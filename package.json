@@ -1,0 +1,21 @@
+{
+  "name": "trpc-proto",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.25.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "clean": "pnpm -r clean",
+    "example:generate": "pnpm --filter @trpc-proto/example generate",
+    "example:server": "pnpm --filter @trpc-proto/example run server",
+    "example:client": "pnpm --filter @trpc-proto/example run client",
+    "example:spin": "pnpm --filter @trpc-proto/example spin",
+    "todo:generate": "pnpm --filter @trpc-proto/example_todo generate",
+    "todo:server": "pnpm --filter @trpc-proto/example_todo run server",
+    "todo:client": "pnpm --filter @trpc-proto/example_todo run client"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

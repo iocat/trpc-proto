@@ -1,0 +1,26 @@
+{
+  "name": "@trpc-proto/schema_ir",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Shared protobuf schema IR for @trpc-proto plugin and runtime",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "tsx --test src/*_test.ts"
+  },
+  "dependencies": {
+    "protobufjs": "^7.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

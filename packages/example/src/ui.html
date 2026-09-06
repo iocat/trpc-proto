@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>analytical-engine</title>
+  <style>
+    :root {
+      --bg: #14120f;
+      --panel: #1d1a15;
+      --ink: #efe6d4;
+      --muted: #9a8f7a;
+      --line: #3a342a;
+      --accent: #d4a017;
+      --ok: #7ea36b;
+      --bad: #c45c4a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.45 "Iowan Old Style", Palatino, Georgia, serif;
+    }
+    header {
+      padding: 28px 32px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+    }
+    header p { margin: 0; color: var(--muted); font-size: 13px; }
+    #status { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    #status.ok { color: var(--ok); }
+    #status.bad { color: var(--bad); }
+    header .auth { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+    header .auth label { font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    header .auth input { width: 280px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    main {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+      padding: 24px 32px 48px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 16px 18px 18px;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+    input, select, button, textarea {
+      font: inherit;
+      width: 100%;
+      background: #12100c;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+    }
+    button {
+      margin-top: 12px;
+      cursor: pointer;
+      background: var(--accent);
+      color: #1a150c;
+      border: 0;
+      font-weight: 600;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 500; }
+    .stack { display: flex; flex-direction: column; gap: 16px; }
+    pre {
+      margin: 12px 0 0;
+      font: 12px/1.4 ui-monospace, Menlo, monospace;
+      color: var(--muted);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .users { min-width: 0; }
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>analytical-engine</h1>
+      <p>browser protobuf → gRPC binary → Go</p>
+    </div>
+    <div class="auth">
+      <label for="auth-token">Bearer</label>
+      <input id="auth-token" value="__AUTH_TOKEN__" spellcheck="false" />
+      <div id="status">connecting…</div>
+    </div>
+  </header>
+  <main>
+    <div class="stack">
+      <section>
+        <h2>Hello / echo</h2>
+        <label>Name</label>
+        <input id="hello-name" value="Ada" />
+        <button id="hello-btn">Hello</button>
+        <label>Echo</label>
+        <input id="echo-text" value="analytical engine" />
+        <button class="secondary" id="echo-btn">Echo</button>
+        <pre id="hello-out"></pre>
+      </section>
+      <section>
+        <h2>Create user</h2>
+        <label>Name</label>
+        <input id="user-name" value="Charles" />
+        <label>Email</label>
+        <input id="user-email" value="charles@example.com" />
+        <div class="row">
+          <div>
+            <label>Role</label>
+            <select id="user-role">
+              <option>USER_ROLE_MEMBER</option>
+              <option>USER_ROLE_ADMIN</option>
+              <option>USER_ROLE_GUEST</option>
+            </select>
+          </div>
+          <div>
+            <label>City</label>
+            <input id="user-city" value="London" />
+          </div>
+        </div>
+        <label>Tags (comma)</label>
+        <input id="user-tags" value="diff-engine" />
+        <button id="create-btn">Create over gRPC</button>
+      </section>
+      <section>
+        <h2>Workspace</h2>
+        <pre id="stats-out"></pre>
+      </section>
+    </div>
+    <section class="users">
+      <h2>Users</h2>
+      <div class="row">
+        <div>
+          <label>Search</label>
+          <input id="q" placeholder="name or email" />
+        </div>
+        <div>
+          <label>Role</label>
+          <select id="role">
+            <option value="">any</option>
+            <option>USER_ROLE_ADMIN</option>
+            <option>USER_ROLE_MEMBER</option>
+            <option>USER_ROLE_GUEST</option>
+          </select>
+        </div>
+      </div>
+      <button class="secondary" id="list-btn">Refresh list</button>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Role</th>
+            <th>City</th>
+            <th>Karma</th>
+          </tr>
+        </thead>
+        <tbody id="user-rows"></tbody>
+      </table>
+      <pre id="user-out"></pre>
+    </section>
+  </main>
+  <script src="/vendor/protobuf.min.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const PKG = 'example.v1';
+    let root;
+
+    function show(id, value) {
+      $(id).textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    }
+
+    function typeName(name) {
+      return name.startsWith('google.') ? name : PKG + '.' + name;
+    }
+
+    async function rpc(service, method, reqType, payload, resType) {
+      const Req = root.lookupType(typeName(reqType));
+      const Res = root.lookupType(typeName(resType));
+      const bytes = Req.encode(Req.create(payload || {})).finish();
+      const res = await fetch('/rpc/' + service + '/' + method, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-protobuf',
+          authorization: 'Bearer ' + $('auth-token').value,
+        },
+        body: bytes,
+      });
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (!res.ok) throw new Error(new TextDecoder().decode(buf) || res.statusText);
+      $('status').textContent =
+        'protobuf ' + bytes.length + 'B → ' + buf.length + 'B · /' + PKG + '.' + service + '/' + method;
+      $('status').className = 'ok';
+      return Res.toObject(Res.decode(buf), {
+        defaults: true,
+        longs: String,
+        enums: String,
+        bytes: String,
+      });
+    }
+
+    async function refreshHealth() {
+      try {
+        const health = await rpc('App', 'Health', 'google.protobuf.Empty', {}, 'AppHealthResponse');
+        const stats = await rpc('OrgWorkspace', 'Stats', 'google.protobuf.Empty', {}, 'WorkspaceStats');
+        show('stats-out', stats);
+        $('status').textContent += ' · ' + stats.users + ' users';
+      } catch (err) {
+        $('status').className = 'bad';
+        $('status').textContent = String(err.message || err);
+      }
+    }
+
+    async function refreshUsers(selectId) {
+      const listed = await rpc(
+        'UserService',
+        'List',
+        'UserListRequest',
+        {
+          q: $('q').value || undefined,
+          role: $('role').value || undefined,
+        },
+        'UserListResponse',
+      );
+      const items = listed.items || [];
+      $('user-rows').innerHTML = items.map((user) =>
+        '<tr data-id="' + user.id + '">' +
+          '<td>' + user.name + '</td>' +
+          '<td>' + user.role + '</td>' +
+          '<td>' + (user.address && user.address.city || '') + '</td>' +
+          '<td>' + user.karma + '</td>' +
+        '</tr>'
+      ).join('');
+      if (selectId) {
+        const user = items.find((item) => item.id === selectId) || items[items.length - 1];
+        if (user) show('user-out', user);
+      }
+    }
+
+    protobuf.load('/proto/example_v1.proto', async (err, loaded) => {
+      if (err) {
+        $('status').className = 'bad';
+        $('status').textContent = String(err);
+        return;
+      }
+      root = loaded;
+      $('hello-btn').onclick = async () => {
+        show('hello-out', await rpc('App', 'Hello', 'AppHelloRequest', { name: $('hello-name').value }, 'AppHelloResponse'));
+      };
+      $('echo-btn').onclick = async () => {
+        const out = await rpc('App', 'Echo', 'AppEchoRequest', { value: $('echo-text').value }, 'AppEchoResponse');
+        show('hello-out', out.value);
+      };
+      $('list-btn').onclick = () => refreshUsers();
+      $('create-btn').onclick = async () => {
+        const created = await rpc(
+          'UserService',
+          'Create',
+          'UserCreateRequest',
+          {
+            name: $('user-name').value,
+            email: $('user-email').value,
+            role: $('user-role').value,
+            tags: $('user-tags').value.split(',').map((t) => t.trim()).filter(Boolean),
+            address: { city: $('user-city').value },
+          },
+          'User',
+        );
+        show('user-out', created);
+        await refreshUsers(created.id);
+        await refreshHealth();
+      };
+      $('user-rows').onclick = async (event) => {
+        const row = event.target.closest('tr');
+        if (!row) return;
+        show('user-out', await rpc(
+          'UserService',
+          'GetById',
+          'UserGetByIdRequest',
+          { id: row.dataset.id },
+          'User',
+        ));
+      };
+      await refreshHealth();
+      await refreshUsers();
+    });
+  </script>
+</body>
+</html>

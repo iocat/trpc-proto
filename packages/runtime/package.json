@@ -1,0 +1,40 @@
+{
+  "name": "@trpc-proto/runtime",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "tRPC protobuf transformer and gRPC client transport",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "tsx --test src/*_test.ts"
+  },
+  "peerDependencies": {
+    "@grpc/grpc-js": "^1.12.0",
+    "@trpc/client": "^11.0.0",
+    "@trpc/server": "^11.0.0",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@trpc/client": { "optional": true }
+  },
+  "dependencies": {
+    "@trpc-proto/schema_ir": "workspace:*",
+    "protobufjs": "^7.5.4"
+  },
+  "devDependencies": {
+    "@grpc/grpc-js": "^1.13.4",
+    "@trpc/client": "^11.18.0",
+    "@trpc/server": "^11.18.0",
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "zod": "^4.1.5"
+  }
+}
