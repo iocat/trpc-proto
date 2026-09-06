@@ -62,16 +62,26 @@ export function encodeGrpcWebMessage(message: Uint8Array) {
   return encodeGrpcWebFrame(message, 0);
 }
 
-export function encodeGrpcWebTrailers(status: number, message = '') {
+export function encodeGrpcWebTrailers(
+  status: number,
+  message = '',
+  extra: Record<string, string> = {},
+) {
   const lines = [
     `grpc-status: ${status}`,
     `grpc-message: ${encodeGrpcMessage(message)}`,
   ];
+  for (const [key, value] of Object.entries(extra)) {
+    const name = key.toLowerCase();
+    if (name === 'grpc-status' || name === 'grpc-message') continue;
+    lines.push(`${name}: ${encodeGrpcMessage(value)}`);
+  }
   return encodeGrpcWebFrame(
     new TextEncoder().encode(`${lines.join('\r\n')}\r\n`),
     TRAILER_FLAG,
   );
 }
+
 
 export function decodeGrpcWeb(body: Uint8Array): GrpcWebDecode {
   const messages: Uint8Array[] = [];
@@ -206,9 +216,14 @@ export function createGrpcWebFetchCall(baseUrl = ''): StubCall {
   };
 }
 
-export function grpcWebErrorFrame(status: number, message: string) {
-  return concat([encodeGrpcWebTrailers(status, message)]);
+export function grpcWebErrorFrame(
+  status: number,
+  message: string,
+  extra: Record<string, string> = {},
+) {
+  return concat([encodeGrpcWebTrailers(status, message, extra)]);
 }
+
 
 export function grpcWebOkFrame(message: Uint8Array) {
   return concat([encodeGrpcWebMessage(message), encodeGrpcWebTrailers(0)]);

@@ -7,6 +7,7 @@ import {
   isGrpcWebContentType,
 } from './protocol.js';
 
+
 describe('gRPC-Web framing', () => {
   it('round-trips a data frame and trailers', () => {
     const payload = new Uint8Array([1, 2, 3]);
@@ -19,6 +20,16 @@ describe('gRPC-Web framing', () => {
     assert.equal(decoded.trailers['grpc-status'], '0');
     assert.equal(decoded.trailers['grpc-message'], 'ok');
   });
+
+  it('includes extra trailer metadata', () => {
+    const decoded = decodeGrpcWeb(
+      encodeGrpcWebTrailers(5, 'missing', { 'x-trace': 'abc' }),
+    );
+    assert.equal(decoded.trailers['grpc-status'], '5');
+    assert.equal(decoded.trailers['grpc-message'], 'missing');
+    assert.equal(decoded.trailers['x-trace'], 'abc');
+  });
+
 });
 
 describe('isGrpcWebContentType', () => {
