@@ -36,12 +36,13 @@ export {
   wellKnownImport,
   wellKnownKind,
 } from './wellknown.js';
+export { createFieldAllocator } from './field_allocator.js';
 export {
-  createFieldAllocator,
   listProcedures,
   prevalidateRouter,
   protoMetaFromRouter,
   schemaFromRouter,
   translate,
 } from './trpc_schema.js';
+
 export type { RuntimeProcedure, TranslateOptions } from './trpc_schema.js';

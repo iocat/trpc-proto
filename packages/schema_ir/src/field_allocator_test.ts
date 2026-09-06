@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createFieldAllocator } from './trpc_schema.js';
+import { createFieldAllocator } from './field_allocator.js';
+
 
 type Op = 'auto' | number;
 

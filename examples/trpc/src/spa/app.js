@@ -13,6 +13,34 @@ const client = createTRPCProxyClient({
   ],
 });
 
+const edits = [];
+let sub;
+
+function paintStream() {
+  const out = $('stream-out');
+  if (!out) return;
+  out.textContent = edits.length
+    ? JSON.stringify(edits, null, 2)
+    : 'listening for note.put…';
+}
+
+function listen() {
+  if (sub) return;
+  sub = client.note.onChange.subscribe(undefined, {
+    onData(note) {
+      edits.push({
+        at: new Date().toISOString(),
+        id: note.id,
+        body: note.body,
+      });
+      paintStream();
+    },
+    onError(err) {
+      fail(err);
+    },
+  });
+}
+
 function route() {
   return location.hash.replace(/^#\/?/, '') || 'echo';
 }
@@ -31,6 +59,7 @@ function fail(err) {
   $('status').className = 'bad';
   $('status').textContent = String(err.message || err);
 }
+
 
 async function render() {
   markNav();
@@ -65,31 +94,24 @@ async function render() {
       app.innerHTML = `
         <section>
           <h2>note.onChange</h2>
-          <p>server-streaming subscription. Put a note on Notes, events land here.</p>
-          <button id="sub-btn">Subscribe</button>
-          <button class="secondary" id="unsub-btn">Unsubscribe</button>
+          <p>live server stream of every Notes put. stay subscribed while you edit.</p>
+          <button id="sub-btn">Listen</button>
+          <button class="secondary" id="unsub-btn">Pause</button>
           <pre id="stream-out"></pre>
         </section>`;
-      const events = [];
-      let sub;
+      paintStream();
+      listen();
       $('sub-btn').onclick = () => {
-        sub?.unsubscribe();
-        events.length = 0;
-        $('stream-out').textContent = 'listening…';
-        sub = client.note.onChange.subscribe(undefined, {
-          onData(note) {
-            events.push(note);
-            $('stream-out').textContent = JSON.stringify(events, null, 2);
-          },
-          onError(err) {
-            fail(err);
-          },
-        });
+        listen();
+        paintStream();
       };
       $('unsub-btn').onclick = () => {
         sub?.unsubscribe();
         sub = undefined;
-        $('stream-out').textContent = 'stopped';
+        const out = $('stream-out');
+        if (out) out.textContent = edits.length
+          ? `${JSON.stringify(edits, null, 2)}\n\n— paused —`
+          : 'paused';
       };
     } else {
       app.innerHTML = `
@@ -117,6 +139,7 @@ async function render() {
 
 $('status').textContent = 'ready';
 $('status').className = 'ok';
+listen();
 window.addEventListener('hashchange', () => {
   void render();
 });

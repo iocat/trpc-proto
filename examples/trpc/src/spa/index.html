@@ -3,25 +3,35 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>trpc</title>
+    <title>CH-03 · trpc</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header>
-      <div>
-        <h1>trpc</h1>
-        <p>browser protobuf → gRPC → TypeScript tRPC</p>
-      </div>
-      <div class="auth">
-        <div id="status">connecting…</div>
-      </div>
-    </header>
-    <nav>
-      <a href="#/echo">Echo</a>
-      <a href="#/notes">Notes</a>
-      <a href="#/stream">Stream</a>
-    </nav>
-    <main id="app"></main>
+    <div class="frame">
+      <header>
+        <div>
+          <p class="kicker">ch-03 · protobuf plotter</p>
+          <h1>trpc.v1</h1>
+          <p>browser → gRPC-Web → TypeScript tRPC</p>
+        </div>
+        <div class="auth">
+          <div class="lamp" aria-hidden="true"></div>
+          <div id="status">connecting…</div>
+        </div>
+      </header>
+      <nav>
+        <a href="#/echo">01 echo</a>
+        <a href="#/notes">02 notes</a>
+        <a href="#/stream">03 stream</a>
+      </nav>
+      <main id="app"></main>
+    </div>
     <script src="/app.js"></script>
   </body>
 </html>

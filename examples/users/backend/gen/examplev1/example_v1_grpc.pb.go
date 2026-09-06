@@ -193,6 +193,7 @@ const (
 	UserService_GetById_FullMethodName = "/example.v1.UserService/GetById"
 	UserService_List_FullMethodName    = "/example.v1.UserService/List"
 	UserService_Create_FullMethodName  = "/example.v1.UserService/Create"
+	UserService_Update_FullMethodName  = "/example.v1.UserService/Update"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -205,6 +206,8 @@ type UserServiceClient interface {
 	List(ctx context.Context, in *UserListRequest, opts ...grpc.CallOption) (*UserListResponse, error)
 	// tRPC mutation user.create
 	Create(ctx context.Context, in *UserCreateRequest, opts ...grpc.CallOption) (*User, error)
+	// tRPC mutation user.update
+	Update(ctx context.Context, in *UserUpdateRequest, opts ...grpc.CallOption) (*User, error)
 }
 
 type userServiceClient struct {
@@ -242,6 +245,15 @@ func (c *userServiceClient) Create(ctx context.Context, in *UserCreateRequest, o
 	return out, nil
 }
 
+func (c *userServiceClient) Update(ctx context.Context, in *UserUpdateRequest, opts ...grpc.CallOption) (*User, error) {
+	out := new(User)
+	err := c.cc.Invoke(ctx, UserService_Update_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility
@@ -252,6 +264,8 @@ type UserServiceServer interface {
 	List(context.Context, *UserListRequest) (*UserListResponse, error)
 	// tRPC mutation user.create
 	Create(context.Context, *UserCreateRequest) (*User, error)
+	// tRPC mutation user.update
+	Update(context.Context, *UserUpdateRequest) (*User, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -267,6 +281,9 @@ func (UnimplementedUserServiceServer) List(context.Context, *UserListRequest) (*
 }
 func (UnimplementedUserServiceServer) Create(context.Context, *UserCreateRequest) (*User, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
+}
+func (UnimplementedUserServiceServer) Update(context.Context, *UserUpdateRequest) (*User, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 
@@ -335,6 +352,24 @@ func _UserService_Create_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).Update(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_Update_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).Update(ctx, req.(*UserUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -353,6 +388,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Create",
 			Handler:    _UserService_Create_Handler,
+		},
+		{
+			MethodName: "Update",
+			Handler:    _UserService_Update_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -445,6 +484,569 @@ var OrgWorkspaceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Stats",
 			Handler:    _OrgWorkspaceService_Stats_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "example_v1.proto",
+}
+
+const (
+	IssueService_GetById_FullMethodName  = "/example.v1.IssueService/GetById"
+	IssueService_List_FullMethodName     = "/example.v1.IssueService/List"
+	IssueService_Create_FullMethodName   = "/example.v1.IssueService/Create"
+	IssueService_Update_FullMethodName   = "/example.v1.IssueService/Update"
+	IssueService_OnChange_FullMethodName = "/example.v1.IssueService/OnChange"
+)
+
+// IssueServiceClient is the client API for IssueService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type IssueServiceClient interface {
+	// tRPC query issue.getById
+	GetById(ctx context.Context, in *IssueGetByIdRequest, opts ...grpc.CallOption) (*Issue, error)
+	// tRPC query issue.list
+	List(ctx context.Context, in *IssueListRequest, opts ...grpc.CallOption) (*IssueListResponse, error)
+	// tRPC mutation issue.create
+	Create(ctx context.Context, in *IssueCreateRequest, opts ...grpc.CallOption) (*Issue, error)
+	// tRPC mutation issue.update
+	Update(ctx context.Context, in *IssueUpdateRequest, opts ...grpc.CallOption) (*Issue, error)
+	// tRPC subscription issue.onChange
+	OnChange(ctx context.Context, in *IssueOnChangeRequest, opts ...grpc.CallOption) (IssueService_OnChangeClient, error)
+}
+
+type issueServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewIssueServiceClient(cc grpc.ClientConnInterface) IssueServiceClient {
+	return &issueServiceClient{cc}
+}
+
+func (c *issueServiceClient) GetById(ctx context.Context, in *IssueGetByIdRequest, opts ...grpc.CallOption) (*Issue, error) {
+	out := new(Issue)
+	err := c.cc.Invoke(ctx, IssueService_GetById_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) List(ctx context.Context, in *IssueListRequest, opts ...grpc.CallOption) (*IssueListResponse, error) {
+	out := new(IssueListResponse)
+	err := c.cc.Invoke(ctx, IssueService_List_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) Create(ctx context.Context, in *IssueCreateRequest, opts ...grpc.CallOption) (*Issue, error) {
+	out := new(Issue)
+	err := c.cc.Invoke(ctx, IssueService_Create_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) Update(ctx context.Context, in *IssueUpdateRequest, opts ...grpc.CallOption) (*Issue, error) {
+	out := new(Issue)
+	err := c.cc.Invoke(ctx, IssueService_Update_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) OnChange(ctx context.Context, in *IssueOnChangeRequest, opts ...grpc.CallOption) (IssueService_OnChangeClient, error) {
+	stream, err := c.cc.NewStream(ctx, &IssueService_ServiceDesc.Streams[0], IssueService_OnChange_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &issueServiceOnChangeClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type IssueService_OnChangeClient interface {
+	Recv() (*Issue, error)
+	grpc.ClientStream
+}
+
+type issueServiceOnChangeClient struct {
+	grpc.ClientStream
+}
+
+func (x *issueServiceOnChangeClient) Recv() (*Issue, error) {
+	m := new(Issue)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// IssueServiceServer is the server API for IssueService service.
+// All implementations must embed UnimplementedIssueServiceServer
+// for forward compatibility
+type IssueServiceServer interface {
+	// tRPC query issue.getById
+	GetById(context.Context, *IssueGetByIdRequest) (*Issue, error)
+	// tRPC query issue.list
+	List(context.Context, *IssueListRequest) (*IssueListResponse, error)
+	// tRPC mutation issue.create
+	Create(context.Context, *IssueCreateRequest) (*Issue, error)
+	// tRPC mutation issue.update
+	Update(context.Context, *IssueUpdateRequest) (*Issue, error)
+	// tRPC subscription issue.onChange
+	OnChange(*IssueOnChangeRequest, IssueService_OnChangeServer) error
+	mustEmbedUnimplementedIssueServiceServer()
+}
+
+// UnimplementedIssueServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedIssueServiceServer struct {
+}
+
+func (UnimplementedIssueServiceServer) GetById(context.Context, *IssueGetByIdRequest) (*Issue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetById not implemented")
+}
+func (UnimplementedIssueServiceServer) List(context.Context, *IssueListRequest) (*IssueListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
+}
+func (UnimplementedIssueServiceServer) Create(context.Context, *IssueCreateRequest) (*Issue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
+}
+func (UnimplementedIssueServiceServer) Update(context.Context, *IssueUpdateRequest) (*Issue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
+}
+func (UnimplementedIssueServiceServer) OnChange(*IssueOnChangeRequest, IssueService_OnChangeServer) error {
+	return status.Errorf(codes.Unimplemented, "method OnChange not implemented")
+}
+func (UnimplementedIssueServiceServer) mustEmbedUnimplementedIssueServiceServer() {}
+
+// UnsafeIssueServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to IssueServiceServer will
+// result in compilation errors.
+type UnsafeIssueServiceServer interface {
+	mustEmbedUnimplementedIssueServiceServer()
+}
+
+func RegisterIssueServiceServer(s grpc.ServiceRegistrar, srv IssueServiceServer) {
+	s.RegisterService(&IssueService_ServiceDesc, srv)
+}
+
+func _IssueService_GetById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueGetByIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).GetById(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_GetById_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).GetById(ctx, req.(*IssueGetByIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).List(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_List_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).List(ctx, req.(*IssueListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).Create(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_Create_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).Create(ctx, req.(*IssueCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).Update(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_Update_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).Update(ctx, req.(*IssueUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_OnChange_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(IssueOnChangeRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(IssueServiceServer).OnChange(m, &issueServiceOnChangeServer{stream})
+}
+
+type IssueService_OnChangeServer interface {
+	Send(*Issue) error
+	grpc.ServerStream
+}
+
+type issueServiceOnChangeServer struct {
+	grpc.ServerStream
+}
+
+func (x *issueServiceOnChangeServer) Send(m *Issue) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+// IssueService_ServiceDesc is the grpc.ServiceDesc for IssueService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var IssueService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "example.v1.IssueService",
+	HandlerType: (*IssueServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetById",
+			Handler:    _IssueService_GetById_Handler,
+		},
+		{
+			MethodName: "List",
+			Handler:    _IssueService_List_Handler,
+		},
+		{
+			MethodName: "Create",
+			Handler:    _IssueService_Create_Handler,
+		},
+		{
+			MethodName: "Update",
+			Handler:    _IssueService_Update_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "OnChange",
+			Handler:       _IssueService_OnChange_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "example_v1.proto",
+}
+
+const (
+	TeamService_GetById_FullMethodName      = "/example.v1.TeamService/GetById"
+	TeamService_List_FullMethodName         = "/example.v1.TeamService/List"
+	TeamService_Create_FullMethodName       = "/example.v1.TeamService/Create"
+	TeamService_Update_FullMethodName       = "/example.v1.TeamService/Update"
+	TeamService_AddMember_FullMethodName    = "/example.v1.TeamService/AddMember"
+	TeamService_RemoveMember_FullMethodName = "/example.v1.TeamService/RemoveMember"
+)
+
+// TeamServiceClient is the client API for TeamService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type TeamServiceClient interface {
+	// tRPC query team.getById
+	GetById(ctx context.Context, in *TeamGetByIdRequest, opts ...grpc.CallOption) (*Team, error)
+	// tRPC query team.list
+	List(ctx context.Context, in *TeamListRequest, opts ...grpc.CallOption) (*TeamListResponse, error)
+	// tRPC mutation team.create
+	Create(ctx context.Context, in *TeamCreateRequest, opts ...grpc.CallOption) (*Team, error)
+	// tRPC mutation team.update
+	Update(ctx context.Context, in *TeamUpdateRequest, opts ...grpc.CallOption) (*Team, error)
+	// tRPC mutation team.addMember
+	AddMember(ctx context.Context, in *TeamAddMemberRequest, opts ...grpc.CallOption) (*Team, error)
+	// tRPC mutation team.removeMember
+	RemoveMember(ctx context.Context, in *TeamAddMemberRequest, opts ...grpc.CallOption) (*Team, error)
+}
+
+type teamServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewTeamServiceClient(cc grpc.ClientConnInterface) TeamServiceClient {
+	return &teamServiceClient{cc}
+}
+
+func (c *teamServiceClient) GetById(ctx context.Context, in *TeamGetByIdRequest, opts ...grpc.CallOption) (*Team, error) {
+	out := new(Team)
+	err := c.cc.Invoke(ctx, TeamService_GetById_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *teamServiceClient) List(ctx context.Context, in *TeamListRequest, opts ...grpc.CallOption) (*TeamListResponse, error) {
+	out := new(TeamListResponse)
+	err := c.cc.Invoke(ctx, TeamService_List_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *teamServiceClient) Create(ctx context.Context, in *TeamCreateRequest, opts ...grpc.CallOption) (*Team, error) {
+	out := new(Team)
+	err := c.cc.Invoke(ctx, TeamService_Create_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *teamServiceClient) Update(ctx context.Context, in *TeamUpdateRequest, opts ...grpc.CallOption) (*Team, error) {
+	out := new(Team)
+	err := c.cc.Invoke(ctx, TeamService_Update_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *teamServiceClient) AddMember(ctx context.Context, in *TeamAddMemberRequest, opts ...grpc.CallOption) (*Team, error) {
+	out := new(Team)
+	err := c.cc.Invoke(ctx, TeamService_AddMember_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *teamServiceClient) RemoveMember(ctx context.Context, in *TeamAddMemberRequest, opts ...grpc.CallOption) (*Team, error) {
+	out := new(Team)
+	err := c.cc.Invoke(ctx, TeamService_RemoveMember_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// TeamServiceServer is the server API for TeamService service.
+// All implementations must embed UnimplementedTeamServiceServer
+// for forward compatibility
+type TeamServiceServer interface {
+	// tRPC query team.getById
+	GetById(context.Context, *TeamGetByIdRequest) (*Team, error)
+	// tRPC query team.list
+	List(context.Context, *TeamListRequest) (*TeamListResponse, error)
+	// tRPC mutation team.create
+	Create(context.Context, *TeamCreateRequest) (*Team, error)
+	// tRPC mutation team.update
+	Update(context.Context, *TeamUpdateRequest) (*Team, error)
+	// tRPC mutation team.addMember
+	AddMember(context.Context, *TeamAddMemberRequest) (*Team, error)
+	// tRPC mutation team.removeMember
+	RemoveMember(context.Context, *TeamAddMemberRequest) (*Team, error)
+	mustEmbedUnimplementedTeamServiceServer()
+}
+
+// UnimplementedTeamServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedTeamServiceServer struct {
+}
+
+func (UnimplementedTeamServiceServer) GetById(context.Context, *TeamGetByIdRequest) (*Team, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetById not implemented")
+}
+func (UnimplementedTeamServiceServer) List(context.Context, *TeamListRequest) (*TeamListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
+}
+func (UnimplementedTeamServiceServer) Create(context.Context, *TeamCreateRequest) (*Team, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
+}
+func (UnimplementedTeamServiceServer) Update(context.Context, *TeamUpdateRequest) (*Team, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
+}
+func (UnimplementedTeamServiceServer) AddMember(context.Context, *TeamAddMemberRequest) (*Team, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddMember not implemented")
+}
+func (UnimplementedTeamServiceServer) RemoveMember(context.Context, *TeamAddMemberRequest) (*Team, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveMember not implemented")
+}
+func (UnimplementedTeamServiceServer) mustEmbedUnimplementedTeamServiceServer() {}
+
+// UnsafeTeamServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to TeamServiceServer will
+// result in compilation errors.
+type UnsafeTeamServiceServer interface {
+	mustEmbedUnimplementedTeamServiceServer()
+}
+
+func RegisterTeamServiceServer(s grpc.ServiceRegistrar, srv TeamServiceServer) {
+	s.RegisterService(&TeamService_ServiceDesc, srv)
+}
+
+func _TeamService_GetById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TeamGetByIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).GetById(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_GetById_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).GetById(ctx, req.(*TeamGetByIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TeamService_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TeamListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).List(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_List_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).List(ctx, req.(*TeamListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TeamService_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TeamCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).Create(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_Create_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).Create(ctx, req.(*TeamCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TeamService_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TeamUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).Update(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_Update_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).Update(ctx, req.(*TeamUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TeamService_AddMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TeamAddMemberRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).AddMember(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_AddMember_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).AddMember(ctx, req.(*TeamAddMemberRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TeamService_RemoveMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TeamAddMemberRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).RemoveMember(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_RemoveMember_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).RemoveMember(ctx, req.(*TeamAddMemberRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// TeamService_ServiceDesc is the grpc.ServiceDesc for TeamService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var TeamService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "example.v1.TeamService",
+	HandlerType: (*TeamServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetById",
+			Handler:    _TeamService_GetById_Handler,
+		},
+		{
+			MethodName: "List",
+			Handler:    _TeamService_List_Handler,
+		},
+		{
+			MethodName: "Create",
+			Handler:    _TeamService_Create_Handler,
+		},
+		{
+			MethodName: "Update",
+			Handler:    _TeamService_Update_Handler,
+		},
+		{
+			MethodName: "AddMember",
+			Handler:    _TeamService_AddMember_Handler,
+		},
+		{
+			MethodName: "RemoveMember",
+			Handler:    _TeamService_RemoveMember_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

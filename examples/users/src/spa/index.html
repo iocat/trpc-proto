@@ -3,27 +3,65 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>users</title>
+    <title>analytical-engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header>
-      <div>
-        <h1>users</h1>
-        <p>browser protobuf → gRPC binary → Go</p>
-      </div>
-      <div class="auth">
-        <label for="auth-token">Bearer</label>
-        <input id="auth-token" value="__AUTH_TOKEN__" spellcheck="false" />
-        <div id="status">connecting…</div>
-      </div>
-    </header>
-    <nav>
-      <a href="#/hello">Hello</a>
-      <a href="#/users">Users</a>
-      <a href="#/workspace">Workspace</a>
-    </nav>
-    <main id="app"></main>
+    <div class="shell">
+      <aside class="rail">
+        <div class="brand">
+          <span class="mark" aria-hidden="true">Æ</span>
+          <div>
+            <strong id="ws-name">analytical-engine</strong>
+            <em id="ws-meta">workspace</em>
+          </div>
+        </div>
+        <button type="button" class="compose" id="new-issue">
+          <span>New issue</span>
+          <kbd>C</kbd>
+        </button>
+        <nav>
+          <a href="#/inbox" data-nav="inbox">
+            <i class="ic ic-inbox"></i> Inbox <span id="count-inbox"></span>
+          </a>
+          <a href="#/issues" data-nav="issues">
+            <i class="ic ic-board"></i> All issues <span id="count-all"></span>
+          </a>
+          <a href="#/people" data-nav="people">
+            <i class="ic ic-team"></i> People
+          </a>
+          <a href="#/workspace" data-nav="workspace">
+            <i class="ic ic-pulse"></i> Workspace
+          </a>
+        </nav>
+        <div class="rail-label">Teams</div>
+        <div class="rail-teams" id="rail-teams"></div>
+        <button type="button" class="ghost" id="new-team">New team</button>
+        <div class="rail-team" id="rail-team"></div>
+        <div class="rail-foot">
+          <div class="live" id="live"><i></i> live</div>
+          <input id="auth-token" type="hidden" value="__AUTH_TOKEN__" />
+        </div>
+      </aside>
+      <section class="stage">
+        <header class="top">
+          <div id="crumb">Inbox</div>
+          <button type="button" class="search-btn" id="search-btn">
+            Search issues, people, commands
+            <kbd>⌘K</kbd>
+          </button>
+          <div id="status">connecting</div>
+        </header>
+        <div id="view"></div>
+      </section>
+    </div>
+    <div class="veil" id="veil" hidden></div>
     <script src="/app.js"></script>
   </body>
 </html>

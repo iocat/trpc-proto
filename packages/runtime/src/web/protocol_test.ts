@@ -1,0 +1,29 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import {
+  decodeGrpcWeb,
+  encodeGrpcWebMessage,
+  encodeGrpcWebTrailers,
+  isGrpcWebContentType,
+} from './protocol.js';
+
+describe('gRPC-Web framing', () => {
+  it('round-trips a data frame and trailers', () => {
+    const payload = new Uint8Array([1, 2, 3]);
+    const body = new Uint8Array([
+      ...encodeGrpcWebMessage(payload),
+      ...encodeGrpcWebTrailers(0, 'ok'),
+    ]);
+    const decoded = decodeGrpcWeb(body);
+    assert.deepEqual([...decoded.messages[0]!], [1, 2, 3]);
+    assert.equal(decoded.trailers['grpc-status'], '0');
+    assert.equal(decoded.trailers['grpc-message'], 'ok');
+  });
+});
+
+describe('isGrpcWebContentType', () => {
+  it('detects application/grpc-web+proto', () => {
+    assert.equal(isGrpcWebContentType('application/grpc-web+proto'), true);
+    assert.equal(isGrpcWebContentType('text/plain'), false);
+  });
+});

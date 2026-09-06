@@ -9,19 +9,25 @@ const AUTH_TOKEN = 'ae_9f2e4c8b7a1d6e0f3c5b8a2d7e4f1c90';
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.WEB_PORT ?? 3000);
 const spaDir = path.join(import.meta.dirname, 'spa');
-const html = readFileSync(path.join(spaDir, 'index.html'), 'utf8').replaceAll(
-  '__AUTH_TOKEN__',
-  AUTH_TOKEN,
-);
-const spaJs = esbuild.buildSync({
-  entryPoints: [path.join(spaDir, 'app.js')],
-  bundle: true,
-  write: false,
-  format: 'iife',
-  platform: 'browser',
-  target: 'es2022',
-  logLevel: 'silent',
-}).outputFiles![0]!.text;
+
+function spaHtml() {
+  return readFileSync(path.join(spaDir, 'index.html'), 'utf8').replaceAll(
+    '__AUTH_TOKEN__',
+    AUTH_TOKEN,
+  );
+}
+
+function spaJs() {
+  return esbuild.buildSync({
+    entryPoints: [path.join(spaDir, 'app.js')],
+    bundle: true,
+    write: false,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    logLevel: 'silent',
+  }).outputFiles![0]!.text;
+}
 const hop = createGrpcWebHop();
 
 function send(
@@ -42,7 +48,7 @@ const server = http.createServer(async (req, res) => {
       req.method === 'GET' &&
       (url.pathname === '/' || url.pathname === '/index.html')
     ) {
-      send(res, 200, html, 'text/html; charset=utf-8');
+      send(res, 200, spaHtml(), 'text/html; charset=utf-8');
       return;
     }
     if (req.method === 'GET' && url.pathname === '/styles.css') {
@@ -55,7 +61,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === 'GET' && url.pathname === '/app.js') {
-      send(res, 200, spaJs, 'text/javascript');
+      send(res, 200, spaJs(), 'text/javascript');
       return;
     }
     res.writeHead(404);
