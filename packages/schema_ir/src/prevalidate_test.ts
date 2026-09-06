@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  assertPrevalidate,
-  formatIssues,
-  prevalidate,
-} from './prevalidate.js';
-import type { ProtoFileHeader } from './index.js';
+import { assertPrevalidate, formatIssues, prevalidate } from './prevalidate.js';
+import type { ProtoFileHeader } from './types.js';
 
 const proto: ProtoFileHeader = {
   package: 'demo.v1',
@@ -21,7 +17,10 @@ describe('prevalidate', () => {
       formatIssues(issues),
       /defaultMeta: \{ proto: \{ package: 'your\.package\.v1' \} \}/,
     );
-    assert.throws(() => assertPrevalidate(issues), /proto\.package is required/);
+    assert.throws(
+      () => assertPrevalidate(issues),
+      /proto\.package is required/,
+    );
   });
 
   it('accepts package-only proto meta (syntax proto3, cache optional)', () => {

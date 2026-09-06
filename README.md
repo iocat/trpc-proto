@@ -6,12 +6,11 @@ This is **opinionated**. Only a subset of `appRouter` is a proto contract. That 
 
 ```
 packages/plugin      @trpc-proto/plugin          evaluate appRouter → .proto + schema.json
-packages/runtime     @trpc-proto/runtime         codec, grpcLink, invoker
+packages/runtime     @trpc-proto/runtime         proto_codec, grpcLink, invoker
 packages/schema_ir   @trpc-proto/schema_ir       ProtoSchema IR, prevalidate, proto text
 examples/users       @trpc-proto/example-users   users/org API + Go gRPC backend
 examples/todo        @trpc-proto/example-todo    todo API + Go gRPC backend
 examples/trpc        @trpc-proto/example-trpc    TypeScript tRPC backend + protobuf gRPC
-examples/calcom      @trpc-proto/example-calcom  large Cal.com-shaped router
 ```
 
 Requires **tRPC 11** and **Zod 4**. Runtime does not host a gRPC server.
@@ -22,38 +21,39 @@ Prevalidate collects every issue, then aborts on errors (no stack). Generate pri
 
 ### Router
 
-| | |
-|---|---|
-| `initTRPC.meta<ProtoMeta>()` with `defaultMeta.proto.package` | required |
-| `proto.syntax` | optional; proto3 only (omitted → proto3) |
-| `proto.cache` | optional; stable field numbers; dropped tags emit `reserved` |
-| `proto.options` | optional (`go_package`, …) |
-| `proto` on a procedure `.meta()` | forbidden (file header is router-global) |
-| procedure `.output()` | required |
-| procedure `.input()` | optional (omitted → `google.protobuf.Empty`) |
-| chained `.input()` | forbidden (merge into one Zod schema) |
-| procedure type | query or mutation (unary). Subscriptions are not a proto RPC |
-| validators | Zod 4 only |
+|                                                               |                                                              |
+| ------------------------------------------------------------- | ------------------------------------------------------------ |
+| `initTRPC.meta<ProtoMeta>()` with `defaultMeta.proto.package` | required                                                     |
+| `proto.syntax`                                                | optional; proto3 only (omitted → proto3)                     |
+| `proto.cache`                                                 | optional; stable field numbers; dropped tags emit `reserved` |
+| `proto.options`                                               | optional (`go_package`, …)                                   |
+| `proto` on a procedure `.meta()`                              | forbidden (file header is router-global)                     |
+| procedure `.output()`                                         | required                                                     |
+| procedure `.input()`                                          | optional (omitted → `google.protobuf.Empty`)                 |
+| chained `.input()`                                            | forbidden (merge into one Zod schema)                        |
+| procedure type                                                | query/mutation (unary) or subscription (server-streaming)    |
+| validators                                                    | Zod 4 only                                                   |
 
 ### Zod → proto
 
-| Zod | Proto |
-|---|---|
-| `z.object`, nested objects | `message` |
-| `.meta({ id: 'User' })` | named message/enum; **id must be PascalCase** |
-| unnamed nested object | nested message named from the field |
-| `z.string`, template literal | `string` (`email` is still `string`) |
-| `z.boolean` | `bool` |
-| `z.number` / `z.int` | `double` / `int32` (int formats: int32, int64, …) |
-| `z.bigint` | `int64` |
-| `z.date` | `google.protobuf.Timestamp` |
-| `z.enum`, same-type literal union | `enum` |
-| `z.array` / `z.set` | `repeated` |
-| `z.record` / `z.map` | `map<key, value>` (scalar keys) |
-| `z.any` / `z.unknown` | `google.protobuf.Value` |
-| `z.record` of any/unknown | `google.protobuf.Struct` |
-| void / undefined / never / null input or output | `google.protobuf.Empty` |
-| `z.optional` / `z.nullable` | `optional` field |
+| Zod                                             | Proto                                             |
+| ----------------------------------------------- | ------------------------------------------------- |
+| `z.object`, nested objects                      | `message`                                         |
+| `.meta({ id: 'User' })`                         | named message/enum; **id must be PascalCase**     |
+| unnamed nested object                           | nested message named from the field               |
+| `z.string`, template literal                    | `string` (`email` is still `string`)              |
+| `z.boolean`                                     | `bool`                                            |
+| `z.number` / `z.int`                            | `double` / `int32` (int formats: int32, int64, …) |
+| `z.bigint`                                      | `int64`                                           |
+| `z.date`                                        | `google.protobuf.Timestamp`                       |
+| `z.enum`, same-type literal union               | `enum`                                            |
+| `z.discriminatedUnion`                          | `oneof` of variant messages                       |
+| `z.array` / `z.set`                             | `repeated`                                        |
+| `z.record` / `z.map`                            | `map<key, value>` (scalar keys)                   |
+| `z.any` / `z.unknown`                           | `google.protobuf.Value`                           |
+| `z.record` of any/unknown                       | `google.protobuf.Struct`                          |
+| void / undefined / never / null input or output | `google.protobuf.Empty`                           |
+| `z.optional` / `z.nullable`                     | `optional` field                                  |
 
 Rejected (translate throws): open unions, mixed-type literals, mixed int/float literals, non-PascalCase `id`, non-scalar map keys, anything else `Unsupported Zod type`.
 
@@ -207,19 +207,15 @@ Or implement the generated proto in another language. The Go examples do that.
 pnpm --filter @trpc-proto/example-users generate
 pnpm --filter @trpc-proto/example-users generate:go
 pnpm --filter @trpc-proto/example-users server   # Go gRPC on :50051
-pnpm --filter @trpc-proto/example-users client
+pnpm --filter @trpc-proto/example-users web      # http://127.0.0.1:3000
 ```
 
-`pnpm --filter @trpc-proto/example-users spin` generates, starts Go + the dashboard (`http://127.0.0.1:3000`).
-
-Todo: `pnpm --filter @trpc-proto/example-todo generate` then `server` / `client`.
+Todo: `pnpm --filter @trpc-proto/example-todo generate` then `server` / `web` (`:3001`).
 
 TypeScript backend (protobuf over gRPC, `bindRouter`):
 
 ```bash
 pnpm --filter @trpc-proto/example-trpc generate
 pnpm --filter @trpc-proto/example-trpc server   # :50053
-pnpm --filter @trpc-proto/example-trpc client
+pnpm --filter @trpc-proto/example-trpc web      # :3002
 ```
-
-Cal.com-shaped router: `pnpm --filter @trpc-proto/example-calcom generate`.

@@ -1,12 +1,11 @@
 import { initTRPC } from '@trpc/server';
-import {
-  createProtoTransformer,
-  noopForNonTsBackend,
-  type ProtoMeta,
-} from '@trpc-proto/runtime';
+import { noopForNonTsBackend } from '@trpc-proto/runtime/noop';
+import { createProtoTransformer } from '@trpc-proto/runtime/proto_codec';
+import type { ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
 
 const t = initTRPC.meta<ProtoMeta>().create({
+  allowOutsideOfServer: true,
   transformer: createProtoTransformer(),
   defaultMeta: {
     proto: {
@@ -60,15 +59,30 @@ export const appRouter = t.router({
   health: t.procedure.output(HealthOutput).query(noopForNonTsBackend),
 
   todo: t.router({
-    list: t.procedure.input(TodoListInput).output(TodoListOutput).query(noopForNonTsBackend),
+    list: t.procedure
+      .input(TodoListInput)
+      .output(TodoListOutput)
+      .query(noopForNonTsBackend),
 
-    getById: t.procedure.input(TodoIdInput).output(Todo).query(noopForNonTsBackend),
+    getById: t.procedure
+      .input(TodoIdInput)
+      .output(Todo)
+      .query(noopForNonTsBackend),
 
-    create: t.procedure.input(TodoCreateInput).output(Todo).mutation(noopForNonTsBackend),
+    create: t.procedure
+      .input(TodoCreateInput)
+      .output(Todo)
+      .mutation(noopForNonTsBackend),
 
-    setDone: t.procedure.input(TodoSetDoneInput).output(Todo).mutation(noopForNonTsBackend),
+    setDone: t.procedure
+      .input(TodoSetDoneInput)
+      .output(Todo)
+      .mutation(noopForNonTsBackend),
 
-    remove: t.procedure.input(TodoIdInput).output(TodoIdInput).mutation(noopForNonTsBackend),
+    remove: t.procedure
+      .input(TodoIdInput)
+      .output(TodoIdInput)
+      .mutation(noopForNonTsBackend),
   }),
 });
 

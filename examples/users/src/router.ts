@@ -1,19 +1,18 @@
-import { initTRPC } from "@trpc/server";
-import {
-  createProtoTransformer,
-  noopForNonTsBackend,
-  type ProtoMeta,
-} from "@trpc-proto/runtime";
-import { z } from "zod";
+import { initTRPC } from '@trpc/server';
+import { noopForNonTsBackend } from '@trpc-proto/runtime/noop';
+import { createProtoTransformer } from '@trpc-proto/runtime/proto_codec';
+import type { ProtoMeta } from '@trpc-proto/runtime';
+import { z } from 'zod';
 
 const t = initTRPC.meta<ProtoMeta>().create({
+  allowOutsideOfServer: true,
   transformer: createProtoTransformer(),
   defaultMeta: {
     proto: {
-      package: "example.v1",
-      cache: "generated/schema.json",
+      package: 'example.v1',
+      cache: 'generated/schema.json',
       options: {
-        go_package: "users/backend/gen/examplev1",
+        go_package: 'users/backend/gen/examplev1',
       },
     },
   },
@@ -21,14 +20,14 @@ const t = initTRPC.meta<ProtoMeta>().create({
 
 const Address = z
   .object({
-    city: z.string().describe("The city of the address"),
-    country: z.string().optional().describe("The country of this address"),
+    city: z.string().describe('The city of the address'),
+    country: z.string().optional().describe('The country of this address'),
   })
-  .meta({ id: "Address" });
+  .meta({ id: 'Address' });
 
-const Role = z.enum(["admin", "member", "guest"]).meta({ id: "UserRole" });
+const Role = z.enum(['admin', 'member', 'guest']).meta({ id: 'UserRole' });
 
-export const User = z
+const User = z
   .object({
     id: z.string(),
     name: z.string(),
@@ -42,9 +41,9 @@ export const User = z
     score: z.number(),
     balance: z.bigint(),
   })
-  .meta({ id: "User" });
+  .meta({ id: 'User' });
 
-export const UserCreateInput = z.object({
+const UserCreateInput = z.object({
   name: z.string().min(1),
   email: z.email(),
   role: Role.optional(),
@@ -52,7 +51,7 @@ export const UserCreateInput = z.object({
   address: Address,
 });
 
-export const UserListInput = z.object({
+const UserListInput = z.object({
   q: z.string().optional(),
   role: Role.optional(),
   page: z.int().optional(),
@@ -69,12 +68,12 @@ const WorkspaceStats = z
     users: z.int(),
     labels: z.record(z.string(), z.int()),
   })
-  .meta({ id: "WorkspaceStats" });
+  .meta({ id: 'WorkspaceStats' });
 
 const HealthOutput = z.object({ ok: z.boolean(), version: z.string() });
 const HelloInput = z.object({
   description: z.string(),
-  fullName: z.string().describe("use full name instead"),
+  fullName: z.string().describe('use full name instead'),
 });
 const HelloOutput = z.object({ message: z.string() });
 

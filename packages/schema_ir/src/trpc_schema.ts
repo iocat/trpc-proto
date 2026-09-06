@@ -1,26 +1,26 @@
-import type { AnyProcedure, AnyRouter, ProcedureType } from '@trpc/server';
+import type { AnyProcedure, AnyRouter } from '@trpc/server';
 import type { ZodType } from 'zod';
+import { assertPrevalidate, prevalidate } from './prevalidate.js';
 import {
-  assertPrevalidate,
   isWellKnownType,
-  prevalidate,
   protoServiceName,
   wellKnownKind,
-  type PropertyGenCache,
-  type ProtoEnum,
-  type ProtoField,
-  type ProtoFileHeader,
-  type ProtoMessage,
-  type ProtoMeta,
-  type ProtoMethod,
-  type ProtoScalar,
-  type ProtoSchema,
-  type ProtoService,
-  type ProtoType,
-  type SchemaGenerateCache,
-} from '@trpc-proto/schema_ir';
-
-export type { ProcedureType };
+} from './wellknown.js';
+import type {
+  ProcedureType,
+  PropertyGenCache,
+  ProtoEnum,
+  ProtoField,
+  ProtoFileHeader,
+  ProtoMessage,
+  ProtoMeta,
+  ProtoMethod,
+  ProtoScalar,
+  ProtoSchema,
+  ProtoService,
+  ProtoType,
+  SchemaGenerateCache,
+} from './types.js';
 
 export interface TranslateOptions {
   proto?: ProtoMeta['proto'];
@@ -48,9 +48,7 @@ function assertValidTag(tag: number, usedTags: Set<number>) {
     throw new Error(`Protobuf tag ${tag} out of range (1..536870911).`);
   }
   if (isReserved(tag)) {
-    throw new Error(
-      `Protobuf tag ${tag} is in reserved range (19000..19999).`,
-    );
+    throw new Error(`Protobuf tag ${tag} is in reserved range (19000..19999).`);
   }
   if (usedTags.has(tag)) {
     throw new Error(`Duplicate protobuf tag ${tag} assigned.`);
@@ -88,7 +86,6 @@ export function createFieldAllocator(
   return gen;
 }
 
-
 export interface RuntimeProcedure {
   path: string;
   type: ProcedureType;
@@ -97,7 +94,6 @@ export interface RuntimeProcedure {
   /** Zod 4 schema from `.output()`, if the procedure set one. */
   output?: ZodType;
 }
-
 
 export function listProcedures(router: AnyRouter): RuntimeProcedure[] {
   return Object.entries(router._def.procedures).flatMap(([path, value]) => {
@@ -132,19 +128,14 @@ function procedureOutput(procedure: AnyProcedure, path: string) {
 
 function requireZod(value: unknown, label: string): ZodType {
   if (!isZodType(value)) {
-    throw new Error(
-      `${label} is not a Zod 4 schema (only Zod is supported)`,
-    );
+    throw new Error(`${label} is not a Zod 4 schema (only Zod is supported)`);
   }
   return value;
 }
 
 function isZodType(value: unknown): value is ZodType {
   return (
-    !!value &&
-    typeof value === 'object' &&
-    '_zod' in value &&
-    'def' in value
+    !!value && typeof value === 'object' && '_zod' in value && 'def' in value
   );
 }
 
@@ -153,15 +144,15 @@ function isRouter(value: unknown): value is AnyRouter {
   if (!('_def' in value)) return false;
   const def = value._def;
   return (
-    !!def &&
-    typeof def === 'object' &&
-    'router' in def &&
-    def.router === true
+    !!def && typeof def === 'object' && 'router' in def && def.router === true
   );
 }
 
 function isProcedure(value: unknown): value is AnyProcedure {
-  if (value === null || (typeof value !== 'function' && typeof value !== 'object')) {
+  if (
+    value === null ||
+    (typeof value !== 'function' && typeof value !== 'object')
+  ) {
     return false;
   }
   if (!('_def' in value)) return false;
@@ -176,9 +167,8 @@ function isProcedure(value: unknown): value is AnyProcedure {
 
 /** File header from `initTRPC.meta<ProtoMeta>().create({ defaultMeta })`. */
 export function protoMetaFromRouter(router: AnyRouter): ProtoMeta {
-  const config = (
-    router._def as { _config?: { defaultMeta?: unknown } }
-  )._config;
+  const config = (router._def as { _config?: { defaultMeta?: unknown } })
+    ._config;
   const meta = config?.defaultMeta;
   if (!meta || typeof meta !== 'object') return {};
   return meta as ProtoMeta;
@@ -227,8 +217,6 @@ function assumeExhaustive(value: never): never {
 /** `default:` is exhaustive except for `Allowed` cases left unhandled. */
 function assumeExhaustiveAllowing<Allowed>(_value: Allowed): void {}
 
-
-
 type ZodRuntime = ZodType & {
   type: string;
   def: {
@@ -244,6 +232,7 @@ type ZodRuntime = ZodType & {
     getter?: () => ZodType;
     left?: ZodType;
     right?: ZodType;
+    discriminator?: string;
     in?: ZodType;
     out?: ZodType;
   };
@@ -277,12 +266,12 @@ function messageCache(
 
 function protoTypeName(type: ProtoType): string {
   switch (type.kind) {
-    case "scalar":
+    case 'scalar':
       return type.type;
-    case "enum":
-    case "message":
+    case 'enum':
+    case 'message':
       return type.name;
-    case "map":
+    case 'map':
       return `map<${type.key}, ${protoTypeName(type.value)}>`;
     default:
       return assumeExhaustive(type);
@@ -290,10 +279,34 @@ function protoTypeName(type: ProtoType): string {
 }
 
 function objectShape(zod: ZodRuntime): Record<string, ZodType> {
-  if (zod.shape && typeof zod.shape === "object") return zod.shape;
+  if (zod.shape && typeof zod.shape === 'object') return zod.shape;
   const shape = zod.def.shape;
-  if (typeof shape === "function") return shape();
+  if (typeof shape === 'function') return shape();
   return shape ?? {};
+}
+
+function unionDiscriminator(zod: ZodRuntime): string | undefined {
+  return typeof zod.def.discriminator === 'string'
+    ? zod.def.discriminator
+    : undefined;
+}
+
+function stringLiteral(zod: ZodRuntime): string | undefined {
+  if (zod.type !== 'literal') return undefined;
+  const values = zod.def.values ?? [];
+  if (values.length === 1 && typeof values[0] === 'string') return values[0];
+  return undefined;
+}
+
+function omitShapeKey(zod: ZodRuntime, key: string): ZodRuntime {
+  const shape = { ...objectShape(zod) };
+  delete shape[key];
+  return {
+    ...zod,
+    type: 'object',
+    def: { ...zod.def, type: 'object', shape },
+    shape,
+  };
 }
 
 function unwrap(zod: ZodType): { inner: ZodRuntime; optional: boolean } {
@@ -303,23 +316,23 @@ function unwrap(zod: ZodType): { inner: ZodRuntime; optional: boolean } {
   while (!seen.has(inner)) {
     seen.add(inner);
     switch (inner.type) {
-      case "optional":
-      case "nullable":
+      case 'optional':
+      case 'nullable':
         optional = true;
         inner = asRuntime(inner.def.innerType ?? inner.unwrap?.() ?? inner);
         continue;
-      case "default":
-      case "prefault":
-      case "catch":
-      case "nonoptional":
-      case "readonly":
+      case 'default':
+      case 'prefault':
+      case 'catch':
+      case 'nonoptional':
+      case 'readonly':
         inner = asRuntime(inner.def.innerType ?? inner.unwrap?.() ?? inner);
         continue;
-      case "pipe":
+      case 'pipe':
         inner = asRuntime(inner.def.out ?? inner.def.in ?? inner);
         continue;
-      case "lazy":
-      case "promise":
+      case 'lazy':
+      case 'promise':
         inner = asRuntime(
           inner.unwrap?.() ??
             inner.def.getter?.() ??
@@ -342,7 +355,7 @@ function zodComment(zod: ZodType): string {
   while (current && !seen.has(current)) {
     seen.add(current);
     const runtime = asRuntime(current);
-    const text = runtime.description ?? runtime.meta?.()?.description ?? "";
+    const text = runtime.description ?? runtime.meta?.()?.description ?? '';
     if (text) return text;
     current =
       runtime.def.innerType ??
@@ -350,53 +363,53 @@ function zodComment(zod: ZodType): string {
       runtime.def.out ??
       runtime.def.in;
   }
-  return "";
+  return '';
 }
 
 function isEmptyType(zod: ZodRuntime): boolean {
   return (
-    zod.type === "void" ||
-    zod.type === "undefined" ||
-    zod.type === "never" ||
-    zod.type === "null"
+    zod.type === 'void' ||
+    zod.type === 'undefined' ||
+    zod.type === 'never' ||
+    zod.type === 'null'
   );
 }
 
 function mapScalar(zod: ZodRuntime): ProtoType | undefined {
   switch (zod.type) {
-    case "string":
-    case "template_literal":
-      return { kind: "scalar", type: "string" };
-    case "any":
-    case "unknown":
-      return { kind: "message", name: "google.protobuf.Value" };
-    case "boolean":
-      return { kind: "scalar", type: "bool" };
-    case "bigint":
-      return { kind: "scalar", type: "int64" };
-    case "number":
-    case "int":
+    case 'string':
+    case 'template_literal':
+      return { kind: 'scalar', type: 'string' };
+    case 'any':
+    case 'unknown':
+      return { kind: 'message', name: 'google.protobuf.Value' };
+    case 'boolean':
+      return { kind: 'scalar', type: 'bool' };
+    case 'bigint':
+      return { kind: 'scalar', type: 'int64' };
+    case 'number':
+    case 'int':
       switch (zod.format) {
-        case "safeint":
-        case "int32":
-          return { kind: "scalar", type: "int32" };
-        case "int64":
-        case "uint64":
-          return { kind: "scalar", type: "int64" };
+        case 'safeint':
+        case 'int32':
+          return { kind: 'scalar', type: 'int32' };
+        case 'int64':
+        case 'uint64':
+          return { kind: 'scalar', type: 'int64' };
         default:
-          assumeExhaustiveAllowing<"uint32" | "float32" | "float64" | null>(
-            zod.format as "uint32" | "float32" | "float64" | null,
+          assumeExhaustiveAllowing<'uint32' | 'float32' | 'float64' | null>(
+            zod.format as 'uint32' | 'float32' | 'float64' | null,
           );
           return zod.isInt
-            ? { kind: "scalar", type: "int32" }
-            : { kind: "scalar", type: "double" };
+            ? { kind: 'scalar', type: 'int32' }
+            : { kind: 'scalar', type: 'double' };
       }
-    case "nan":
-      return { kind: "scalar", type: "double" };
-    case "date":
-      return { kind: "message", name: "google.protobuf.Timestamp" };
-    case "file":
-      return { kind: "scalar", type: "bytes" };
+    case 'nan':
+      return { kind: 'scalar', type: 'double' };
+    case 'date':
+      return { kind: 'message', name: 'google.protobuf.Timestamp' };
+    case 'file':
+      return { kind: 'scalar', type: 'bytes' };
     default:
       assumeExhaustiveAllowing<string>(zod.type);
       return undefined;
@@ -408,52 +421,52 @@ function mapLiteral(zod: ZodRuntime): ProtoType {
   const kinds = new Set(values.map((item) => typeof item));
   if (kinds.size > 1) {
     throw new Error(
-      `literal values have mixed types: ${[...kinds].join(", ")}`,
+      `literal values have mixed types: ${[...kinds].join(', ')}`,
     );
   }
   const value: unknown = values[0];
   const kind = typeof value;
   switch (kind) {
-    case "string":
-      return { kind: "scalar", type: "string" };
-    case "boolean":
-      return { kind: "scalar", type: "bool" };
-    case "bigint":
-      return { kind: "scalar", type: "int64" };
-    case "number": {
+    case 'string':
+      return { kind: 'scalar', type: 'string' };
+    case 'boolean':
+      return { kind: 'scalar', type: 'bool' };
+    case 'bigint':
+      return { kind: 'scalar', type: 'int64' };
+    case 'number': {
       const ints = values.every(
-        (item) => typeof item === "number" && Number.isInteger(item),
+        (item) => typeof item === 'number' && Number.isInteger(item),
       );
       const floats = values.every(
-        (item) => typeof item === "number" && !Number.isInteger(item),
+        (item) => typeof item === 'number' && !Number.isInteger(item),
       );
       if (!ints && !floats) {
-        throw new Error("literal values mix integers and floats");
+        throw new Error('literal values mix integers and floats');
       }
       return ints
-        ? { kind: "scalar", type: "int32" }
-        : { kind: "scalar", type: "double" };
+        ? { kind: 'scalar', type: 'int32' }
+        : { kind: 'scalar', type: 'double' };
     }
     default:
-      assumeExhaustiveAllowing<"undefined" | "object" | "function" | "symbol">(
+      assumeExhaustiveAllowing<'undefined' | 'object' | 'function' | 'symbol'>(
         kind,
       );
-      return { kind: "scalar", type: "string" };
+      return { kind: 'scalar', type: 'string' };
   }
 }
 
 function mapKeyScalar(zod: ZodType): ProtoScalar {
   const mapped = mapScalar(unwrap(zod).inner);
-  if (!mapped || mapped.kind !== "scalar") {
-    throw new Error("map/record key must be a proto scalar");
+  if (!mapped || mapped.kind !== 'scalar') {
+    throw new Error('map/record key must be a proto scalar');
   }
   if (
-    mapped.type !== "string" &&
-    mapped.type !== "int32" &&
-    mapped.type !== "int64" &&
-    mapped.type !== "bool"
+    mapped.type !== 'string' &&
+    mapped.type !== 'int32' &&
+    mapped.type !== 'int64' &&
+    mapped.type !== 'bool'
   ) {
-    return "string";
+    return 'string';
   }
   return mapped.type;
 }
@@ -546,6 +559,95 @@ class Translator {
     return message;
   }
 
+  convertDiscriminatedUnion(
+    zod: ZodRuntime,
+    messageName: string,
+    discriminator: string,
+    hoist = true,
+    cacheName = messageName,
+  ): ProtoMessage {
+    if (hoist) {
+      const existing = this.messages.find(
+        (message) => message.name === messageName,
+      );
+      if (existing) return existing;
+    }
+    const cache = messageCache(this.cache, cacheName);
+    const assignments: Record<string, number> = {};
+    for (const [name, child] of Object.entries(cache.propertyGenCache)) {
+      if (child.tag !== undefined) assignments[name] = child.tag;
+    }
+    for (const [id, name] of Object.entries(cache.usedIds)) {
+      assignments[name] ??= Number(id);
+    }
+    const allocator = createFieldAllocator(assignments);
+    const fields: ProtoField[] = [];
+    const subMessages: ProtoMessage[] = [];
+    const oneof = toSnakeCase(discriminator);
+    const seen = new Set<string>();
+    for (const option of zod.def.options ?? []) {
+      const arm = unwrap(option).inner;
+      if (arm.type !== 'object') {
+        throw new Error(
+          `discriminatedUnion "${discriminator}" arms must be objects at ${messageName}`,
+        );
+      }
+      const tagField = objectShape(arm)[discriminator];
+      const tag = tagField ? stringLiteral(unwrap(tagField).inner) : undefined;
+      if (!tag) {
+        throw new Error(
+          `discriminatedUnion "${discriminator}" needs a string literal at ${messageName}`,
+        );
+      }
+      const nestedName = toPascalCase(tag);
+      if (seen.has(nestedName)) {
+        throw new Error(
+          `discriminatedUnion duplicate arm "${tag}" at ${messageName}`,
+        );
+      }
+      seen.add(nestedName);
+      const variant = this.convertObject(
+        omitShapeKey(arm, discriminator),
+        nestedName,
+        false,
+        `${cacheName}.${nestedName}`,
+      );
+      subMessages.push(variant);
+      const fieldName = toSnakeCase(tag);
+      const existingField = cache.propertyGenCache[fieldName];
+      const number =
+        existingField?.tag !== undefined
+          ? existingField.tag
+          : allocator.next().value;
+      cache.usedIds[number] = fieldName;
+      cache.propertyGenCache[fieldName] = {
+        tag: number,
+        type: nestedName,
+        propertyGenCache: existingField?.propertyGenCache ?? {},
+        usedIds: existingField?.usedIds ?? {},
+      };
+      fields.push({
+        name: fieldName,
+        number,
+        type: { kind: 'message', name: nestedName },
+        repeated: false,
+        optional: false,
+        comment: zodComment(option),
+        oneof,
+        discriminatorValue: tag,
+      });
+    }
+    const message: ProtoMessage = {
+      name: messageName,
+      fields,
+      subMessages,
+      comment: zodComment(zod),
+      discriminator,
+    };
+    if (hoist) this.messages.push(message);
+    return message;
+  }
+
   convertEnum(zod: ZodRuntime, enumName: string): ProtoType {
     const name = this.messageName(zod, enumName);
     if (isWellKnownType(name)) {
@@ -557,7 +659,7 @@ class Translator {
         name: valueName,
         number: index,
       }));
-      if (values.length === 0 && zod.type === "union") {
+      if (values.length === 0 && zod.type === 'union') {
         const names = (zod.def.options ?? []).flatMap((option) => {
           const inner = unwrap(option).inner;
           return (inner.def.values ?? []).map((value) => String(value));
@@ -569,7 +671,7 @@ class Translator {
       }
       this.enums.push({ name, values, comment: zodComment(zod) });
     }
-    return { kind: "enum", name };
+    return { kind: 'enum', name };
   }
 
   mapField(
@@ -580,13 +682,13 @@ class Translator {
   ): { type: ProtoType; repeated: boolean; message?: ProtoMessage } {
     const inner = unwrap(zod).inner;
     switch (inner.type) {
-      case "array":
-      case "set": {
+      case 'array':
+      case 'set': {
         const element = asRuntime(inner.element ?? inner.def.element ?? inner);
         const mapped = this.mapField(element, parentMessage, fieldName, nested);
         return { ...mapped, repeated: true };
       }
-      case "object": {
+      case 'object': {
         const named = inner.meta?.()?.id;
         if (named && isWellKnownType(named)) {
           return {
@@ -597,7 +699,7 @@ class Translator {
         if (named) {
           const name = this.messageName(inner, named);
           this.convertObject(inner, name, true);
-          return { type: { kind: "message", name }, repeated: false };
+          return { type: { kind: 'message', name }, repeated: false };
         }
         const nestedName = toPascalCase(fieldName);
         const message = this.convertObject(
@@ -608,12 +710,12 @@ class Translator {
         );
         nested.push(message);
         return {
-          type: { kind: "message", name: nestedName },
+          type: { kind: 'message', name: nestedName },
           repeated: false,
           message,
         };
       }
-      case "enum":
+      case 'enum':
         return {
           type: this.convertEnum(
             inner,
@@ -621,13 +723,13 @@ class Translator {
           ),
           repeated: false,
         };
-      case "record":
-      case "map": {
+      case 'record':
+      case 'map': {
         const valueType = inner.def.valueType ?? inner;
         const valueInner = unwrap(valueType).inner;
-        if (valueInner.type === "any" || valueInner.type === "unknown") {
+        if (valueInner.type === 'any' || valueInner.type === 'unknown') {
           return {
-            type: { kind: "message", name: "google.protobuf.Struct" },
+            type: { kind: 'message', name: 'google.protobuf.Struct' },
             repeated: false,
           };
         }
@@ -639,11 +741,11 @@ class Translator {
           nested,
         );
         return {
-          type: { kind: "map", key, value: value.type },
+          type: { kind: 'map', key, value: value.type },
           repeated: false,
         };
       }
-      case "tuple": {
+      case 'tuple': {
         const nestedName = toPascalCase(fieldName);
         const items = (inner.def as { items?: ZodType[] }).items ?? [];
         const fakeShape: Record<string, ZodType> = {};
@@ -651,22 +753,22 @@ class Translator {
           fakeShape[`f${index}`] = item;
         });
         const message = this.convertObject(
-          { ...inner, type: "object", def: { ...inner.def, shape: fakeShape } },
+          { ...inner, type: 'object', def: { ...inner.def, shape: fakeShape } },
           nestedName,
           false,
           `${parentMessage}.${nestedName}`,
         );
         nested.push(message);
         return {
-          type: { kind: "message", name: nestedName },
+          type: { kind: 'message', name: nestedName },
           repeated: false,
           message,
         };
       }
-      case "intersection": {
+      case 'intersection': {
         const left = asRuntime(inner.def.left ?? inner);
         const right = asRuntime(inner.def.right ?? inner);
-        if (left.type === "object" && right.type === "object") {
+        if (left.type === 'object' && right.type === 'object') {
           const named = inner.meta?.()?.id;
           const merged = {
             ...left,
@@ -679,7 +781,7 @@ class Translator {
           if (named) {
             const name = this.messageName(inner, named);
             this.convertObject(merged, name, true);
-            return { type: { kind: "message", name }, repeated: false };
+            return { type: { kind: 'message', name }, repeated: false };
           }
           const nestedName = toPascalCase(fieldName);
           const message = this.convertObject(
@@ -690,17 +792,40 @@ class Translator {
           );
           nested.push(message);
           return {
-            type: { kind: "message", name: nestedName },
+            type: { kind: 'message', name: nestedName },
             repeated: false,
             message,
           };
         }
-        assumeExhaustiveAllowing<"intersection">(inner.type);
+        assumeExhaustiveAllowing<'intersection'>(inner.type);
         throw new Error(
           `Unsupported Zod type "${inner.type}" at ${parentMessage}.${fieldName}`,
         );
       }
-      case "union": {
+      case 'union': {
+        const discriminator = unionDiscriminator(inner);
+        if (discriminator) {
+          const named = inner.meta?.()?.id;
+          if (named) {
+            const name = this.messageName(inner, named);
+            this.convertDiscriminatedUnion(inner, name, discriminator, true);
+            return { type: { kind: 'message', name }, repeated: false };
+          }
+          const nestedName = toPascalCase(fieldName);
+          const message = this.convertDiscriminatedUnion(
+            inner,
+            nestedName,
+            discriminator,
+            false,
+            `${parentMessage}.${nestedName}`,
+          );
+          nested.push(message);
+          return {
+            type: { kind: 'message', name: nestedName },
+            repeated: false,
+            message,
+          };
+        }
         const options = (inner.def.options ?? []).map(
           (option) => unwrap(option).inner,
         );
@@ -710,7 +835,7 @@ class Translator {
         }
         if (
           meaningful.length > 0 &&
-          meaningful.every((option) => option.type === "literal")
+          meaningful.every((option) => option.type === 'literal')
         ) {
           return {
             type: this.convertEnum(
@@ -720,12 +845,12 @@ class Translator {
             repeated: false,
           };
         }
-        assumeExhaustiveAllowing<"union">(inner.type);
+        assumeExhaustiveAllowing<'union'>(inner.type);
         throw new Error(
           `Unsupported Zod type "${inner.type}" at ${parentMessage}.${fieldName}`,
         );
       }
-      case "literal":
+      case 'literal':
         return { type: mapLiteral(inner), repeated: false };
       default: {
         assumeExhaustiveAllowing<string>(inner.type);
@@ -743,7 +868,7 @@ class Translator {
       (message) => message.name === messageName,
     );
     if (existing) return messageName;
-    const mapped = this.mapField(zod, messageName, "value");
+    const mapped = this.mapField(zod, messageName, 'value');
     const cache = messageCache(this.cache, messageName);
     const assignments: Record<string, number> = {};
     if (cache.propertyGenCache.value?.tag !== undefined) {
@@ -753,7 +878,7 @@ class Translator {
     const existingTag = cache.propertyGenCache.value?.tag;
     const number =
       existingTag !== undefined ? existingTag : allocator.next().value;
-    cache.usedIds[number] = "value";
+    cache.usedIds[number] = 'value';
     cache.propertyGenCache.value = {
       tag: number,
       type: protoTypeName(mapped.type),
@@ -764,7 +889,7 @@ class Translator {
       name: messageName,
       fields: [
         {
-          name: "value",
+          name: 'value',
           number,
           type: mapped.type,
           repeated: mapped.repeated,
@@ -779,46 +904,48 @@ class Translator {
   }
 
   ioType(zod: ZodType | undefined, fallbackName: string): string {
-    if (!zod) return "google.protobuf.Empty";
+    if (!zod) return 'google.protobuf.Empty';
     const { inner } = unwrap(zod);
-    if (isEmptyType(inner)) return "google.protobuf.Empty";
+    if (isEmptyType(inner)) return 'google.protobuf.Empty';
     const id = inner.meta?.()?.id;
     if (id && isWellKnownType(id)) return id;
-    switch (inner.type) {
-      case "object": {
-        const name = this.messageName(inner, fallbackName);
-        this.convertObject(inner, name);
-        return name;
-      }
-      default: {
-        assumeExhaustiveAllowing<string>(inner.type);
-        const mapped =
-          inner.type === "literal" ? mapLiteral(inner) : mapScalar(inner);
-        if (
-          mapped &&
-          (mapped.kind === "message" || mapped.kind === "enum") &&
-          isWellKnownType(mapped.name)
-        ) {
-          return mapped.name;
-        }
-        this.wrapScalar(fallbackName, zod);
-        return fallbackName;
-      }
+    if (inner.type === 'object') {
+      const name = this.messageName(inner, fallbackName);
+      this.convertObject(inner, name);
+      return name;
     }
+    const discriminator = unionDiscriminator(inner);
+    if (inner.type === 'union' && discriminator) {
+      const name = this.messageName(inner, fallbackName);
+      this.convertDiscriminatedUnion(inner, name, discriminator, true);
+      return name;
+    }
+    assumeExhaustiveAllowing<string>(inner.type);
+    const mapped =
+      inner.type === 'literal' ? mapLiteral(inner) : mapScalar(inner);
+    if (
+      mapped &&
+      (mapped.kind === 'message' || mapped.kind === 'enum') &&
+      isWellKnownType(mapped.name)
+    ) {
+      return mapped.name;
+    }
+    this.wrapScalar(fallbackName, zod);
+    return fallbackName;
   }
 }
 
 function serviceName(path: string, rootService: string): string {
-  const parts = path.split(".");
+  const parts = path.split('.');
   if (parts.length === 1) return rootService;
   return parts
     .slice(0, -1)
     .map((part) => toPascalCase(part))
-    .join("");
+    .join('');
 }
 
 function methodName(path: string): string {
-  const last = path.split(".").at(-1) ?? path;
+  const last = path.split('.').at(-1) ?? path;
   return toPascalCase(last);
 }
 
@@ -827,12 +954,11 @@ function toPascalCase(name: string): string {
     .split(/[._-]/g)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
+    .join('');
 }
 function toSnakeCase(name: string): string {
-  return name.replace(/([A-Z])/g, "_$1").toLowerCase();
+  return name.replace(/([A-Z])/g, '_$1').toLowerCase();
 }
-
 
 /**
  * Walk runtime Zod parsers on `procedure.input` / `output` into ProtoSchema.
@@ -841,7 +967,7 @@ export function translate(
   procedures: RuntimeProcedure[],
   options: TranslateOptions = {},
 ): ProtoSchema {
-  const rootService = options.rootService ?? "App";
+  const rootService = options.rootService ?? 'App';
   const translator = new Translator(
     structuredClone(options.generateCache ?? { propertyGenCache: {} }),
   );
@@ -865,6 +991,8 @@ export function translate(
       type: procedure.type,
       requestType,
       responseType,
+      // Server-side streaming only. No client-stream or bidi.
+      isResponseStreaming: procedure.type === 'subscription',
     });
     services.set(service, methods);
   }
@@ -877,8 +1005,8 @@ export function translate(
   );
 
   return {
-    syntax: options.proto?.syntax ?? "proto3",
-    package: options.proto?.package ?? options.packageName ?? "trpc",
+    syntax: options.proto?.syntax ?? 'proto3',
+    package: options.proto?.package ?? options.packageName ?? 'trpc',
     options: options.proto?.options,
     services: protoServices,
     messages: translator.messages,

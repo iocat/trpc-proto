@@ -1,21 +1,18 @@
+export { bindRouter } from './grpc/server.js';
+export type { StubHandlers } from './grpc/server.js';
+export { noopForNonTsBackend } from './noop.js';
+
 export {
-  bindRouter,
-  noopForNonTsBackend,
-} from './bind.js';
-export type { StubHandlers } from './bind.js';
-export { createCodec, createProtoTransformer } from './codec.js';
-export type { Codec } from './codec.js';
-export {
-  createProtobufProxy,
-  createProtoStub,
-  serveGrpc,
-} from './grpc.js';
-export type {
-  GrpcProtoOptions,
-  GrpcServerHandle,
-  ServeGrpcOptions,
-} from './grpc.js';
-export { authInterceptor, grpcLink } from './link.js';
+  createProtoCodec,
+  createProtoTransformer,
+} from './proto_codec/proto_codec.js';
+export type { ProtoCodec } from './proto_codec/proto_codec.js';
+export { createProtoStub, serveGrpc } from './grpc/server.js';
+export { createGrpcWebHop } from './web/hop.js';
+export { grpcWebProxyLink } from './web/link.js';
+export type { GrpcWebProxyLinkOptions } from './web/link.js';
+export { GRPC_WEB_CONTENT_TYPE, isGrpcWebContentType } from './web/protocol.js';
+export { authInterceptor, grpcLink } from './grpc/link.js';
 export type {
   AuthConfig,
   CallContext,
@@ -23,23 +20,21 @@ export type {
   GrpcLinkOptions,
   StubCall,
   StubRequest,
-} from './link.js';
+} from './grpc/link.js';
 export {
   listProcedures,
   prevalidateRouter,
   protoMetaFromRouter,
   schemaFromRouter,
   translate,
-} from './translate.js';
+} from '@trpc-proto/schema_ir';
 export type {
   ProcedureType,
-  RuntimeProcedure,
-  TranslateOptions,
-} from './translate.js';
-export type {
   ProtoFileHeader,
   ProtoFileOptions,
   ProtoMeta,
   ProtoSchema,
   ProtoSyntax,
+  RuntimeProcedure,
+  TranslateOptions,
 } from '@trpc-proto/schema_ir';

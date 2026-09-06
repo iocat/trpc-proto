@@ -1,5 +1,5 @@
 import { initTRPC } from '@trpc/server';
-import type { ProtoMeta } from '@trpc-proto/runtime';
+import type { ProtoMeta } from '@trpc-proto/schema_ir';
 
 const t = initTRPC.meta<ProtoMeta>().create({
   defaultMeta: {

@@ -13,8 +13,12 @@ import type {
   ProtoSyntax,
   ProtoType,
   SchemaGenerateCache,
-} from './index.js';
-import { isWellKnownType, wellKnownImport, wellKnownKind } from './wellknown.js';
+} from './types.js';
+import {
+  isWellKnownType,
+  wellKnownImport,
+  wellKnownKind,
+} from './wellknown.js';
 
 const SCALARS = new Set<string>([
   'double',
@@ -77,7 +81,10 @@ function prepare(source: string): string {
     text = `syntax = "proto3";\n${text}`;
   }
   if (!/^\s*package\s+\w/m.test(text)) {
-    text = text.replace(/syntax\s*=\s*"proto3"\s*;/, 'syntax = "proto3";\npackage trpc;');
+    text = text.replace(
+      /syntax\s*=\s*"proto3"\s*;/,
+      'syntax = "proto3";\npackage trpc;',
+    );
   }
   return text;
 }
@@ -91,7 +98,8 @@ function publicTypeName(name: string): string {
 
 function namedType(name: string, enumNames: Set<string>): ProtoType {
   const publicName = publicTypeName(name);
-  if (SCALARS.has(publicName)) return { kind: 'scalar', type: publicName as ProtoScalar };
+  if (SCALARS.has(publicName))
+    return { kind: 'scalar', type: publicName as ProtoScalar };
   if (isWellKnownType(publicName)) {
     return { kind: wellKnownKind(publicName), name: publicName };
   }
@@ -123,6 +131,10 @@ function fromField(field: protobuf.Field, enumNames: Set<string>): ProtoField {
       comment: field.comment ?? '',
     };
   }
+  const oneof =
+    field.partOf && !field.partOf.isProto3Optional
+      ? field.partOf.name
+      : undefined;
   return {
     name: field.name,
     number: field.id,
@@ -130,21 +142,28 @@ function fromField(field: protobuf.Field, enumNames: Set<string>): ProtoField {
     repeated: field.repeated,
     optional: Boolean(field.optional),
     comment: field.comment ?? '',
+    ...(oneof ? { oneof, discriminatorValue: field.name } : {}),
   };
 }
 
-function fromMessage(type: protobuf.Type, enumNames: Set<string>): ProtoMessage {
+function fromMessage(
+  type: protobuf.Type,
+  enumNames: Set<string>,
+): ProtoMessage {
   const subMessages: ProtoMessage[] = [];
   for (const nested of type.nestedArray) {
     if (nested instanceof protobuf.Type) {
       subMessages.push(fromMessage(nested, enumNames));
     }
   }
+  const oneofs = type.oneofsArray.filter((oneof) => !oneof.isProto3Optional);
+  const discriminator = oneofs.length === 1 ? oneofs[0]?.name : undefined;
   return {
     name: type.name,
     fields: type.fieldsArray.map((field) => fromField(field, enumNames)),
     subMessages,
     comment: type.comment ?? '',
+    ...(discriminator ? { discriminator } : {}),
   };
 }
 
@@ -168,6 +187,7 @@ function fromService(service: protobuf.Service): ProtoService {
       type: (note?.[1] as ProcedureType | undefined) ?? 'query',
       requestType: publicTypeName(method.requestType),
       responseType: publicTypeName(method.responseType),
+      isResponseStreaming: method.responseStream === true,
     };
   });
   return { name: service.name, methods };
@@ -226,7 +246,11 @@ function fileOptionsFromRoot(
   return Object.keys(options).length > 0 ? options : undefined;
 }
 
-function emitComment(lines: string[], comment: string | undefined, indent: string) {
+function emitComment(
+  lines: string[],
+  comment: string | undefined,
+  indent: string,
+) {
   if (!comment) return;
   for (const line of comment.split(/\r?\n/)) {
     lines.push(`${indent}// ${line}`);
@@ -286,6 +310,37 @@ function reservedNumbers(
   return [...tags];
 }
 
+function emitField(
+  lines: string[],
+  field: ProtoField,
+  indent: string,
+  inOneof: boolean,
+) {
+  emitComment(lines, field.comment, indent);
+  let prefix = '';
+  if (!inOneof) {
+    switch (field.type.kind) {
+      case 'map':
+        prefix = '';
+        break;
+      case 'scalar':
+      case 'enum':
+      case 'message':
+        prefix = field.repeated
+          ? 'repeated '
+          : field.optional
+            ? 'optional '
+            : '';
+        break;
+      default:
+        assumeExhaustive(field.type);
+    }
+  }
+  lines.push(
+    `${indent}${prefix}${renderType(field.type)} ${field.name} = ${field.number};`,
+  );
+}
+
 function emitMessage(
   lines: string[],
   message: ProtoMessage,
@@ -304,28 +359,22 @@ function emitMessage(
       `${cacheKey}.${nested.name}`,
     );
   }
+  const grouped = new Map<string, ProtoField[]>();
+  const rest: ProtoField[] = [];
   for (const field of message.fields) {
-    emitComment(lines, field.comment, `${indent}  `);
-    let prefix = '';
-    switch (field.type.kind) {
-      case 'map':
-        prefix = '';
-        break;
-      case 'scalar':
-      case 'enum':
-      case 'message':
-        prefix = field.repeated
-          ? 'repeated '
-          : field.optional
-            ? 'optional '
-            : '';
-        break;
-      default:
-        assumeExhaustive(field.type);
+    if (field.oneof) {
+      const list = grouped.get(field.oneof) ?? [];
+      list.push(field);
+      grouped.set(field.oneof, list);
+    } else {
+      rest.push(field);
     }
-    lines.push(
-      `${indent}  ${prefix}${renderType(field.type)} ${field.name} = ${field.number};`,
-    );
+  }
+  for (const field of rest) emitField(lines, field, `${indent}  `, false);
+  for (const [name, fields] of grouped) {
+    lines.push(`${indent}  oneof ${name} {`);
+    for (const field of fields) emitField(lines, field, `${indent}    `, true);
+    lines.push(`${indent}  }`);
   }
   const reserved = formatReservedNumbers(
     reservedNumbers(message, cache?.propertyGenCache[cacheKey]),
@@ -423,7 +472,7 @@ export function toString(schema: ProtoSchema): string {
     for (const method of service.methods) {
       lines.push(
         `  // tRPC ${method.type} ${method.path}`,
-        `  rpc ${method.name} (${method.requestType}) returns (${method.responseType});`,
+        `  rpc ${method.name} (${method.requestType}) returns (${method.isResponseStreaming ? 'stream ' : ''}${method.responseType});`,
       );
     }
     lines.push('}', '');

@@ -7,13 +7,27 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./web": {
+      "types": "./dist/web/index.d.ts",
+      "import": "./dist/web/index.js"
+    },
+    "./proto_codec": {
+      "types": "./dist/proto_codec/index.d.ts",
+      "import": "./dist/proto_codec/index.js"
+    },
+    "./noop": {
+      "types": "./dist/noop.d.ts",
+      "import": "./dist/noop.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "test": "tsx --test src/*_test.ts"
+    "test": "tsx --test src/**/*_test.ts"
   },
   "peerDependencies": {
     "@grpc/grpc-js": "^1.12.0",
@@ -22,7 +36,9 @@
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@trpc/client": { "optional": true }
+    "@trpc/client": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@trpc-proto/schema_ir": "workspace:*",

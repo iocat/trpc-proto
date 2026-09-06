@@ -20,15 +20,15 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	App_Health_FullMethodName = "/example.v1.App/Health"
-	App_Hello_FullMethodName  = "/example.v1.App/Hello"
-	App_Echo_FullMethodName   = "/example.v1.App/Echo"
+	AppService_Health_FullMethodName = "/example.v1.AppService/Health"
+	AppService_Hello_FullMethodName  = "/example.v1.AppService/Hello"
+	AppService_Echo_FullMethodName   = "/example.v1.AppService/Echo"
 )
 
-// AppClient is the client API for App service.
+// AppServiceClient is the client API for AppService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type AppClient interface {
+type AppServiceClient interface {
 	// tRPC query health
 	Health(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*AppHealthResponse, error)
 	// tRPC query hello
@@ -37,152 +37,152 @@ type AppClient interface {
 	Echo(ctx context.Context, in *AppEchoRequest, opts ...grpc.CallOption) (*AppEchoResponse, error)
 }
 
-type appClient struct {
+type appServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewAppClient(cc grpc.ClientConnInterface) AppClient {
-	return &appClient{cc}
+func NewAppServiceClient(cc grpc.ClientConnInterface) AppServiceClient {
+	return &appServiceClient{cc}
 }
 
-func (c *appClient) Health(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*AppHealthResponse, error) {
+func (c *appServiceClient) Health(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*AppHealthResponse, error) {
 	out := new(AppHealthResponse)
-	err := c.cc.Invoke(ctx, App_Health_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, AppService_Health_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *appClient) Hello(ctx context.Context, in *AppHelloRequest, opts ...grpc.CallOption) (*AppHelloResponse, error) {
+func (c *appServiceClient) Hello(ctx context.Context, in *AppHelloRequest, opts ...grpc.CallOption) (*AppHelloResponse, error) {
 	out := new(AppHelloResponse)
-	err := c.cc.Invoke(ctx, App_Hello_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, AppService_Hello_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *appClient) Echo(ctx context.Context, in *AppEchoRequest, opts ...grpc.CallOption) (*AppEchoResponse, error) {
+func (c *appServiceClient) Echo(ctx context.Context, in *AppEchoRequest, opts ...grpc.CallOption) (*AppEchoResponse, error) {
 	out := new(AppEchoResponse)
-	err := c.cc.Invoke(ctx, App_Echo_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, AppService_Echo_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// AppServer is the server API for App service.
-// All implementations must embed UnimplementedAppServer
+// AppServiceServer is the server API for AppService service.
+// All implementations must embed UnimplementedAppServiceServer
 // for forward compatibility
-type AppServer interface {
+type AppServiceServer interface {
 	// tRPC query health
 	Health(context.Context, *emptypb.Empty) (*AppHealthResponse, error)
 	// tRPC query hello
 	Hello(context.Context, *AppHelloRequest) (*AppHelloResponse, error)
 	// tRPC query echo
 	Echo(context.Context, *AppEchoRequest) (*AppEchoResponse, error)
-	mustEmbedUnimplementedAppServer()
+	mustEmbedUnimplementedAppServiceServer()
 }
 
-// UnimplementedAppServer must be embedded to have forward compatible implementations.
-type UnimplementedAppServer struct {
+// UnimplementedAppServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedAppServiceServer struct {
 }
 
-func (UnimplementedAppServer) Health(context.Context, *emptypb.Empty) (*AppHealthResponse, error) {
+func (UnimplementedAppServiceServer) Health(context.Context, *emptypb.Empty) (*AppHealthResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Health not implemented")
 }
-func (UnimplementedAppServer) Hello(context.Context, *AppHelloRequest) (*AppHelloResponse, error) {
+func (UnimplementedAppServiceServer) Hello(context.Context, *AppHelloRequest) (*AppHelloResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Hello not implemented")
 }
-func (UnimplementedAppServer) Echo(context.Context, *AppEchoRequest) (*AppEchoResponse, error) {
+func (UnimplementedAppServiceServer) Echo(context.Context, *AppEchoRequest) (*AppEchoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Echo not implemented")
 }
-func (UnimplementedAppServer) mustEmbedUnimplementedAppServer() {}
+func (UnimplementedAppServiceServer) mustEmbedUnimplementedAppServiceServer() {}
 
-// UnsafeAppServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to AppServer will
+// UnsafeAppServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AppServiceServer will
 // result in compilation errors.
-type UnsafeAppServer interface {
-	mustEmbedUnimplementedAppServer()
+type UnsafeAppServiceServer interface {
+	mustEmbedUnimplementedAppServiceServer()
 }
 
-func RegisterAppServer(s grpc.ServiceRegistrar, srv AppServer) {
-	s.RegisterService(&App_ServiceDesc, srv)
+func RegisterAppServiceServer(s grpc.ServiceRegistrar, srv AppServiceServer) {
+	s.RegisterService(&AppService_ServiceDesc, srv)
 }
 
-func _App_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AppService_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AppServer).Health(ctx, in)
+		return srv.(AppServiceServer).Health(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: App_Health_FullMethodName,
+		FullMethod: AppService_Health_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AppServer).Health(ctx, req.(*emptypb.Empty))
+		return srv.(AppServiceServer).Health(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _App_Hello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AppService_Hello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AppHelloRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AppServer).Hello(ctx, in)
+		return srv.(AppServiceServer).Hello(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: App_Hello_FullMethodName,
+		FullMethod: AppService_Hello_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AppServer).Hello(ctx, req.(*AppHelloRequest))
+		return srv.(AppServiceServer).Hello(ctx, req.(*AppHelloRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _App_Echo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AppService_Echo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AppEchoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AppServer).Echo(ctx, in)
+		return srv.(AppServiceServer).Echo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: App_Echo_FullMethodName,
+		FullMethod: AppService_Echo_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AppServer).Echo(ctx, req.(*AppEchoRequest))
+		return srv.(AppServiceServer).Echo(ctx, req.(*AppEchoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// App_ServiceDesc is the grpc.ServiceDesc for App service.
+// AppService_ServiceDesc is the grpc.ServiceDesc for AppService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var App_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "example.v1.App",
-	HandlerType: (*AppServer)(nil),
+var AppService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "example.v1.AppService",
+	HandlerType: (*AppServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Health",
-			Handler:    _App_Health_Handler,
+			Handler:    _AppService_Health_Handler,
 		},
 		{
 			MethodName: "Hello",
-			Handler:    _App_Hello_Handler,
+			Handler:    _AppService_Hello_Handler,
 		},
 		{
 			MethodName: "Echo",
-			Handler:    _App_Echo_Handler,
+			Handler:    _AppService_Echo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -360,91 +360,91 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	OrgWorkspace_Stats_FullMethodName = "/example.v1.OrgWorkspace/Stats"
+	OrgWorkspaceService_Stats_FullMethodName = "/example.v1.OrgWorkspaceService/Stats"
 )
 
-// OrgWorkspaceClient is the client API for OrgWorkspace service.
+// OrgWorkspaceServiceClient is the client API for OrgWorkspaceService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type OrgWorkspaceClient interface {
+type OrgWorkspaceServiceClient interface {
 	// tRPC query org.workspace.stats
 	Stats(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*WorkspaceStats, error)
 }
 
-type orgWorkspaceClient struct {
+type orgWorkspaceServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewOrgWorkspaceClient(cc grpc.ClientConnInterface) OrgWorkspaceClient {
-	return &orgWorkspaceClient{cc}
+func NewOrgWorkspaceServiceClient(cc grpc.ClientConnInterface) OrgWorkspaceServiceClient {
+	return &orgWorkspaceServiceClient{cc}
 }
 
-func (c *orgWorkspaceClient) Stats(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*WorkspaceStats, error) {
+func (c *orgWorkspaceServiceClient) Stats(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*WorkspaceStats, error) {
 	out := new(WorkspaceStats)
-	err := c.cc.Invoke(ctx, OrgWorkspace_Stats_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, OrgWorkspaceService_Stats_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// OrgWorkspaceServer is the server API for OrgWorkspace service.
-// All implementations must embed UnimplementedOrgWorkspaceServer
+// OrgWorkspaceServiceServer is the server API for OrgWorkspaceService service.
+// All implementations must embed UnimplementedOrgWorkspaceServiceServer
 // for forward compatibility
-type OrgWorkspaceServer interface {
+type OrgWorkspaceServiceServer interface {
 	// tRPC query org.workspace.stats
 	Stats(context.Context, *emptypb.Empty) (*WorkspaceStats, error)
-	mustEmbedUnimplementedOrgWorkspaceServer()
+	mustEmbedUnimplementedOrgWorkspaceServiceServer()
 }
 
-// UnimplementedOrgWorkspaceServer must be embedded to have forward compatible implementations.
-type UnimplementedOrgWorkspaceServer struct {
+// UnimplementedOrgWorkspaceServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedOrgWorkspaceServiceServer struct {
 }
 
-func (UnimplementedOrgWorkspaceServer) Stats(context.Context, *emptypb.Empty) (*WorkspaceStats, error) {
+func (UnimplementedOrgWorkspaceServiceServer) Stats(context.Context, *emptypb.Empty) (*WorkspaceStats, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Stats not implemented")
 }
-func (UnimplementedOrgWorkspaceServer) mustEmbedUnimplementedOrgWorkspaceServer() {}
+func (UnimplementedOrgWorkspaceServiceServer) mustEmbedUnimplementedOrgWorkspaceServiceServer() {}
 
-// UnsafeOrgWorkspaceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to OrgWorkspaceServer will
+// UnsafeOrgWorkspaceServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to OrgWorkspaceServiceServer will
 // result in compilation errors.
-type UnsafeOrgWorkspaceServer interface {
-	mustEmbedUnimplementedOrgWorkspaceServer()
+type UnsafeOrgWorkspaceServiceServer interface {
+	mustEmbedUnimplementedOrgWorkspaceServiceServer()
 }
 
-func RegisterOrgWorkspaceServer(s grpc.ServiceRegistrar, srv OrgWorkspaceServer) {
-	s.RegisterService(&OrgWorkspace_ServiceDesc, srv)
+func RegisterOrgWorkspaceServiceServer(s grpc.ServiceRegistrar, srv OrgWorkspaceServiceServer) {
+	s.RegisterService(&OrgWorkspaceService_ServiceDesc, srv)
 }
 
-func _OrgWorkspace_Stats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _OrgWorkspaceService_Stats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(OrgWorkspaceServer).Stats(ctx, in)
+		return srv.(OrgWorkspaceServiceServer).Stats(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: OrgWorkspace_Stats_FullMethodName,
+		FullMethod: OrgWorkspaceService_Stats_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(OrgWorkspaceServer).Stats(ctx, req.(*emptypb.Empty))
+		return srv.(OrgWorkspaceServiceServer).Stats(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// OrgWorkspace_ServiceDesc is the grpc.ServiceDesc for OrgWorkspace service.
+// OrgWorkspaceService_ServiceDesc is the grpc.ServiceDesc for OrgWorkspaceService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var OrgWorkspace_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "example.v1.OrgWorkspace",
-	HandlerType: (*OrgWorkspaceServer)(nil),
+var OrgWorkspaceService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "example.v1.OrgWorkspaceService",
+	HandlerType: (*OrgWorkspaceServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Stats",
-			Handler:    _OrgWorkspace_Stats_Handler,
+			Handler:    _OrgWorkspaceService_Stats_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -1,40 +1,26 @@
+import { createTRPCProxyClient } from '@trpc/client';
+import { grpcWebProxyLink } from '@trpc-proto/runtime/web';
+import { appRouter } from '../router.ts';
+
 const $ = (id) => document.getElementById(id);
-const PKG = 'example.v1';
-let root;
+
+function client() {
+  return createTRPCProxyClient({
+    links: [
+      grpcWebProxyLink({
+        router: appRouter,
+        url: '',
+        auth: { token: () => $('auth-token')?.value },
+      }),
+    ],
+  });
+}
 
 function show(id, value) {
   const el = $(id);
   if (!el) return;
-  el.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-}
-
-function typeName(name) {
-  return name.startsWith('google.') ? name : `${PKG}.${name}`;
-}
-
-async function rpc(service, method, reqType, payload, resType) {
-  const Req = root.lookupType(typeName(reqType));
-  const Res = root.lookupType(typeName(resType));
-  const bytes = Req.encode(Req.create(payload || {})).finish();
-  const res = await fetch(`/rpc/${service}/${method}`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-protobuf',
-      authorization: `Bearer ${$('auth-token').value}`,
-    },
-    body: bytes,
-  });
-  const buf = new Uint8Array(await res.arrayBuffer());
-  if (!res.ok) throw new Error(new TextDecoder().decode(buf) || res.statusText);
-  $('status').textContent =
-    `protobuf ${bytes.length}B → ${buf.length}B · /${PKG}.${service}/${method}`;
-  $('status').className = 'ok';
-  return Res.toObject(Res.decode(buf), {
-    defaults: true,
-    longs: String,
-    enums: String,
-    bytes: String,
-  });
+  el.textContent =
+    typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }
 
 function route() {
@@ -63,7 +49,7 @@ function helloView() {
       <button class="secondary" id="echo-btn">Echo</button>
       <pre id="hello-out"></pre>
     </section>`;
-  }
+}
 
 function usersView() {
   return `
@@ -128,13 +114,10 @@ function workspaceView() {
 }
 
 async function refreshUsers(selectId) {
-  const listed = await rpc(
-    'UserService',
-    'List',
-    'UserListRequest',
-    { q: $('q').value || undefined, role: $('role').value || undefined },
-    'UserListResponse',
-  );
+  const listed = await client().user.list.query({
+    q: $('q').value || undefined,
+    role: $('role').value || undefined,
+  });
   const items = listed.items || [];
   $('user-rows').innerHTML = items
     .map(
@@ -145,7 +128,8 @@ async function refreshUsers(selectId) {
     )
     .join('');
   if (selectId) {
-    const user = items.find((item) => item.id === selectId) || items[items.length - 1];
+    const user =
+      items.find((item) => item.id === selectId) || items[items.length - 1];
     if (user) show('user-out', user);
   }
 }
@@ -154,54 +138,43 @@ function bindHello() {
   $('hello-btn').onclick = async () => {
     show(
       'hello-out',
-      await rpc(
-        'AppService',
-        'Hello',
-        'AppHelloRequest',
-        { fullName: $('hello-name').value, description: $('hello-desc').value },
-        'AppHelloResponse',
-      ),
+      await client().hello.query({
+        fullName: $('hello-name').value,
+        description: $('hello-desc').value,
+      }),
     );
   };
   $('echo-btn').onclick = async () => {
-    const out = await rpc('AppService', 'Echo', 'AppEchoRequest', { value: $('echo-text').value }, 'AppEchoResponse');
-    show('hello-out', out.value);
+    show('hello-out', await client().echo.query($('echo-text').value));
   };
 }
 
 function bindUsers() {
   $('list-btn').onclick = () => refreshUsers();
   $('create-btn').onclick = async () => {
-    const created = await rpc(
-      'UserService',
-      'Create',
-      'UserCreateRequest',
-      {
-        name: $('user-name').value,
-        email: $('user-email').value,
-        role: $('user-role').value,
-        tags: $('user-tags').value.split(',').map((t) => t.trim()).filter(Boolean),
-        address: { city: $('user-city').value },
-      },
-      'User',
-    );
+    const created = await client().user.create.mutate({
+      name: $('user-name').value,
+      email: $('user-email').value,
+      role: $('user-role').value,
+      tags: $('user-tags')
+        .value.split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+      address: { city: $('user-city').value },
+    });
     show('user-out', created);
     await refreshUsers(created.id);
   };
   $('user-rows').onclick = async (event) => {
     const row = event.target.closest('tr');
     if (!row) return;
-    show(
-      'user-out',
-      await rpc('UserService', 'GetById', 'UserGetByIdRequest', { id: row.dataset.id }, 'User'),
-    );
+    show('user-out', await client().user.getById.query({ id: row.dataset.id }));
   };
   return refreshUsers();
 }
 
 async function bindWorkspace() {
-  const stats = await rpc('OrgWorkspaceService', 'Stats', 'google.protobuf.Empty', {}, 'WorkspaceStats');
-  show('stats-out', stats);
+  show('stats-out', await client().org.workspace.stats.query());
 }
 
 async function render() {
@@ -225,17 +198,9 @@ async function render() {
   }
 }
 
-protobuf.load('/proto/example_v1.proto', async (err, loaded) => {
-  if (err) {
-    $('status').className = 'bad';
-    $('status').textContent = String(err);
-    return;
-  }
-  root = loaded;
-  $('status').textContent = 'ready';
-  $('status').className = 'ok';
-  window.addEventListener('hashchange', () => {
-    void render();
-  });
-  await render();
+$('status').textContent = 'ready';
+$('status').className = 'ok';
+window.addEventListener('hashchange', () => {
+  void render();
 });
+void render();

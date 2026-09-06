@@ -50,3 +50,8 @@ export function wellKnownKind(name: string): 'enum' | 'message' {
 export function wellKnownImport(name: string): string | undefined {
   return WELL_KNOWN_IMPORTS[name];
 }
+
+/** gRPC service name: always `FooService`, never double-suffix. */
+export function protoServiceName(name: string): string {
+  return name.endsWith('Service') ? name : `${name}Service`;
+}

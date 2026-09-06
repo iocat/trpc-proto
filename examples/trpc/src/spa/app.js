@@ -1,32 +1,17 @@
+import { createTRPCProxyClient } from '@trpc/client';
+import { grpcWebProxyLink } from '@trpc-proto/runtime/web';
+import { appRouter } from '../router.ts';
+
 const $ = (id) => document.getElementById(id);
-const PKG = 'trpc.v1';
-let root;
 
-function typeName(name) {
-  return name.startsWith('google.') ? name : `${PKG}.${name}`;
-}
-
-async function rpc(service, method, reqType, payload, resType) {
-  const Req = root.lookupType(typeName(reqType));
-  const Res = root.lookupType(typeName(resType));
-  const bytes = Req.encode(Req.create(payload || {})).finish();
-  const res = await fetch(`/rpc/${service}/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-protobuf' },
-    body: bytes,
-  });
-  const buf = new Uint8Array(await res.arrayBuffer());
-  if (!res.ok) throw new Error(new TextDecoder().decode(buf) || res.statusText);
-  $('status').textContent =
-    `protobuf ${bytes.length}B → ${buf.length}B · /${PKG}.${service}/${method}`;
-  $('status').className = 'ok';
-  return Res.toObject(Res.decode(buf), {
-    defaults: true,
-    longs: String,
-    enums: String,
-    bytes: String,
-  });
-}
+const client = createTRPCProxyClient({
+  links: [
+    grpcWebProxyLink({
+      router: appRouter,
+      url: '',
+    }),
+  ],
+});
 
 function route() {
   return location.hash.replace(/^#\/?/, '') || 'echo';
@@ -35,7 +20,10 @@ function route() {
 function markNav() {
   const current = route();
   for (const link of document.querySelectorAll('nav a')) {
-    link.classList.toggle('active', link.getAttribute('href') === `#/${current}`);
+    link.classList.toggle(
+      'active',
+      link.getAttribute('href') === `#/${current}`,
+    );
   }
 }
 
@@ -61,17 +49,47 @@ async function render() {
           <pre id="note-out"></pre>
         </section>`;
       $('put-btn').onclick = async () => {
-        const put = await rpc('NoteService', 'Put', 'Note', {
+        const put = await client.note.put.mutate({
           id: $('note-id').value,
           body: $('note-body').value,
-        }, 'Note');
+        });
         $('note-out').textContent = JSON.stringify(put, null, 2);
       };
       $('get-btn').onclick = async () => {
-        const got = await rpc('NoteService', 'Get', 'NoteGetRequest', {
+        const got = await client.note.get.query({
           id: $('note-id').value,
-        }, 'Note');
+        });
         $('note-out').textContent = JSON.stringify(got, null, 2);
+      };
+    } else if (route() === 'stream') {
+      app.innerHTML = `
+        <section>
+          <h2>note.onChange</h2>
+          <p>server-streaming subscription. Put a note on Notes, events land here.</p>
+          <button id="sub-btn">Subscribe</button>
+          <button class="secondary" id="unsub-btn">Unsubscribe</button>
+          <pre id="stream-out"></pre>
+        </section>`;
+      const events = [];
+      let sub;
+      $('sub-btn').onclick = () => {
+        sub?.unsubscribe();
+        events.length = 0;
+        $('stream-out').textContent = 'listening…';
+        sub = client.note.onChange.subscribe(undefined, {
+          onData(note) {
+            events.push(note);
+            $('stream-out').textContent = JSON.stringify(events, null, 2);
+          },
+          onError(err) {
+            fail(err);
+          },
+        });
+      };
+      $('unsub-btn').onclick = () => {
+        sub?.unsubscribe();
+        sub = undefined;
+        $('stream-out').textContent = 'stopped';
       };
     } else {
       app.innerHTML = `
@@ -84,14 +102,12 @@ async function render() {
           <pre id="echo-out"></pre>
         </section>`;
       $('health-btn').onclick = async () => {
-        const health = await rpc('AppService', 'Health', 'google.protobuf.Empty', {}, 'AppHealthResponse');
+        const health = await client.health.query();
         $('echo-out').textContent = JSON.stringify(health, null, 2);
       };
       $('echo-btn').onclick = async () => {
-        const echo = await rpc('AppService', 'Echo', 'AppEchoRequest', {
-          value: $('echo-text').value,
-        }, 'AppEchoResponse');
-        $('echo-out').textContent = echo.value;
+        const echo = await client.echo.query($('echo-text').value);
+        $('echo-out').textContent = echo;
       };
     }
   } catch (err) {
@@ -99,16 +115,9 @@ async function render() {
   }
 }
 
-protobuf.load('/proto/trpc_v1.proto', async (err, loaded) => {
-  if (err) {
-    fail(err);
-    return;
-  }
-  root = loaded;
-  $('status').textContent = 'ready';
-  $('status').className = 'ok';
-  window.addEventListener('hashchange', () => {
-    void render();
-  });
-  await render();
+$('status').textContent = 'ready';
+$('status').className = 'ok';
+window.addEventListener('hashchange', () => {
+  void render();
 });
+void render();

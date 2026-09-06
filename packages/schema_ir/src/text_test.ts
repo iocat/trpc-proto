@@ -10,7 +10,7 @@ import type {
   ProtoSchema,
   ProtoService,
   ProtoType,
-} from './index.js';
+} from './types.js';
 import { fromString, toString } from './text.js';
 
 function field(
@@ -61,7 +61,14 @@ function method(
   responseType: string,
   type: ProcedureType = 'query',
 ): ProtoMethod {
-  return { name, path, type, requestType, responseType };
+  return {
+    name,
+    path,
+    type,
+    requestType,
+    responseType,
+    isResponseStreaming: type === 'subscription',
+  };
 }
 
 function service(name: string, methods: ProtoMethod[]): ProtoService {
@@ -169,11 +176,16 @@ message User {
           [
             stringField('id', 1, { comment: 'unique id' }),
             stringField('tags', 2, { repeated: true }),
-            field('labels', 3, {
-              kind: 'map',
-              key: 'string',
-              value: { kind: 'scalar', type: 'int32' },
-            }, { optional: false }),
+            field(
+              'labels',
+              3,
+              {
+                kind: 'map',
+                key: 'string',
+                value: { kind: 'scalar', type: 'int32' },
+              },
+              { optional: false },
+            ),
             field('address', 4, { kind: 'message', name: 'Address' }),
           ],
           [message('Address', [stringField('city', 1)])],
@@ -227,9 +239,7 @@ enum UserRole {
   {
     name: 'service tRPC comments',
     schema: schema({
-      messages: [
-        message('HelloRequest', [stringField('name', 1)]),
-      ],
+      messages: [message('HelloRequest', [stringField('name', 1)])],
       services: [
         service('AppService', [
           method('Hello', 'hello', 'HelloRequest', 'HelloRequest'),
@@ -247,6 +257,41 @@ message HelloRequest {
 service AppService {
   // tRPC query hello
   rpc Hello (HelloRequest) returns (HelloRequest);
+}
+`,
+  },
+  {
+    name: 'subscription server-streaming rpc',
+    schema: schema({
+      messages: [
+        message('Note', [stringField('id', 1), stringField('body', 2)]),
+      ],
+      services: [
+        service('NoteService', [
+          method(
+            'OnChange',
+            'note.onChange',
+            'google.protobuf.Empty',
+            'Note',
+            'subscription',
+          ),
+        ]),
+      ],
+    }),
+    proto: `syntax = "proto3";
+
+package trpc;
+
+import "google/protobuf/empty.proto";
+
+message Note {
+  optional string id = 1;
+  optional string body = 2;
+}
+
+service NoteService {
+  // tRPC subscription note.onChange
+  rpc OnChange (google.protobuf.Empty) returns (stream Note);
 }
 `,
   },

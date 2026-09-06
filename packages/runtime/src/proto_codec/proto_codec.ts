@@ -6,7 +6,7 @@ import type {
   ProtoType,
 } from '@trpc-proto/schema_ir';
 
-export interface Codec {
+export interface ProtoCodec {
   readonly schema: ProtoSchema;
   encode(messageName: string, value: unknown): Uint8Array;
   decode(messageName: string, bytes: Uint8Array): unknown;
@@ -51,6 +51,7 @@ function addMessageType(
   for (const nested of message.subMessages ?? []) {
     addMessageType(type, nested);
   }
+  const oneofs = new Map<string, protobuf.OneOf>();
   for (const field of message.fields) {
     if (field.type.kind === 'map') {
       type.add(
@@ -64,14 +65,22 @@ function addMessageType(
       continue;
     }
     const rule = field.repeated ? 'repeated' : 'optional';
-    type.add(
-      new protobuf.Field(
-        field.name,
-        field.number,
-        fieldTypeName(field.type),
-        rule,
-      ),
+    const pbField = new protobuf.Field(
+      field.name,
+      field.number,
+      fieldTypeName(field.type),
+      rule,
     );
+    type.add(pbField);
+    if (field.oneof) {
+      let oneof = oneofs.get(field.oneof);
+      if (!oneof) {
+        oneof = new protobuf.OneOf(field.oneof);
+        type.add(oneof);
+        oneofs.set(field.oneof, oneof);
+      }
+      oneof.add(pbField);
+    }
   }
   ns.add(type);
   return type;
@@ -95,9 +104,7 @@ function buildRoot(schema: ProtoSchema): protobuf.Root {
 
 function lookupType(root: protobuf.Root, schema: ProtoSchema, name: string) {
   if (name.startsWith('google.protobuf.')) return root.lookupType(name);
-  return (
-    root.lookupType(`${schema.package}.${name}`) ?? root.lookupType(name)
-  );
+  return root.lookupType(`${schema.package}.${name}`) ?? root.lookupType(name);
 }
 
 function isWrapper(message: ProtoMessage) {
@@ -142,7 +149,9 @@ function timestampToDate(value: unknown): Date {
   if (value instanceof Date) return value;
   if (!value || typeof value !== 'object') return new Date(NaN);
   const rec = value as { seconds?: string | number; nanos?: number };
-  return new Date(Number(rec.seconds ?? 0) * 1000 + Number(rec.nanos ?? 0) / 1e6);
+  return new Date(
+    Number(rec.seconds ?? 0) * 1000 + Number(rec.nanos ?? 0) / 1e6,
+  );
 }
 
 function toProtoValue(
@@ -152,7 +161,10 @@ function toProtoValue(
   scope?: ProtoMessage,
 ): unknown {
   if (value == null) return value;
-  if (type.kind === 'scalar' && (type.type === 'int64' || type.type === 'uint64' || type.type === 'sint64')) {
+  if (
+    type.kind === 'scalar' &&
+    (type.type === 'int64' || type.type === 'uint64' || type.type === 'sint64')
+  ) {
     return typeof value === 'bigint' ? value.toString() : value;
   }
   if (type.kind === 'message' && type.name === 'google.protobuf.Timestamp') {
@@ -178,7 +190,10 @@ function fromProtoValue(
   scope?: ProtoMessage,
 ): unknown {
   if (value == null) return value;
-  if (type.kind === 'scalar' && (type.type === 'int64' || type.type === 'sint64')) {
+  if (
+    type.kind === 'scalar' &&
+    (type.type === 'int64' || type.type === 'sint64')
+  ) {
     return typeof value === 'bigint' ? value : BigInt(String(value));
   }
   if (type.kind === 'message' && type.name === 'google.protobuf.Timestamp') {
@@ -221,6 +236,21 @@ function toProtoObject(
   }
   if (!payload || typeof payload !== 'object') return payload;
   const src = payload as Record<string, unknown>;
+  if (message.discriminator) {
+    const tag = src[message.discriminator];
+    const arm = message.fields.find(
+      (field) =>
+        field.discriminatorValue === tag ||
+        field.name === tag ||
+        toCamel(field.name) === tag,
+    );
+    if (!arm || arm.type.kind !== 'message') return {};
+    const rest: Record<string, unknown> = { ...src };
+    delete rest[message.discriminator];
+    return {
+      [arm.name]: toProtoObject(schema, arm.type.name, rest, message),
+    };
+  }
   const out: Record<string, unknown> = {};
   for (const field of message.fields) {
     const raw = src[field.name] ?? src[toCamel(field.name)];
@@ -247,6 +277,22 @@ function fromProtoObject(
   const message = resolveMessage(schema, name, scope);
   if (!message || !value || typeof value !== 'object') return value;
   const src = value as Record<string, unknown>;
+  if (message.discriminator) {
+    for (const field of message.fields) {
+      const raw = src[field.name] ?? src[toCamel(field.name)];
+      if (raw === undefined || raw === null) continue;
+      const decoded = fromProtoValue(schema, field.type, raw, message);
+      const rest =
+        decoded && typeof decoded === 'object' && !Array.isArray(decoded)
+          ? (decoded as Record<string, unknown>)
+          : {};
+      return {
+        [message.discriminator]: field.discriminatorValue ?? field.name,
+        ...rest,
+      };
+    }
+    return {};
+  }
   const out: Record<string, unknown> = {};
   for (const field of message.fields) {
     const raw = src[field.name] ?? src[toCamel(field.name)];
@@ -264,7 +310,7 @@ function fromProtoObject(
   return out;
 }
 
-export function createCodec(schema: ProtoSchema): Codec {
+export function createProtoCodec(schema: ProtoSchema): ProtoCodec {
   const root = buildRoot(schema);
   return {
     schema,
@@ -291,7 +337,7 @@ export function createCodec(schema: ProtoSchema): Codec {
  *
  * tRPC transformers are path-blind (`serialize(value)` / `deserialize(value)`).
  * Protobuf needs the RPC's request/response message names, which only `grpcLink`
- * has (`schema` + `op.path` → `createCodec().encode/decode`). Putting wire
+ * has (`schema` + `op.path` → `createProtoCodec().encode/decode`). Putting wire
  * encoding here would either guess the wrong message or double-encode.
  *
  * Pass this (or omit `transformer`) so tRPC does not wrap values before the link.

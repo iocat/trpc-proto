@@ -1,13 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createFieldAllocator } from './translate.js';
+import { createFieldAllocator } from './trpc_schema.js';
 
 type Op = 'auto' | number;
 
-function assignTags(
-  ops: Op[],
-  seed: Record<string, number> = {},
-): number[] {
+function assignTags(ops: Op[], seed: Record<string, number> = {}): number[] {
   const gen = createFieldAllocator(seed);
   return ops.map((op) =>
     op === 'auto' ? gen.next().value : gen.next(op).value,

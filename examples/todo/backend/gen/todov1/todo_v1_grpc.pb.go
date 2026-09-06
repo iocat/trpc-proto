@@ -20,91 +20,91 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	App_Health_FullMethodName = "/todo.v1.App/Health"
+	AppService_Health_FullMethodName = "/todo.v1.AppService/Health"
 )
 
-// AppClient is the client API for App service.
+// AppServiceClient is the client API for AppService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type AppClient interface {
+type AppServiceClient interface {
 	// tRPC query health
 	Health(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*AppHealthResponse, error)
 }
 
-type appClient struct {
+type appServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewAppClient(cc grpc.ClientConnInterface) AppClient {
-	return &appClient{cc}
+func NewAppServiceClient(cc grpc.ClientConnInterface) AppServiceClient {
+	return &appServiceClient{cc}
 }
 
-func (c *appClient) Health(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*AppHealthResponse, error) {
+func (c *appServiceClient) Health(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*AppHealthResponse, error) {
 	out := new(AppHealthResponse)
-	err := c.cc.Invoke(ctx, App_Health_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, AppService_Health_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// AppServer is the server API for App service.
-// All implementations must embed UnimplementedAppServer
+// AppServiceServer is the server API for AppService service.
+// All implementations must embed UnimplementedAppServiceServer
 // for forward compatibility
-type AppServer interface {
+type AppServiceServer interface {
 	// tRPC query health
 	Health(context.Context, *emptypb.Empty) (*AppHealthResponse, error)
-	mustEmbedUnimplementedAppServer()
+	mustEmbedUnimplementedAppServiceServer()
 }
 
-// UnimplementedAppServer must be embedded to have forward compatible implementations.
-type UnimplementedAppServer struct {
+// UnimplementedAppServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedAppServiceServer struct {
 }
 
-func (UnimplementedAppServer) Health(context.Context, *emptypb.Empty) (*AppHealthResponse, error) {
+func (UnimplementedAppServiceServer) Health(context.Context, *emptypb.Empty) (*AppHealthResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Health not implemented")
 }
-func (UnimplementedAppServer) mustEmbedUnimplementedAppServer() {}
+func (UnimplementedAppServiceServer) mustEmbedUnimplementedAppServiceServer() {}
 
-// UnsafeAppServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to AppServer will
+// UnsafeAppServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AppServiceServer will
 // result in compilation errors.
-type UnsafeAppServer interface {
-	mustEmbedUnimplementedAppServer()
+type UnsafeAppServiceServer interface {
+	mustEmbedUnimplementedAppServiceServer()
 }
 
-func RegisterAppServer(s grpc.ServiceRegistrar, srv AppServer) {
-	s.RegisterService(&App_ServiceDesc, srv)
+func RegisterAppServiceServer(s grpc.ServiceRegistrar, srv AppServiceServer) {
+	s.RegisterService(&AppService_ServiceDesc, srv)
 }
 
-func _App_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AppService_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AppServer).Health(ctx, in)
+		return srv.(AppServiceServer).Health(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: App_Health_FullMethodName,
+		FullMethod: AppService_Health_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AppServer).Health(ctx, req.(*emptypb.Empty))
+		return srv.(AppServiceServer).Health(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// App_ServiceDesc is the grpc.ServiceDesc for App service.
+// AppService_ServiceDesc is the grpc.ServiceDesc for AppService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var App_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "todo.v1.App",
-	HandlerType: (*AppServer)(nil),
+var AppService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "todo.v1.AppService",
+	HandlerType: (*AppServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Health",
-			Handler:    _App_Health_Handler,
+			Handler:    _AppService_Health_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

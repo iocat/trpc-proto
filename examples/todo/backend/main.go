@@ -73,7 +73,7 @@ func cloneTodo(todo *pb.Todo) *pb.Todo {
 }
 
 type appServer struct {
-	pb.UnimplementedAppServer
+	pb.UnimplementedAppServiceServer
 }
 
 func (appServer) Health(context.Context, *emptypb.Empty) (*pb.AppHealthResponse, error) {
@@ -156,7 +156,7 @@ func main() {
 	}
 	store := newStore()
 	server := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor))
-	pb.RegisterAppServer(server, appServer{})
+	pb.RegisterAppServiceServer(server, appServer{})
 	pb.RegisterTodoServiceServer(server, &todoServer{store: store})
 	log.SetOutput(os.Stdout)
 	log.Printf("gRPC listening on %s\n", addr)

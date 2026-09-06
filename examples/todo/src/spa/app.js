@@ -1,33 +1,18 @@
+import { createTRPCProxyClient } from '@trpc/client';
+import { grpcWebProxyLink } from '@trpc-proto/runtime/web';
+import { appRouter } from '../router.ts';
+
 const $ = (id) => document.getElementById(id);
-const PKG = 'todo.v1';
-let root;
 
-function typeName(name) {
-  return name.startsWith('google.') ? name : `${PKG}.${name}`;
-}
-
-async function rpc(service, method, reqType, payload, resType) {
-  const Req = root.lookupType(typeName(reqType));
-  const Res = root.lookupType(typeName(resType));
-  const bytes = Req.encode(Req.create(payload || {})).finish();
-  const res = await fetch(`/rpc/${service}/${method}`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-protobuf',
-      authorization: `Bearer ${$('auth-token').value}`,
-    },
-    body: bytes,
-  });
-  const buf = new Uint8Array(await res.arrayBuffer());
-  if (!res.ok) throw new Error(new TextDecoder().decode(buf) || res.statusText);
-  $('status').textContent =
-    `protobuf ${bytes.length}B → ${buf.length}B · /${PKG}.${service}/${method}`;
-  $('status').className = 'ok';
-  return Res.toObject(Res.decode(buf), {
-    defaults: true,
-    longs: String,
-    enums: String,
-    bytes: String,
+function client() {
+  return createTRPCProxyClient({
+    links: [
+      grpcWebProxyLink({
+        router: appRouter,
+        url: '',
+        auth: { token: () => $('auth-token')?.value },
+      }),
+    ],
   });
 }
 
@@ -80,8 +65,12 @@ function createView() {
 async function refresh() {
   const filter = $('filter').value;
   const payload =
-    filter === 'open' ? { done: false } : filter === 'done' ? { done: true } : {};
-  const listed = await rpc('TodoService', 'List', 'TodoListRequest', payload, 'TodoListResponse');
+    filter === 'open'
+      ? { done: false }
+      : filter === 'done'
+        ? { done: true }
+        : {};
+  const listed = await client().todo.list.query(payload);
   $('todo-rows').innerHTML = (listed.items || [])
     .map((todo) => {
       const titleClass = todo.done ? ' class="done"' : '';
@@ -95,6 +84,11 @@ async function refresh() {
     .join('');
 }
 
+function fail(err) {
+  $('status').className = 'bad';
+  $('status').textContent = String(err.message || err);
+}
+
 function bindList() {
   $('list-btn').onclick = () => refresh().catch(fail);
   $('filter').onchange = () => refresh().catch(fail);
@@ -104,14 +98,14 @@ function bindList() {
     const id = row.dataset.id;
     try {
       if (event.target.classList.contains('toggle')) {
-        await rpc('TodoService', 'SetDone', 'TodoSetDoneRequest', {
+        await client().todo.setDone.mutate({
           id,
           done: event.target.checked,
-        }, 'Todo');
+        });
         await refresh();
       }
       if (event.target.classList.contains('del')) {
-        await rpc('TodoService', 'Remove', 'TodoGetByIdRequest', { id }, 'TodoGetByIdRequest');
+        await client().todo.remove.mutate({ id });
         await refresh();
       }
     } catch (err) {
@@ -124,20 +118,15 @@ function bindList() {
 function bindCreate() {
   $('create-btn').onclick = async () => {
     try {
-      const created = await rpc('TodoService', 'Create', 'TodoCreateRequest', {
+      const created = await client().todo.create.mutate({
         title: $('title').value,
         notes: $('notes').value || undefined,
-      }, 'Todo');
+      });
       $('create-out').textContent = JSON.stringify(created, null, 2);
     } catch (err) {
       fail(err);
     }
   };
-}
-
-function fail(err) {
-  $('status').className = 'bad';
-  $('status').textContent = String(err.message || err);
 }
 
 async function render() {
@@ -156,16 +145,9 @@ async function render() {
   }
 }
 
-protobuf.load('/proto/todo_v1.proto', async (err, loaded) => {
-  if (err) {
-    fail(err);
-    return;
-  }
-  root = loaded;
-  $('status').textContent = 'ready';
-  $('status').className = 'ok';
-  window.addEventListener('hashchange', () => {
-    void render();
-  });
-  await render();
+$('status').textContent = 'ready';
+$('status').className = 'ok';
+window.addEventListener('hashchange', () => {
+  void render();
 });
+void render();

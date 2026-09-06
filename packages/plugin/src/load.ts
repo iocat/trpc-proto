@@ -2,8 +2,8 @@ import path from 'node:path';
 import type { AnyRouter } from '@trpc/server';
 import { createJiti } from 'jiti';
 
-export { listProcedures, protoMetaFromRouter } from '@trpc-proto/runtime';
-export type { ProcedureType, RuntimeProcedure } from '@trpc-proto/runtime';
+export { listProcedures, protoMetaFromRouter } from '@trpc-proto/schema_ir';
+export type { ProcedureType, RuntimeProcedure } from '@trpc-proto/schema_ir';
 
 export interface LoadOptions {
   routerFile?: string;
@@ -33,9 +33,6 @@ function isRouter(value: unknown): value is AnyRouter {
   if (!('_def' in value)) return false;
   const def = value._def;
   return (
-    !!def &&
-    typeof def === 'object' &&
-    'router' in def &&
-    def.router === true
+    !!def && typeof def === 'object' && 'router' in def && def.router === true
   );
 }

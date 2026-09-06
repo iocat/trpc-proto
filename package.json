@@ -8,17 +8,18 @@
     "clean": "pnpm -r clean",
     "users:generate": "pnpm --filter @trpc-proto/example-users generate",
     "users:server": "pnpm --filter @trpc-proto/example-users run server",
-    "users:client": "pnpm --filter @trpc-proto/example-users run client",
-    "users:spin": "pnpm --filter @trpc-proto/example-users spin",
     "todo:generate": "pnpm --filter @trpc-proto/example-todo generate",
     "todo:server": "pnpm --filter @trpc-proto/example-todo run server",
-    "todo:client": "pnpm --filter @trpc-proto/example-todo run client",
     "trpc:generate": "pnpm --filter @trpc-proto/example-trpc generate",
-    "trpc:server": "pnpm --filter @trpc-proto/example-trpc run server",
-    "trpc:client": "pnpm --filter @trpc-proto/example-trpc run client"
+    "trpc:server": "pnpm --filter @trpc-proto/example-trpc run server"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
     "typescript": "^5.9.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

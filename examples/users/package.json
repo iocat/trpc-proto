@@ -7,10 +7,7 @@
     "generate": "trpc-proto generate --router src/router.ts --export appRouter --out generated",
     "generate:go": "bash backend/generate.sh",
     "server": "bash -c 'cd backend && go run .'",
-    "client": "tsx src/client.ts",
-    "proto-client": "tsx src/proto-client.ts",
     "web": "tsx src/web.ts",
-    "spin": "tsx scripts/spin.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -18,7 +15,7 @@
     "@trpc/server": "^11.18.0",
     "@trpc-proto/plugin": "workspace:*",
     "@trpc-proto/runtime": "workspace:*",
-    "protobufjs": "^7.5.4",
+    "esbuild": "^0.25.9",
     "zod": "^4.1.5"
   },
   "devDependencies": {

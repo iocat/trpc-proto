@@ -78,7 +78,7 @@ func newID() string {
 }
 
 type appServer struct {
-	pb.UnimplementedAppServer
+	pb.UnimplementedAppServiceServer
 }
 
 func (appServer) Health(context.Context, *emptypb.Empty) (*pb.AppHealthResponse, error) {
@@ -90,7 +90,7 @@ func (appServer) Health(context.Context, *emptypb.Empty) (*pb.AppHealthResponse,
 
 func (appServer) Hello(_ context.Context, req *pb.AppHelloRequest) (*pb.AppHelloResponse, error) {
 	return &pb.AppHelloResponse{
-		Message: proto.String("hello " + req.GetName()),
+		Message: proto.String("hello " + req.GetFullName()),
 	}, nil
 }
 
@@ -162,7 +162,7 @@ func (s *userServer) Create(_ context.Context, req *pb.UserCreateRequest) (*pb.U
 }
 
 type orgServer struct {
-	pb.UnimplementedOrgWorkspaceServer
+	pb.UnimplementedOrgWorkspaceServiceServer
 	store *store
 }
 
@@ -191,9 +191,9 @@ func main() {
 	}
 	store := newStore()
 	server := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor))
-	pb.RegisterAppServer(server, appServer{})
+	pb.RegisterAppServiceServer(server, appServer{})
 	pb.RegisterUserServiceServer(server, &userServer{store: store})
-	pb.RegisterOrgWorkspaceServer(server, &orgServer{store: store})
+	pb.RegisterOrgWorkspaceServiceServer(server, &orgServer{store: store})
 	log.SetOutput(os.Stdout)
 	log.Printf("gRPC listening on %s\n", addr)
 	if err := server.Serve(lis); err != nil {

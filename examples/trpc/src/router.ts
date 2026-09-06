@@ -1,8 +1,10 @@
 import { initTRPC, TRPCError } from '@trpc/server';
-import { createProtoTransformer, type ProtoMeta } from '@trpc-proto/runtime';
+import { observable } from '@trpc/server/observable';
+import { createProtoTransformer } from '@trpc-proto/runtime/proto_codec';
+import type { ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
-
 const t = initTRPC.meta<ProtoMeta>().create({
+  allowOutsideOfServer: true,
   transformer: createProtoTransformer(),
   defaultMeta: {
     proto: {
@@ -20,6 +22,7 @@ const Note = z
   .meta({ id: 'Note' });
 
 const notes = new Map<string, z.infer<typeof Note>>();
+const noteListeners = new Set<(note: z.infer<typeof Note>) => void>();
 
 export const appRouter = t.router({
   health: t.procedure
@@ -37,6 +40,7 @@ export const appRouter = t.router({
       .output(Note)
       .mutation(({ input }) => {
         notes.set(input.id, input);
+        for (const push of noteListeners) push(input);
         return input;
       }),
 
@@ -53,6 +57,23 @@ export const appRouter = t.router({
         }
         return note;
       }),
+
+    onChange: t.procedure
+      .input(z.object({}))
+      .output(Note)
+      .subscription((({ signal }: { signal?: AbortSignal }) =>
+        observable<z.infer<typeof Note>>((emit) => {
+          const push = (note: z.infer<typeof Note>) => {
+            emit.next(note);
+          };
+          noteListeners.add(push);
+          const onAbort = () => emit.complete();
+          signal?.addEventListener('abort', onAbort);
+          return () => {
+            noteListeners.delete(push);
+            signal?.removeEventListener('abort', onAbort);
+          };
+        })) as never),
   }),
 });
 

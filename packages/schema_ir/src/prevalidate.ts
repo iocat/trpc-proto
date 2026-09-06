@@ -1,12 +1,9 @@
-import type { ProtoFileHeader } from './index.js';
+import type { ProtoFileHeader } from './types.js';
 
 export type ProtoIssueLevel = 'error' | 'warning';
 
 export type ProtoIssueCode =
-  | 'missing_output'
-  | 'proto_override'
-  | 'bad_syntax'
-  | 'missing_package';
+  'missing_output' | 'proto_override' | 'bad_syntax' | 'missing_package';
 
 export interface ProtoIssue {
   level: ProtoIssueLevel;
@@ -55,7 +52,6 @@ export function prevalidate(input: ProtoPrevalidateInput): ProtoIssue[] {
       message: `defaultMeta.proto.syntax must be "proto3", got ${JSON.stringify(header.syntax)}`,
     });
   }
-
 
   for (const procedure of input.procedures) {
     if (!procedure.hasOutput) {

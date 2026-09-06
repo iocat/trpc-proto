@@ -1,10 +1,8 @@
 import { TRPCClientError, type TRPCLink } from '@trpc/client';
 import type { AnyRouter } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
-import { createCodec } from './codec.js';
-import { createGrpcStubCall } from './grpc.js';
-import { schemaFromRouter } from './translate.js';
-import type { ProtoSchema } from '@trpc-proto/schema_ir';
+import { createProtoCodec } from '../proto_codec/proto_codec.js';
+import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
 
 /** gRPC metadata / HTTP header key for bearer credentials. */
 const AUTH_METADATA_KEY = 'authorization';
@@ -61,24 +59,27 @@ export interface AuthConfig {
   token?: string | (() => MaybePromise<string | undefined>);
   /** Extra gRPC metadata (static or getter). */
   metadata?:
-    | Record<string, string>
-    | (() => MaybePromise<Record<string, string>>);
+    Record<string, string> | (() => MaybePromise<Record<string, string>>);
   /** Metadata key. Default `authorization`. */
   header?: string;
   /** Token scheme. Default `Bearer`. Set `''` for a raw value. */
   scheme?: string;
 }
 
-export interface GrpcLinkOptions<TRouter extends AnyRouter = AnyRouter> {
+export interface ProtoLinkOptions<TRouter extends AnyRouter = AnyRouter> {
   router: TRouter;
-  address?: string;
   interceptors?: CallInterceptor[];
-  /** Used by the auth interceptor to decorate the authentication to the request. */
   auth?: AuthConfig;
 }
 
 function isBytes(value: unknown): value is Uint8Array {
   return value instanceof Uint8Array;
+}
+
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+  return (
+    value != null && typeof value === 'object' && Symbol.asyncIterator in value
+  );
 }
 
 function compose(
@@ -116,15 +117,13 @@ export function authInterceptor(auth: AuthConfig): CallInterceptor {
   };
 }
 
-export function grpcLink<TRouter extends AnyRouter>(
-  opts: GrpcLinkOptions<TRouter>,
+/** Router walk + codec. `call` is native gRPC or gRPC-Web. */
+export function createProtoLink<TRouter extends AnyRouter>(
+  opts: ProtoLinkOptions<TRouter>,
+  call: StubCall,
 ): TRPCLink<TRouter> {
   const schema = schemaFromRouter(opts.router);
-  const codec = createCodec(schema);
-  const call = createGrpcStubCall({
-    router: opts.router,
-    address: opts.address,
-  });
+  const codec = createProtoCodec(schema);
   const interceptors = [
     ...(opts.auth ? [authInterceptor(opts.auth)] : []),
     ...(opts.interceptors ?? []),
@@ -141,6 +140,10 @@ export function grpcLink<TRouter extends AnyRouter>(
           return;
         }
         const { service, method } = rpc;
+        const ac = new AbortController();
+        if (op.signal) {
+          op.signal.addEventListener('abort', () => ac.abort(), { once: true });
+        }
         const ctx: CallContext = {
           path: op.path,
           type: op.type,
@@ -149,7 +152,7 @@ export function grpcLink<TRouter extends AnyRouter>(
           grpcPath: `/${schema.package}.${service.name}/${method.name}`,
           input: op.input,
           metadata: new Map(),
-          signal: op.signal ?? undefined,
+          signal: ac.signal,
         };
 
         async function invoke(current: CallContext) {
@@ -165,6 +168,7 @@ export function grpcLink<TRouter extends AnyRouter>(
             metadata: Object.fromEntries(current.metadata),
             signal: current.signal,
           });
+          if (isAsyncIterable(data)) return data;
           if (isBytes(data)) {
             return codec.decode(method.responseType, data);
           }
@@ -173,7 +177,18 @@ export function grpcLink<TRouter extends AnyRouter>(
 
         const execute = compose(interceptors, invoke);
         void execute(ctx).then(
-          (data) => {
+          async (data) => {
+            if (isAsyncIterable(data)) {
+              for await (const item of data) {
+                if (ac.signal.aborted) break;
+                const decoded = isBytes(item)
+                  ? codec.decode(method.responseType, item)
+                  : item;
+                observer.next({ result: { type: 'data', data: decoded } });
+              }
+              observer.complete();
+              return;
+            }
             observer.next({ result: { type: 'data', data } });
             observer.complete();
           },
@@ -182,6 +197,6 @@ export function grpcLink<TRouter extends AnyRouter>(
           },
         );
 
-        return () => undefined;
+        return () => ac.abort();
       });
 }

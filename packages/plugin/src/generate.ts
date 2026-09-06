@@ -4,18 +4,16 @@ import {
   listProcedures,
   prevalidateRouter,
   protoMetaFromRouter,
-  translate,
-} from '@trpc-proto/runtime';
-import type { RuntimeProcedure } from '@trpc-proto/runtime';
-import {
   toString,
+  translate,
   type ProtoMeta,
   type ProtoSchema,
+  type RuntimeProcedure,
   type SchemaGenerateCache,
 } from '@trpc-proto/schema_ir';
 import { loadAppRouter, type LoadOptions } from './load.js';
 
-export { translate } from '@trpc-proto/runtime';
+export { translate } from '@trpc-proto/schema_ir';
 
 export interface GenerateOptions extends LoadOptions, ProtoMeta {
   outDir?: string;
@@ -43,7 +41,10 @@ export async function generate(
   const fromOpts = options.proto ?? {};
   const outDir = options.outDir ?? 'generated';
   const packageName =
-    options.packageName ?? fromOpts.package ?? fromRouter?.package ?? DEFAULT_PACKAGE;
+    options.packageName ??
+    fromOpts.package ??
+    fromRouter?.package ??
+    DEFAULT_PACKAGE;
   const cachePath = path.resolve(
     fromOpts.cache ?? fromRouter?.cache ?? path.join(outDir, 'schema.json'),
   );
@@ -76,7 +77,6 @@ function loadGenerateCache(cachePath: string): SchemaGenerateCache | undefined {
   if (raw.propertyGenCache) return { propertyGenCache: raw.propertyGenCache };
   return undefined;
 }
-
 
 function writeOutputs(
   schema: ProtoSchema,

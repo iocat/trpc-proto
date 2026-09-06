@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createCodec } from './codec.js';
-import type { ProtoSchema } from '@trpc-proto/schema_ir';
+import { createProtoCodec } from './proto_codec.js';
+import { translate, type ProtoSchema } from '@trpc-proto/schema_ir';
+import { z } from 'zod';
 
 const schema: ProtoSchema = {
   syntax: 'proto3',
@@ -95,8 +96,8 @@ const schema: ProtoSchema = {
   services: [],
 };
 
-describe('createCodec', () => {
-  const codec = createCodec(schema);
+describe('createProtoCodec', () => {
+  const codec = createProtoCodec(schema);
 
   it('roundtrips an object message', () => {
     const encoded = codec.encode('HelloRequest', { name: 'Ada' });
@@ -124,7 +125,10 @@ describe('createCodec', () => {
       balance: 1000n,
       labels: { core: 3 },
     };
-    const decoded = codec.decode('User', codec.encode('User', user)) as typeof user;
+    const decoded = codec.decode(
+      'User',
+      codec.encode('User', user),
+    ) as typeof user;
     assert.equal(decoded.id, 'user_ada');
     assert.equal(decoded.role, 'admin');
     assert.deepEqual(decoded.tags, ['founder', 'math']);
@@ -167,7 +171,7 @@ describe('createCodec', () => {
         },
       ],
     };
-    const codecNested = createCodec(nested);
+    const codecNested = createProtoCodec(nested);
     const payload = { address: { city: 'London' } };
     assert.deepEqual(
       codecNested.decode(
@@ -175,6 +179,29 @@ describe('createCodec', () => {
         codecNested.encode('UserUpdateRequest', payload),
       ),
       payload,
+    );
+  });
+
+  it('roundtrips discriminatedUnion as oneof', () => {
+    const schema = translate([
+      {
+        path: 'track',
+        type: 'query',
+        input: z.discriminatedUnion('kind', [
+          z.object({ kind: z.literal('click'), x: z.number() }),
+          z.object({ kind: z.literal('key'), key: z.string() }),
+        ]),
+        output: z.object({ ok: z.boolean() }),
+      },
+    ]);
+    const codec = createProtoCodec(schema);
+    const click = { kind: 'click', x: 1.5 };
+    const encoded = codec.encode('AppTrackRequest', click);
+    assert.deepEqual(codec.decode('AppTrackRequest', encoded), click);
+    const key = { kind: 'key', key: 'Enter' };
+    assert.deepEqual(
+      codec.decode('AppTrackRequest', codec.encode('AppTrackRequest', key)),
+      key,
     );
   });
 });
