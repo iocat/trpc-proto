@@ -2,15 +2,70 @@
 
 Generate protobuf from a tRPC 11 + Zod 4 router. The TypeScript client keeps talking tRPC; the wire is gRPC.
 
+This is **opinionated**. Only a subset of `appRouter` is a proto contract. That subset is **enforced** at generate and at runtime (`grpcLink` / `schemaFromRouter`). Anything outside it is rejected, not approximated.
+
 ```
-packages/plugin      @trpc-proto/plugin      evaluate appRouter → .proto + schema.json
-packages/runtime     @trpc-proto/runtime     codec, grpcLink, invoker
-packages/schema_ir   @trpc-proto/schema_ir   ProtoSchema IR, prevalidate, proto text
-packages/example     @trpc-proto/example     Zod router + Go gRPC backend
-packages/example_todo                        smaller Go-backed demo
+packages/plugin      @trpc-proto/plugin          evaluate appRouter → .proto + schema.json
+packages/runtime     @trpc-proto/runtime         codec, grpcLink, invoker
+packages/schema_ir   @trpc-proto/schema_ir       ProtoSchema IR, prevalidate, proto text
+examples/users       @trpc-proto/example-users   users/org API + Go gRPC backend
+examples/todo        @trpc-proto/example-todo    todo API + Go gRPC backend
+examples/trpc        @trpc-proto/example-trpc    TypeScript tRPC backend + protobuf gRPC
+examples/calcom      @trpc-proto/example-calcom  large Cal.com-shaped router
 ```
 
 Requires **tRPC 11** and **Zod 4**. Runtime does not host a gRPC server.
+
+## Enforced subset
+
+Prevalidate collects every issue, then aborts on errors (no stack). Generate prints the router file path.
+
+### Router
+
+| | |
+|---|---|
+| `initTRPC.meta<ProtoMeta>()` with `defaultMeta.proto.package` | required |
+| `proto.syntax` | optional; proto3 only (omitted → proto3) |
+| `proto.cache` | optional; stable field numbers; dropped tags emit `reserved` |
+| `proto.options` | optional (`go_package`, …) |
+| `proto` on a procedure `.meta()` | forbidden (file header is router-global) |
+| procedure `.output()` | required |
+| procedure `.input()` | optional (omitted → `google.protobuf.Empty`) |
+| chained `.input()` | forbidden (merge into one Zod schema) |
+| procedure type | query or mutation (unary). Subscriptions are not a proto RPC |
+| validators | Zod 4 only |
+
+### Zod → proto
+
+| Zod | Proto |
+|---|---|
+| `z.object`, nested objects | `message` |
+| `.meta({ id: 'User' })` | named message/enum; **id must be PascalCase** |
+| unnamed nested object | nested message named from the field |
+| `z.string`, template literal | `string` (`email` is still `string`) |
+| `z.boolean` | `bool` |
+| `z.number` / `z.int` | `double` / `int32` (int formats: int32, int64, …) |
+| `z.bigint` | `int64` |
+| `z.date` | `google.protobuf.Timestamp` |
+| `z.enum`, same-type literal union | `enum` |
+| `z.array` / `z.set` | `repeated` |
+| `z.record` / `z.map` | `map<key, value>` (scalar keys) |
+| `z.any` / `z.unknown` | `google.protobuf.Value` |
+| `z.record` of any/unknown | `google.protobuf.Struct` |
+| void / undefined / never / null input or output | `google.protobuf.Empty` |
+| `z.optional` / `z.nullable` | `optional` field |
+
+Rejected (translate throws): open unions, mixed-type literals, mixed int/float literals, non-PascalCase `id`, non-scalar map keys, anything else `Unsupported Zod type`.
+
+Do not expect tRPC-only features (middleware-only procedures, output inference without `.output()`, superjson-only types) to round-trip through protobuf.
+
+```
+src/router.ts
+error: procedure ping missing required output
+  ping: t.procedure
+    .output(z.object({ ok: z.boolean() }))
+    .query(...)
+```
 
 ## Install
 
@@ -20,10 +75,6 @@ pnpm build
 ```
 
 ## 1. Router
-
-`proto.package` is required. Omitted `syntax` is proto3. `cache` is optional (stable field numbers across generates). Every procedure needs `.output()`. Do not set `proto` on a procedure.
-
-Named Zod objects (`.meta({ id: 'User' })`) become proto messages.
 
 ```ts
 import { initTRPC } from '@trpc/server';
@@ -40,7 +91,7 @@ const t = initTRPC.meta<ProtoMeta>().create({
     proto: {
       package: 'example.v1',
       cache: 'generated/schema.json',
-      options: { go_package: 'example/backend/gen/examplev1' },
+      options: { go_package: 'users/backend/gen/examplev1' },
     },
   },
 });
@@ -69,7 +120,7 @@ export const appRouter = t.router({
 export type AppRouter = typeof appRouter;
 ```
 
-`noopForNonTsBackend` is a schema-only resolver. A non-TS service that implements the generated proto is the real backend. For a TypeScript backend, use a real resolver and `createInvoker` (below).
+`noopForNonTsBackend` is a schema-only resolver. A non-TS service that implements the generated proto is the real backend. For a TypeScript backend, implement real resolvers and call `bindRouter` (below).
 
 The plugin evaluates `export const appRouter` (the runtime value, not the type) so it can read the Zod parsers.
 
@@ -82,7 +133,7 @@ trpc-proto generate \
   --out generated
 ```
 
-`--package` / `--cache` override `defaultMeta.proto`. Prevalidate failures print a report (no stack) and exit 1.
+`--package` / `--cache` override `defaultMeta.proto`. Prevalidate failures print the report and exit 1.
 
 Writes:
 
@@ -110,7 +161,7 @@ await generate({
 
 ## 3. Client
 
-`grpcLink` walks the live Zod parsers on `appRouter`. It dials gRPC itself (default `127.0.0.1:50051`). No `schema.json` on the client.
+`grpcLink` walks the live Zod parsers on `appRouter` (same subset). It dials gRPC itself (default `127.0.0.1:50051`). No `schema.json` on the client.
 
 ```ts
 import { createTRPCClient } from '@trpc/client';
@@ -132,55 +183,43 @@ await client.user.getById.query({ id: '1' });
 
 ## 4. Backend
 
-Bind generated stubs to `createInvoker` if the backend is still tRPC:
+TypeScript tRPC — `serveGrpc` is the server-side counterpart of `grpcLink`:
 
 ```ts
-import { bindStubHandlers, createInvoker } from '@trpc-proto/runtime';
+import { serveGrpc } from '@trpc-proto/runtime';
 import { appRouter } from './router.js';
-import schema from './generated/schema.json';
 
-const invoke = createInvoker(appRouter);
-const stubs = bindStubHandlers(schema, invoke);
-
-server.addService(UserService, {
-  getById: (call, callback) => {
-    stubs.UserService.GetById(call.request).then(
-      (res) => callback(null, res),
-      (err) => callback(err),
-    );
-  },
+await serveGrpc(appRouter, {
+  address: '127.0.0.1:50051',
+  createContext: () => ({}),
 });
 ```
 
-Or implement the generated proto in another language. The example Go server does that.
+If you already have generated stubs (connect, grpc-js `protoc`, Go, …), use `bindRouter(appRouter)` and plug `stubs.UserService.GetById` into that server instead.
 
-## Example
+Nested routers become service names (`user.getById` → `UserService.GetById`).
+
+Or implement the generated proto in another language. The Go examples do that.
+
+## Examples
 
 ```bash
-pnpm --filter @trpc-proto/example generate
-pnpm --filter @trpc-proto/example generate:go
-pnpm --filter @trpc-proto/example server   # Go gRPC on :50051
-pnpm --filter @trpc-proto/example client
+pnpm --filter @trpc-proto/example-users generate
+pnpm --filter @trpc-proto/example-users generate:go
+pnpm --filter @trpc-proto/example-users server   # Go gRPC on :50051
+pnpm --filter @trpc-proto/example-users client
 ```
 
-`pnpm --filter @trpc-proto/example spin` generates, starts Go + the dashboard (`http://127.0.0.1:3000`).
+`pnpm --filter @trpc-proto/example-users spin` generates, starts Go + the dashboard (`http://127.0.0.1:3000`).
 
-## Prevalidate
+Todo: `pnpm --filter @trpc-proto/example-todo generate` then `server` / `client`.
 
-Runs at generate and when `grpcLink` / `schemaFromRouter` load the router. All issues are collected; only errors abort.
+TypeScript backend (protobuf over gRPC, `bindRouter`):
 
-| | |
-|---|---|
-| `proto.package` missing | error |
-| procedure missing `.output()` | error |
-| procedure sets `proto` meta | error |
-| `syntax` set to something other than proto3 | error |
-| `cache` missing | allowed |
-
+```bash
+pnpm --filter @trpc-proto/example-trpc generate
+pnpm --filter @trpc-proto/example-trpc server   # :50053
+pnpm --filter @trpc-proto/example-trpc client
 ```
-src/router.ts
-error: procedure ping missing required output
-  ping: t.procedure
-    .output(z.object({ ok: z.boolean() }))
-    .query(...)
-```
+
+Cal.com-shaped router: `pnpm --filter @trpc-proto/example-calcom generate`.

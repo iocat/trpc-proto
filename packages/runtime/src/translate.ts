@@ -189,14 +189,9 @@ function procedureProto(procedure: AnyProcedure): ProtoFileHeader | undefined {
   return meta?.proto;
 }
 
-export function prevalidateRouter(
-  router: AnyRouter,
-  phase: 'generate' | 'runtime',
-  file?: string,
-): void {
+export function prevalidateRouter(router: AnyRouter, file?: string): void {
   assertPrevalidate(
     prevalidate({
-      phase,
       defaultProto: protoMetaFromRouter(router).proto,
       procedures: Object.entries(router._def.procedures).flatMap(
         ([path, value]) => {
@@ -217,7 +212,7 @@ export function prevalidateRouter(
 }
 
 export function schemaFromRouter(router: AnyRouter): ProtoSchema {
-  prevalidateRouter(router, 'runtime');
+  prevalidateRouter(router);
   const header = protoMetaFromRouter(router).proto!;
   return translate(listProcedures(router), {
     proto: header,
@@ -838,20 +833,6 @@ function toSnakeCase(name: string): string {
   return name.replace(/([A-Z])/g, "_$1").toLowerCase();
 }
 
-function toScreamingSnake(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[.-]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_/, "")
-    .toUpperCase();
-}
-
-function protoEnumValue(enumName: string, valueName: string): string {
-  const prefix = toScreamingSnake(enumName);
-  const value = toScreamingSnake(valueName);
-  return value.startsWith(`${prefix}_`) ? value : `${prefix}_${value}`;
-}
 
 /**
  * Walk runtime Zod parsers on `procedure.input` / `output` into ProtoSchema.

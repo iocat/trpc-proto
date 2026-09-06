@@ -1,22 +1,5 @@
 import type { ProtoFileHeader } from './index.js';
 
-export const PROTO_META_HINT = `Add the proto file header on the router:
-
-import { type ProtoMeta } from '@trpc-proto/runtime';
-
-const t = initTRPC.meta<ProtoMeta>().create({
-  defaultMeta: {
-    proto: {
-      package: 'your.package.v1',
-      syntax: 'proto3',
-      cache: 'generated/schema.json',
-      options: {
-        go_package: 'your/go/package',
-      },
-    },
-  },
-});`;
-
 export type ProtoIssueLevel = 'error' | 'warning';
 
 export type ProtoIssueCode =
@@ -38,10 +21,7 @@ export interface ProtoProcedureCheck {
   proto?: ProtoFileHeader;
 }
 
-export type ProtoPrevalidatePhase = 'generate' | 'runtime';
-
 export interface ProtoPrevalidateInput {
-  phase: ProtoPrevalidatePhase;
   defaultProto?: ProtoFileHeader;
   procedures: ProtoProcedureCheck[];
 }

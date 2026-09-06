@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>trpc</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>trpc</h1>
+      <p>browser protobuf → gRPC → TypeScript tRPC</p>
+    </div>
+    <div class="auth">
+      <div id="status">connecting…</div>
+    </div>
+  </header>
+  <nav>
+    <a href="#/echo">Echo</a>
+    <a href="#/notes">Notes</a>
+  </nav>
+  <main id="app"></main>
+  <script src="/vendor/protobuf.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

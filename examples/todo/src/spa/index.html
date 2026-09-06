@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>todo</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>todo</h1>
+      <p>browser protobuf → gRPC binary → Go</p>
+    </div>
+    <div class="auth">
+      <label for="auth-token">Bearer</label>
+      <input id="auth-token" value="__AUTH_TOKEN__" spellcheck="false" />
+      <div id="status">connecting…</div>
+    </div>
+  </header>
+  <nav>
+    <a href="#/list">List</a>
+    <a href="#/new">Create</a>
+  </nav>
+  <main id="app"></main>
+  <script src="/vendor/protobuf.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

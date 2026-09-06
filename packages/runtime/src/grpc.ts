@@ -1,6 +1,6 @@
 import * as grpc from '@grpc/grpc-js';
-import type { AnyRouter } from '@trpc/server';
-import { bindStubHandlers, type StubHandlers } from './bind.js';
+import { TRPCError, type AnyRouter } from '@trpc/server';
+import { bindRouter, bindStubHandlers, type StubHandlers } from './bind.js';
 import { createCodec } from './codec.js';
 import type { StubCall } from './link.js';
 import { schemaFromRouter } from './translate.js';
@@ -120,6 +120,124 @@ export function createProtobufProxy(address = DEFAULT_ADDRESS) {
         },
       );
       return promise;
+    },
+  };
+}
+
+export interface ServeGrpcOptions {
+  address?: string;
+  createContext?: () => unknown | Promise<unknown>;
+  credentials?: grpc.ServerCredentials;
+}
+
+export interface GrpcServerHandle {
+  address: string;
+  port: number;
+  close(): Promise<void>;
+}
+
+function grpcStatus(err: TRPCError) {
+  switch (err.code) {
+    case 'NOT_FOUND':
+      return grpc.status.NOT_FOUND;
+    case 'BAD_REQUEST':
+      return grpc.status.INVALID_ARGUMENT;
+    case 'UNAUTHORIZED':
+      return grpc.status.UNAUTHENTICATED;
+    case 'FORBIDDEN':
+      return grpc.status.PERMISSION_DENIED;
+    default:
+      return grpc.status.UNKNOWN;
+  }
+}
+
+function toServiceError(err: unknown): grpc.ServiceError {
+  if (err instanceof TRPCError) {
+    return Object.assign(new Error(err.message), {
+      code: grpcStatus(err),
+      details: err.message,
+      metadata: new grpc.Metadata(),
+    }) as grpc.ServiceError;
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  return Object.assign(new Error(message), {
+    code: grpc.status.UNKNOWN,
+    details: message,
+    metadata: new grpc.Metadata(),
+  }) as grpc.ServiceError;
+}
+
+/** Serve a tRPC router over gRPC with protobuf encoding. */
+export async function serveGrpc(
+  router: AnyRouter,
+  opts: ServeGrpcOptions = {},
+): Promise<GrpcServerHandle> {
+  const address = opts.address ?? DEFAULT_ADDRESS;
+  const credentials =
+    opts.credentials ?? grpc.ServerCredentials.createInsecure();
+  const schema = schemaFromRouter(router);
+  const codec = createCodec(schema);
+  const stubs = bindRouter(router, { createContext: opts.createContext });
+  const server = new grpc.Server();
+
+  for (const service of schema.services) {
+    const definition: Record<string, grpc.MethodDefinition<unknown, unknown>> =
+      {};
+    const implementation: grpc.UntypedServiceImplementation = {};
+    const handlers = stubs[service.name];
+    for (const method of service.methods) {
+      definition[method.name] = {
+        path: `/${schema.package}.${service.name}/${method.name}`,
+        requestStream: false,
+        responseStream: false,
+        requestSerialize: (value) =>
+          Buffer.from(codec.encode(method.requestType, value)),
+        requestDeserialize: (bytes) =>
+          codec.decode(method.requestType, new Uint8Array(bytes)),
+        responseSerialize: (value) =>
+          Buffer.from(codec.encode(method.responseType, value)),
+        responseDeserialize: (bytes) =>
+          codec.decode(method.responseType, new Uint8Array(bytes)),
+      };
+      implementation[method.name] = (
+        call: grpc.ServerUnaryCall<unknown, unknown>,
+        callback: grpc.sendUnaryData<unknown>,
+      ) => {
+        const handle = handlers?.[method.name];
+        if (!handle) {
+          callback(
+            toServiceError(
+              new TRPCError({
+                code: 'NOT_FOUND',
+                message: `No handler for ${service.name}.${method.name}`,
+              }),
+            ),
+          );
+          return;
+        }
+        handle(call.request).then(
+          (res) => callback(null, res),
+          (err) => callback(toServiceError(err)),
+        );
+      };
+    }
+    server.addService(definition as grpc.ServiceDefinition, implementation);
+  }
+
+  const { promise, resolve, reject } = Promise.withResolvers<number>();
+  server.bindAsync(address, credentials, (err, port) => {
+    if (err) reject(err);
+    else resolve(port);
+  });
+  const port = await promise;
+  const host = address.replace(/:\d+$/, '');
+  return {
+    address: `${host}:${port}`,
+    port,
+    close() {
+      const shutdown = Promise.withResolvers<void>();
+      server.tryShutdown(() => shutdown.resolve());
+      return shutdown.promise;
     },
   };
 }

@@ -146,14 +146,12 @@ export {
   formatIssues,
   prevalidate,
   PrevalidateError,
-  PROTO_META_HINT,
 } from './prevalidate.js';
 export type {
   ProtoIssue,
   ProtoIssueCode,
   ProtoIssueLevel,
   ProtoPrevalidateInput,
-  ProtoPrevalidatePhase,
   ProtoProcedureCheck,
 } from './prevalidate.js';
 export {

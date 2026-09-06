@@ -1,19 +1,20 @@
 export {
-  bindStubHandlers,
-  createNoopStub,
+  bindRouter,
   noopForNonTsBackend,
 } from './bind.js';
 export type { StubHandlers } from './bind.js';
 export { createCodec, createProtoTransformer } from './codec.js';
 export type { Codec } from './codec.js';
 export {
-  createGrpcStubCall,
   createProtobufProxy,
   createProtoStub,
+  serveGrpc,
 } from './grpc.js';
-export type { GrpcProtoOptions } from './grpc.js';
-export { createInvoker } from './invoke.js';
-export type { InvokeRequest, Invoker } from './invoke.js';
+export type {
+  GrpcProtoOptions,
+  GrpcServerHandle,
+  ServeGrpcOptions,
+} from './grpc.js';
 export { authInterceptor, grpcLink } from './link.js';
 export type {
   AuthConfig,

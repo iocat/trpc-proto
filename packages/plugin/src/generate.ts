@@ -37,7 +37,7 @@ export async function generate(
   options: GenerateOptions = {},
 ): Promise<GenerateResult> {
   const router = await loadAppRouter(options);
-  prevalidateRouter(router, 'generate', options.routerFile);
+  prevalidateRouter(router, options.routerFile);
   const procedures = listProcedures(router);
   const fromRouter = protoMetaFromRouter(router).proto;
   const fromOpts = options.proto ?? {};

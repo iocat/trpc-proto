@@ -1,8 +1,10 @@
-import { createCodec } from './codec.js';
+import type { AnyRouter } from '@trpc/server';
+import { createInvoker } from './invoke.js';
 import type { Invoker } from './invoke.js';
+import { schemaFromRouter } from './translate.js';
 import type { ProtoSchema } from '@trpc-proto/schema_ir';
 
-/** `{ User: { GetById: (input) => ... } }` — spread onto generated server stubs. */
+/** `{ UserService: { GetById: (input) => ... } }` — spread onto generated server stubs. */
 export type StubHandlers = Record<
   string,
   Record<string, (input: unknown) => Promise<unknown>>
@@ -24,22 +26,16 @@ export function bindStubHandlers(
 }
 
 /**
- * Proto-shaped handlers that return protobuf defaults (empty messages).
- * A non-tRPC backend can replace any method; unimplemented RPCs stay valid proto.
+ * Proto-shaped handlers that call a tRPC router.
+ * Use this when the backend is TypeScript tRPC.
  */
-export function createNoopStub(schema: ProtoSchema): StubHandlers {
-  const codec = createCodec(schema);
-  const services: StubHandlers = {};
-  for (const service of schema.services) {
-    const methods: Record<string, (input: unknown) => Promise<unknown>> = {};
-    for (const method of service.methods) {
-      methods[method.name] = async () =>
-        codec.decode(method.responseType, new Uint8Array());
-    }
-    services[service.name] = methods;
-  }
-  return services;
+export function bindRouter(
+  router: AnyRouter,
+  opts?: { createContext?: () => unknown | Promise<unknown> },
+): StubHandlers {
+  return bindStubHandlers(schemaFromRouter(router), createInvoker(router, opts));
 }
+
 
 /**
  * Empty procedure body. tRPC requires a resolver; `.input()` / `.output()`

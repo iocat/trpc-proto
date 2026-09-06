@@ -14,7 +14,6 @@ const proto: ProtoFileHeader = {
 describe('prevalidate', () => {
   it('requires proto.package', () => {
     const issues = prevalidate({
-      phase: 'runtime',
       procedures: [{ path: 'hello', hasOutput: true }],
     });
     assert.equal(issues[0]?.message, 'proto.package is required');
@@ -28,7 +27,6 @@ describe('prevalidate', () => {
   it('accepts package-only proto meta (syntax proto3, cache optional)', () => {
     assert.deepEqual(
       prevalidate({
-        phase: 'runtime',
         defaultProto: proto,
         procedures: [{ path: 'hello', hasOutput: true, proto }],
       }),
@@ -38,7 +36,6 @@ describe('prevalidate', () => {
 
   it('collects missing package and missing outputs together', () => {
     const issues = prevalidate({
-      phase: 'generate',
       procedures: [
         { path: 'hello', hasOutput: false },
         { path: 'ping', hasOutput: false },
@@ -64,7 +61,6 @@ describe('prevalidate', () => {
 
   it('throws when a procedure overrides proto meta', () => {
     const issues = prevalidate({
-      phase: 'runtime',
       defaultProto: proto,
       procedures: [
         {
