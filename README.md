@@ -203,6 +203,43 @@ Nested routers become service names (`user.getById` → `UserService.GetById`).
 
 Or implement the generated proto in another language. The Go examples do that.
 
+Cross-origin browser access is opt-in and uses exact serialized origins:
+
+```ts
+import { createGrpcWebHop } from '@trpc-proto/runtime';
+
+const hop = createGrpcWebHop({
+  address: '127.0.0.1:50051',
+  cors: {
+    allowedOrigins: ['https://app.example.com'],
+    additionalAllowedHeaders: ['x-trace-id'],
+  },
+});
+```
+
+The hop answers valid preflight requests, rejects disallowed origins, methods,
+and headers before contacting gRPC, and adds the matching CORS headers to
+gRPC-Web responses. Omit `cors` for same-origin deployments.
+
+## gRPC-Web backlog
+
+The current hop supports binary unary calls and server streaming through one
+reused grpc-js client. This table tracks the remaining proxy work.
+
+| Priority | Area | Backlog item | Acceptance |
+| --- | --- | --- | --- |
+| P0 | Text encoding | Negotiate `application/grpc-web-text` and incrementally decode/encode base64 chunks. | Binary and text requests and responses pass interoperability tests, including padding split across chunks. |
+| P0 | Framing | Validate frame flags, reject data after trailers, require final trailers, and reject truncated stream EOF. | Malformed framing has table-driven negative tests; trailers are always final. |
+| P0 | Cancellation | Parse `grpc-timeout`, apply an upstream deadline, and cancel the grpc-js call when the browser disconnects or aborts. | Deadline and disconnect tests observe cancellation at the backend. |
+| P0 | Boundary | Limit request-body size and restrict forwarded gRPC service/method paths. | Oversized bodies and unknown methods are rejected before an upstream call. |
+| P1 | Streaming | Replace the private `x-grpc-web-stream` contract with descriptor-driven server-streaming and add end-to-end stream tests. | Standard gRPC-Web clients can consume server streams without private headers. |
+| P1 | HTTP | Support and test HTTP/1.1 and HTTP/2 browser ingress. | The same unary and streaming suite passes over both ingress protocols. |
+| P1 | Metadata | Support binary `*-bin` metadata and configurable request/response header forwarding. | Binary metadata round-trips; hop-by-hop and disallowed headers never cross the boundary. |
+| P1 | Status | Percent-decode `grpc-message` and reject successful HTTP responses missing a valid final status. | Encoded error messages and malformed status responses have interoperability tests. |
+| P1 | Connections | Add client lifecycle cleanup and explicit pooling for multiple upstream targets. | Channels are reused, bounded, observable, and closed deterministically. |
+| P2 | Resilience | Add circuit breaking, active health checks, and rate limiting. | Each policy is configurable and covered by failure/recovery scenarios. |
+| P2 | Observability | Add structured access logs and request, latency, status, stream, and upstream metrics. | Operators can attribute failures and saturation to route and upstream. |
+
 ## Examples
 
 ```bash

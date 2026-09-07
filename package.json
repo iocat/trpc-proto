@@ -5,6 +5,7 @@
   "packageManager": "pnpm@10.25.0",
   "scripts": {
     "build": "pnpm -r build",
+    "lint": "eslint packages",
     "clean": "pnpm -r clean",
     "users:generate": "pnpm --filter @trpc-proto/example-users generate",
     "users:server": "pnpm --filter @trpc-proto/example-users run server",
@@ -15,6 +16,9 @@
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "@typescript-eslint/parser": "^8.69.0",
+    "eslint": "^10.10.0",
+    "eslint-plugin-jsdoc": "^64.3.6",
     "typescript": "^5.9.2"
   },
   "pnpm": {

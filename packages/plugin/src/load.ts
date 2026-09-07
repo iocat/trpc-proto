@@ -5,6 +5,7 @@ import { createJiti } from 'jiti';
 export { listProcedures, protoMetaFromRouter } from '@trpc-proto/schema_ir';
 export type { ProcedureType, RuntimeProcedure } from '@trpc-proto/schema_ir';
 
+/** Options for loading an app router from a TypeScript module. */
 export interface LoadOptions {
   routerFile?: string;
   routerExport?: string;

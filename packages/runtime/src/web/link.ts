@@ -3,6 +3,7 @@ import type { AnyRouter } from '@trpc/server';
 import { createGrpcWebFetchCall } from './protocol.js';
 import { createProtoLink, type ProtoLinkOptions } from '../grpc/proto_link.js';
 
+/** Options for a tRPC link that sends protobuf over gRPC-Web. */
 export interface GrpcWebProxyLinkOptions<
   TRouter extends AnyRouter = AnyRouter,
 > extends ProtoLinkOptions<TRouter> {

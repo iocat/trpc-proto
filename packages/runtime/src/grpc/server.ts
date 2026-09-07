@@ -9,6 +9,7 @@ import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
 /** Default insecure gRPC dial target for local development. */
 const DEFAULT_ADDRESS = '127.0.0.1:50051';
 
+/** Router and address used by a native gRPC client stub. */
 export interface GrpcProtoOptions {
   router: AnyRouter;
   address?: string;
@@ -281,12 +282,14 @@ export function createProtoStub(opts: GrpcProtoOptions): StubHandlers {
   );
 }
 
+/** Options for serving a tRPC router over native gRPC. */
 export interface ServeGrpcOptions {
   address?: string;
   createContext?: () => unknown | Promise<unknown>;
   credentials?: grpc.ServerCredentials;
 }
 
+/** Bound native gRPC server and its lifecycle controls. */
 export interface GrpcServerHandle {
   address: string;
   port: number;

@@ -21,6 +21,7 @@ function lookupRpc(schema: ProtoSchema, path: string) {
   return undefined;
 }
 
+/** Transport-neutral request passed from a protobuf link to its stub call. */
 export interface StubRequest {
   path: string;
   type: 'query' | 'mutation' | 'subscription';
@@ -38,6 +39,7 @@ export interface StubRequest {
 /** Transport. Return decoded JS or raw response bytes (link will decode). */
 export type StubCall = (request: StubRequest) => Promise<unknown>;
 
+/** Mutable request context passed through protobuf link interceptors. */
 export interface CallContext {
   path: string;
   type: 'query' | 'mutation' | 'subscription';
@@ -56,6 +58,7 @@ export type CallInterceptor = (
 
 export type MaybePromise<T> = T | Promise<T>;
 
+/** Authorization metadata generated for each protobuf link call. */
 export interface AuthConfig {
   /** Bearer token, or getter. Empty/undefined skips the header. */
   token?: string | (() => MaybePromise<string | undefined>);
@@ -68,6 +71,7 @@ export interface AuthConfig {
   scheme?: string;
 }
 
+/** Shared router, interceptor, and authorization options for protobuf links. */
 export interface ProtoLinkOptions<TRouter extends AnyRouter = AnyRouter> {
   router: TRouter;
   interceptors?: CallInterceptor[];

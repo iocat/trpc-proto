@@ -23,7 +23,7 @@ const spaJs = esbuild.buildSync({
   target: 'es2022',
   logLevel: 'silent',
 }).outputFiles![0]!.text;
-const hop = createGrpcWebHop(GRPC_ADDRESS);
+const hop = createGrpcWebHop({ address: GRPC_ADDRESS });
 
 function send(
   res: http.ServerResponse,

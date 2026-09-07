@@ -7,6 +7,7 @@ import type {
   ProtoType,
 } from '@trpc-proto/schema_ir';
 
+/** Runtime protobuf encoder and decoder for a translated schema. */
 export interface ProtoCodec {
   readonly schema: ProtoSchema;
   encode(messageName: string, value: unknown): Uint8Array;

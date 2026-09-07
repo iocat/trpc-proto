@@ -36,6 +36,7 @@ import type {
 } from '../ir/types.js';
 
 
+/** Overrides applied while translating tRPC procedures into protobuf schema. */
 export interface TranslateOptions {
   proto?: ProtoMeta['proto'];
   packageName?: string;
@@ -43,6 +44,7 @@ export interface TranslateOptions {
   generateCache?: SchemaGenerateCache;
 }
 
+/** Runtime tRPC procedure and its input and output Zod schemas. */
 export interface RuntimeProcedure {
   path: string;
   type: ProcedureType;

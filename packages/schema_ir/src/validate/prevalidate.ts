@@ -6,6 +6,7 @@ export type ProtoIssueLevel = 'error' | 'warning';
 export type ProtoIssueCode =
   'missing_output' | 'proto_override' | 'bad_syntax' | 'missing_package';
 
+/** Actionable validation issue found before protobuf generation. */
 export interface ProtoIssue {
   level: ProtoIssueLevel;
   code: ProtoIssueCode;
@@ -13,12 +14,14 @@ export interface ProtoIssue {
   path?: string;
 }
 
+/** Minimal procedure contract consumed by pre-generation validation. */
 export interface ProtoProcedureCheck {
   path: string;
   hasOutput: boolean;
   proto?: ProtoFileHeader;
 }
 
+/** Router metadata and procedures checked before protobuf generation. */
 export interface ProtoPrevalidateInput {
   defaultProto?: ProtoFileHeader;
   procedures: ProtoProcedureCheck[];

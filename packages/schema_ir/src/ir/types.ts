@@ -26,6 +26,7 @@ export type ProtoType =
   | { kind: 'message'; name: string }
   | { kind: 'map'; key: ProtoScalar; value: ProtoType };
 
+/** Field definition in the protobuf schema intermediate representation. */
 export interface ProtoField {
   name: string;
   number: number;
@@ -40,6 +41,7 @@ export interface ProtoField {
   discriminatorValue?: string;
 }
 
+/** Message definition in the protobuf schema intermediate representation. */
 export interface ProtoMessage {
   name: string;
   fields: ProtoField[];
@@ -50,6 +52,7 @@ export interface ProtoMessage {
   discriminator?: string;
 }
 
+/** Enum definition in the protobuf schema intermediate representation. */
 export interface ProtoEnum {
   name: string;
   values: { name: string; number: number }[];
@@ -59,6 +62,7 @@ export interface ProtoEnum {
 
 export type ProcedureType = 'query' | 'mutation' | 'subscription';
 
+/** RPC method translated from a tRPC procedure. */
 export interface ProtoMethod {
   /** gRPC method name, e.g. `GetById`. */
   name: string;
@@ -71,6 +75,7 @@ export interface ProtoMethod {
   isResponseStreaming: boolean;
 }
 
+/** gRPC service containing translated tRPC procedures. */
 export interface ProtoService {
   name: string;
   methods: ProtoMethod[];
@@ -88,6 +93,7 @@ export interface PropertyGenCache {
   usedIds: Record<number, string>;
 }
 
+/** Stable field-allocation cache retained between schema generations. */
 export interface SchemaGenerateCache {
   propertyGenCache: Record<string, PropertyGenCache>;
 }
@@ -112,6 +118,7 @@ export interface ProtoFileOptions {
   [option: string]: string | boolean | number | undefined;
 }
 
+/** Package, syntax, cache, and file options read from router metadata. */
 export interface ProtoFileHeader {
   package?: string;
   /** Defaults to proto3 when omitted. */
@@ -140,6 +147,7 @@ export interface ProtoObjectMeta {
 }
 
 
+/** Complete protobuf schema intermediate representation. */
 export interface ProtoSchema {
   syntax: ProtoSyntax;
   package: string;

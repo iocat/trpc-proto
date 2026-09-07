@@ -14,6 +14,7 @@ export const GRPC_WEB_STREAM_HEADER = 'x-grpc-web-stream';
 const TRAILER_FLAG = 0x80;
 const COMPRESSED_FLAG = 0x01;
 
+/** Data messages and status trailers decoded from a gRPC-Web response body. */
 export interface GrpcWebDecode {
   messages: Uint8Array[];
   trailers: Record<string, string>;

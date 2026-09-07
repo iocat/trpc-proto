@@ -14,6 +14,7 @@ export type {
   StubRequest,
 } from './proto_link.js';
 
+/** Options for a tRPC link backed by a native gRPC client. */
 export interface GrpcLinkOptions<
   TRouter extends AnyRouter = AnyRouter,
 > extends ProtoLinkOptions<TRouter> {

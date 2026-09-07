@@ -15,6 +15,7 @@ import { loadAppRouter, type LoadOptions } from './load.js';
 
 export { translate } from '@trpc-proto/schema_ir';
 
+/** Options for loading a router and generating its protobuf artifacts. */
 export interface GenerateOptions extends LoadOptions, ProtoMeta {
   outDir?: string;
   /** CLI override for `defaultMeta.package`. */
@@ -23,6 +24,7 @@ export interface GenerateOptions extends LoadOptions, ProtoMeta {
   generateCache?: SchemaGenerateCache;
 }
 
+/** Schema and files produced by a protobuf generation run. */
 export interface GenerateResult {
   procedures: RuntimeProcedure[];
   schema: ProtoSchema;
