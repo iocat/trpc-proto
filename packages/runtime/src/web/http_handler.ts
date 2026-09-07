@@ -5,9 +5,7 @@ import {
   encodeGrpcWebMessage,
   encodeGrpcWebTrailers,
   GRPC_WEB_CONTENT_TYPE,
-  GRPC_WEB_STREAM_HEADER,
   grpcWebErrorFrame,
-  grpcWebOkFrame,
   isGrpcWebContentType,
 } from './protocol.js';
 
@@ -18,7 +16,6 @@ const DEFAULT_CORS_REQUEST_HEADERS = [
   'content-type',
   'grpc-timeout',
   'x-grpc-web',
-  'x-grpc-web-stream',
   'x-user-agent',
 ] as const;
 
@@ -67,7 +64,6 @@ const SKIP_METADATA_HEADERS: Record<string, true> = {
   upgrade: true,
   'user-agent': true,
   'x-grpc-web': true,
-  'x-grpc-web-stream': true,
   'x-user-agent': true,
 };
 
@@ -224,38 +220,8 @@ export function createGrpcWebHttpHandler(
   const corsPolicy = cors ? createCorsPolicy(cors) : undefined;
   const client = new grpc.Client(address, credentials);
 
-  function unary(
-    grpcPath: string,
-    message: Uint8Array,
-    metadata: grpc.Metadata,
-  ): Promise<Uint8Array> {
-    const { promise, resolve } = Promise.withResolvers<Uint8Array>();
-    client.makeUnaryRequest(
-      grpcPath,
-      (value: Buffer) => value,
-      (value: Buffer) => value,
-      Buffer.from(message),
-      metadata,
-      (err, res) => {
-        if (err) {
-          const status =
-            typeof err.code === 'number' ? err.code : grpc.status.UNKNOWN;
-          resolve(
-            grpcWebErrorFrame(
-              status,
-              err.details || err.message,
-              trailerRecord(err.metadata),
-            ),
-          );
-          return;
-        }
-        resolve(grpcWebOkFrame(new Uint8Array(res ?? Buffer.alloc(0))));
-      },
-    );
-    return promise;
-  }
 
-  function stream(
+  function forwardGrpcCall(
     grpcPath: string,
     message: Uint8Array,
     metadata: grpc.Metadata,
@@ -333,17 +299,13 @@ export function createGrpcWebHttpHandler(
       res.end(payload);
       return true;
     }
-    if (req.headers[GRPC_WEB_STREAM_HEADER] === '1') {
-      await stream(url.pathname, message, metadata, res, responseOrigin);
-      return true;
-    }
-    const out = await unary(url.pathname, message, metadata);
-    const payload = Buffer.from(out);
-    res.writeHead(200, {
-      ...grpcWebHeaders(responseOrigin),
-      'content-length': String(payload.length),
-    });
-    res.end(payload);
+    await forwardGrpcCall(
+      url.pathname,
+      message,
+      metadata,
+      res,
+      responseOrigin,
+    );
     return true;
   };
 }

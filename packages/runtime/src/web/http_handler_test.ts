@@ -142,6 +142,73 @@ describe('createGrpcWebHttpHandler', () => {
     }
   });
 
+  it('streams response frames without a private request header', async () => {
+    const backend = new grpc.Server();
+    backend.addService(
+      {
+        Watch: {
+          path: '/demo.v1.AppService/Watch',
+          requestStream: false,
+          responseStream: true,
+          requestSerialize: (value: Buffer) => value,
+          requestDeserialize: (value: Buffer) => value,
+          responseSerialize: (value: Buffer) => value,
+          responseDeserialize: (value: Buffer) => value,
+        },
+      },
+      {
+        Watch(call: grpc.ServerWritableStream<Buffer, Buffer>) {
+          call.write(Buffer.from([1]));
+          call.write(Buffer.from([2, 3]));
+          call.end();
+        },
+      },
+    );
+    const port = await new Promise<number>((resolve, reject) => {
+      backend.bindAsync(
+        '127.0.0.1:0',
+        grpc.ServerCredentials.createInsecure(),
+        (err, bound) => (err ? reject(err) : resolve(bound)),
+      );
+    });
+    const handleGrpcWeb = createGrpcWebHttpHandler({
+      address: `127.0.0.1:${port}`,
+    });
+    const server = http.createServer(async (req, res) => {
+      if (!(await handleGrpcWeb(req, res))) {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    const { port: webPort } = server.address() as { port: number };
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:${webPort}/demo.v1.AppService/Watch`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': GRPC_WEB_CONTENT_TYPE,
+            'x-grpc-web': '1',
+          },
+          body: Buffer.from(encodeGrpcWebMessage(new Uint8Array([0]))),
+        },
+      );
+      const decoded = decodeGrpcWeb(new Uint8Array(await res.arrayBuffer()));
+      assert.deepEqual(
+        decoded.messages.map((message) => [...message]),
+        [[1], [2, 3]],
+      );
+      assert.equal(decoded.trailers['grpc-status'], '0');
+    } finally {
+      server.close();
+      backend.forceShutdown();
+    }
+  });
+
   it('forwards request metadata and grpc-status trailers', async () => {
     const backend = new grpc.Server();
     let calls = 0;

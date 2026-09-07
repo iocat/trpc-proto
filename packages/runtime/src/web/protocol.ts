@@ -8,8 +8,6 @@ import type { StubCall } from '../grpc/proto_link.js';
  */
 export const GRPC_WEB_CONTENT_TYPE = 'application/grpc-web+proto';
 
-/** Hop/client flag: this gRPC-Web call is server-streaming. */
-export const GRPC_WEB_STREAM_HEADER = 'x-grpc-web-stream';
 
 const TRAILER_FLAG = 0x80;
 const COMPRESSED_FLAG = 0x01;
@@ -182,9 +180,6 @@ export function createGrpcWebFetchCall(baseUrl = ''): StubCall {
       'x-user-agent': 'grpc-web-javascript/0.1',
       ...(request.metadata ?? {}),
     };
-    if (request.type === 'subscription') {
-      headers[GRPC_WEB_STREAM_HEADER] = '1';
-    }
     const res = await fetch(`${baseUrl}${path}`, {
       method: 'POST',
       headers,
@@ -216,6 +211,3 @@ export function grpcWebErrorFrame(
   return concat([encodeGrpcWebTrailers(status, message, extra)]);
 }
 
-export function grpcWebOkFrame(message: Uint8Array) {
-  return concat([encodeGrpcWebMessage(message), encodeGrpcWebTrailers(0)]);
-}

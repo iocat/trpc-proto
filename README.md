@@ -232,7 +232,6 @@ through one reused grpc-js client. This table tracks the remaining proxy work.
 | P0 | Framing | Validate frame flags, reject data after trailers, require final trailers, and reject truncated stream EOF. | Malformed framing has table-driven negative tests; trailers are always final. |
 | P0 | Cancellation | Parse `grpc-timeout`, apply an upstream deadline, and cancel the grpc-js call when the browser disconnects or aborts. | Deadline and disconnect tests observe cancellation at the backend. |
 | P0 | Boundary | Limit request-body size and restrict forwarded gRPC service/method paths. | Oversized bodies and unknown methods are rejected before an upstream call. |
-| P1 | Streaming | Replace the private `x-grpc-web-stream` contract with descriptor-driven server-streaming and add end-to-end stream tests. | Standard gRPC-Web clients can consume server streams without private headers. |
 | P1 | HTTP | Support and test HTTP/1.1 and HTTP/2 browser ingress. | The same unary and streaming suite passes over both ingress protocols. |
 | P1 | Metadata | Support binary `*-bin` metadata and configurable request/response header forwarding. | Binary metadata round-trips; hop-by-hop and disallowed headers never cross the boundary. |
 | P1 | Status | Percent-decode `grpc-message` and reject successful HTTP responses missing a valid final status. | Encoded error messages and malformed status responses have interoperability tests. |
