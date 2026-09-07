@@ -1,4 +1,4 @@
-import { createGrpcWebHop } from '@trpc-proto/runtime';
+import { createGrpcWebHttpHandler } from '@trpc-proto/runtime';
 import * as esbuild from 'esbuild';
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
@@ -23,7 +23,7 @@ const spaJs = esbuild.buildSync({
   target: 'es2022',
   logLevel: 'silent',
 }).outputFiles![0]!.text;
-const hop = createGrpcWebHop({ address: GRPC_ADDRESS });
+const handleGrpcWeb = createGrpcWebHttpHandler({ address: GRPC_ADDRESS });
 
 function send(
   res: http.ServerResponse,
@@ -37,7 +37,7 @@ function send(
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (await hop.handle(req, res)) return;
+    if (await handleGrpcWeb(req, res)) return;
     const url = new URL(req.url ?? '/', `http://${HOST}`);
     if (
       req.method === 'GET' &&

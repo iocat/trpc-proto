@@ -5,7 +5,7 @@ import * as grpc from '@grpc/grpc-js';
 import { createTRPCClient } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
-import { createGrpcWebHop } from './hop.js';
+import { createGrpcWebHttpHandler } from './http_handler.js';
 import { grpcWebProxyLink } from './link.js';
 import {
   decodeGrpcWeb,
@@ -15,8 +15,8 @@ import {
 import { serveGrpc } from '../grpc/server.js';
 import type { ProtoMeta } from '@trpc-proto/schema_ir';
 
-describe('createGrpcWebHop', () => {
-  it('round-trips through a gRPC-Web hop to serveGrpc', async () => {
+describe('createGrpcWebHttpHandler', () => {
+  it('round-trips through a gRPC-Web HTTP handler to serveGrpc', async () => {
     const t = initTRPC.meta<ProtoMeta>().create({
       defaultMeta: { proto: { package: 'demo.v1' } },
     });
@@ -28,11 +28,11 @@ describe('createGrpcWebHop', () => {
     });
     type AppRouter = typeof appRouter;
     const grpcServer = await serveGrpc(appRouter, { address: '127.0.0.1:0' });
-    const proxy = createGrpcWebHop({
+    const handleGrpcWeb = createGrpcWebHttpHandler({
       address: `127.0.0.1:${grpcServer.port}`,
     });
     const server = http.createServer(async (req, res) => {
-      if (!(await proxy.handle(req, res))) {
+      if (!(await handleGrpcWeb(req, res))) {
         res.writeHead(404);
         res.end();
       }
@@ -59,14 +59,14 @@ describe('createGrpcWebHop', () => {
   });
 
   it('validates CORS preflight origin, method, and headers', async () => {
-    const proxy = createGrpcWebHop({
+    const handleGrpcWeb = createGrpcWebHttpHandler({
       cors: {
         allowedOrigins: ['https://app.example'],
         additionalAllowedHeaders: ['x-trace'],
       },
     });
     const server = http.createServer(async (req, res) => {
-      if (!(await proxy.handle(req, res))) {
+      if (!(await handleGrpcWeb(req, res))) {
         res.writeHead(404);
         res.end();
       }
@@ -186,7 +186,7 @@ describe('createGrpcWebHop', () => {
         (err, bound) => (err ? reject(err) : resolve(bound)),
       );
     });
-    const proxy = createGrpcWebHop({
+    const handleGrpcWeb = createGrpcWebHttpHandler({
       address: `127.0.0.1:${port}`,
       cors: {
         allowedOrigins: ['https://app.example'],
@@ -194,7 +194,7 @@ describe('createGrpcWebHop', () => {
       },
     });
     const server = http.createServer(async (req, res) => {
-      if (!(await proxy.handle(req, res))) {
+      if (!(await handleGrpcWeb(req, res))) {
         res.writeHead(404);
         res.end();
       }

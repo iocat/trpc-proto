@@ -206,9 +206,9 @@ Or implement the generated proto in another language. The Go examples do that.
 Cross-origin browser access is opt-in and uses exact serialized origins:
 
 ```ts
-import { createGrpcWebHop } from '@trpc-proto/runtime';
+import { createGrpcWebHttpHandler } from '@trpc-proto/runtime';
 
-const hop = createGrpcWebHop({
+const handleGrpcWeb = createGrpcWebHttpHandler({
   address: '127.0.0.1:50051',
   cors: {
     allowedOrigins: ['https://app.example.com'],
@@ -217,14 +217,14 @@ const hop = createGrpcWebHop({
 });
 ```
 
-The hop answers valid preflight requests, rejects disallowed origins, methods,
+The handler answers valid preflight requests, rejects disallowed origins, methods,
 and headers before contacting gRPC, and adds the matching CORS headers to
 gRPC-Web responses. Omit `cors` for same-origin deployments.
 
 ## gRPC-Web backlog
 
-The current hop supports binary unary calls and server streaming through one
-reused grpc-js client. This table tracks the remaining proxy work.
+The current HTTP handler supports binary unary calls and server streaming
+through one reused grpc-js client. This table tracks the remaining proxy work.
 
 | Priority | Area | Backlog item | Acceptance |
 | --- | --- | --- | --- |

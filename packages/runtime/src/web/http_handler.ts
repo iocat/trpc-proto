@@ -24,16 +24,16 @@ const DEFAULT_CORS_REQUEST_HEADERS = [
 
 const CORS_EXPOSE_HEADERS = 'grpc-status, grpc-message, x-grpc-web';
 
-/** CORS policy applied to browser requests handled by a gRPC-Web hop. */
+/** CORS policy applied to browser requests handled by the gRPC-Web HTTP handler. */
 export interface GrpcWebCorsOptions {
-  /** Exact serialized origins allowed to call the hop. */
+  /** Exact serialized origins allowed to call the handler. */
   readonly allowedOrigins: readonly string[];
   /** Request headers allowed in addition to the gRPC-Web defaults. */
   readonly additionalAllowedHeaders?: readonly string[];
 }
 
-/** Configuration for the browser-to-gRPC proxy hop. */
-export interface GrpcWebHopOptions {
+/** Configuration for the browser-to-gRPC HTTP handler. */
+export interface GrpcWebHttpHandlerOptions {
   /** Native gRPC upstream address. Defaults to `127.0.0.1:50051`. */
   address?: string;
   /** Channel credentials for the native gRPC upstream. Defaults to insecure. */
@@ -209,11 +209,13 @@ function decodeUnaryFrame(body: Uint8Array): Uint8Array {
 }
 
 /**
- * Browser gRPC-Web unary/stream → native gRPC.
- * The default channel is insecure and CORS is disabled unless configured.
- * `handle(req, res)` returns true when the response has been written.
+ * Creates one Node HTTP request handler for gRPC-Web unary and server streams.
+ * The default upstream channel is insecure and CORS is disabled unless configured.
+ * The handler returns true when it writes a response.
  */
-export function createGrpcWebHop(options: GrpcWebHopOptions = {}) {
+export function createGrpcWebHttpHandler(
+  options: GrpcWebHttpHandlerOptions = {},
+) {
   const {
     address = DEFAULT_ADDRESS,
     credentials = grpc.credentials.createInsecure(),
@@ -296,51 +298,52 @@ export function createGrpcWebHop(options: GrpcWebHopOptions = {}) {
     });
   }
 
-  return {
-    async handle(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-      if (handleCorsPreflight(req, res, corsPolicy)) return true;
-      if (req.method !== 'POST' || !isGrpcWebContentType(contentType(req))) {
-        return false;
-      }
-      const origin = requestHeader(req, 'origin');
-      if (origin && corsPolicy && !corsPolicy.allowedOrigins.has(origin)) {
-        res.writeHead(403, { vary: 'Origin', 'content-length': '0' });
-        res.end();
-        return true;
-      }
-      const responseOrigin =
-        origin && corsPolicy?.allowedOrigins.has(origin) ? origin : undefined;
-      const url = new URL(req.url ?? '/', 'http://grpc-web.invalid');
-      const metadata = metadataFromRequest(req);
-      const body = await readBody(req);
+  return async function handleGrpcWebHttpRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<boolean> {
+    if (handleCorsPreflight(req, res, corsPolicy)) return true;
+    if (req.method !== 'POST' || !isGrpcWebContentType(contentType(req))) {
+      return false;
+    }
+    const origin = requestHeader(req, 'origin');
+    if (origin && corsPolicy && !corsPolicy.allowedOrigins.has(origin)) {
+      res.writeHead(403, { vary: 'Origin', 'content-length': '0' });
+      res.end();
+      return true;
+    }
+    const responseOrigin =
+      origin && corsPolicy?.allowedOrigins.has(origin) ? origin : undefined;
+    const url = new URL(req.url ?? '/', 'http://grpc-web.invalid');
+    const metadata = metadataFromRequest(req);
+    const body = await readBody(req);
 
-      let message: Uint8Array;
-      try {
-        message = decodeUnaryFrame(body);
-      } catch (err) {
-        const text = err instanceof Error ? err.message : String(err);
-        const payload = Buffer.from(
-          grpcWebErrorFrame(grpc.status.INTERNAL, text),
-        );
-        res.writeHead(200, {
-          ...grpcWebHeaders(responseOrigin),
-          'content-length': String(payload.length),
-        });
-        res.end(payload);
-        return true;
-      }
-      if (req.headers[GRPC_WEB_STREAM_HEADER] === '1') {
-        await stream(url.pathname, message, metadata, res, responseOrigin);
-        return true;
-      }
-      const out = await unary(url.pathname, message, metadata);
-      const payload = Buffer.from(out);
+    let message: Uint8Array;
+    try {
+      message = decodeUnaryFrame(body);
+    } catch (err) {
+      const text = err instanceof Error ? err.message : String(err);
+      const payload = Buffer.from(
+        grpcWebErrorFrame(grpc.status.INTERNAL, text),
+      );
       res.writeHead(200, {
         ...grpcWebHeaders(responseOrigin),
         'content-length': String(payload.length),
       });
       res.end(payload);
       return true;
-    },
+    }
+    if (req.headers[GRPC_WEB_STREAM_HEADER] === '1') {
+      await stream(url.pathname, message, metadata, res, responseOrigin);
+      return true;
+    }
+    const out = await unary(url.pathname, message, metadata);
+    const payload = Buffer.from(out);
+    res.writeHead(200, {
+      ...grpcWebHeaders(responseOrigin),
+      'content-length': String(payload.length),
+    });
+    res.end(payload);
+    return true;
   };
 }
