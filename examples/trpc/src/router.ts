@@ -1,15 +1,15 @@
-import { initTRPC, TRPCError } from '@trpc/server';
-import { observable } from '@trpc/server/observable';
-import { createProtoTransformer } from '@trpc-proto/runtime/proto_codec';
-import type { ProtoMeta } from '@trpc-proto/runtime';
-import { z } from 'zod';
+import { initTRPC, TRPCError } from "@trpc/server";
+import { observable } from "@trpc/server/observable";
+import { createProtoTransformer } from "@trpc-proto/runtime/proto_codec";
+import type { ProtoMeta } from "@trpc-proto/runtime";
+import { z } from "zod";
 const t = initTRPC.meta<ProtoMeta>().create({
   allowOutsideOfServer: true,
   transformer: createProtoTransformer(),
   defaultMeta: {
     proto: {
-      package: 'trpc.v1',
-      cache: 'generated/schema.json',
+      package: "trpc.v1",
+      cache: "generated/schema.json",
     },
   },
 });
@@ -19,7 +19,7 @@ const Note = z
     id: z.string(),
     body: z.string(),
   })
-  .meta({ protoMessageName: 'Note' });
+  .meta({ protoMessageName: "Note" });
 
 const notes = new Map<string, z.infer<typeof Note>>();
 const noteListeners = new Set<(note: z.infer<typeof Note>) => void>();
@@ -51,7 +51,7 @@ export const appRouter = t.router({
         const note = notes.get(input.id);
         if (!note) {
           throw new TRPCError({
-            code: 'NOT_FOUND',
+            code: "NOT_FOUND",
             message: `note "${input.id}" not found`,
           });
         }
@@ -68,10 +68,10 @@ export const appRouter = t.router({
           };
           noteListeners.add(push);
           const onAbort = () => emit.complete();
-          signal?.addEventListener('abort', onAbort);
+          signal?.addEventListener("abort", onAbort);
           return () => {
             noteListeners.delete(push);
-            signal?.removeEventListener('abort', onAbort);
+            signal?.removeEventListener("abort", onAbort);
           };
         })) as never),
   }),

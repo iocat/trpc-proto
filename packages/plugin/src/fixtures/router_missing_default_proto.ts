@@ -1,6 +1,6 @@
-import { initTRPC } from '@trpc/server';
-import type { ProtoMeta } from '@trpc-proto/schema_ir';
-import { z } from 'zod';
+import { initTRPC } from "@trpc/server";
+import type { ProtoMeta } from "@trpc-proto/schema_ir";
+import { z } from "zod";
 
 const t = initTRPC.meta<ProtoMeta>().create();
 

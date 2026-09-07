@@ -1,14 +1,14 @@
-import { TRPCClientError, type TRPCLink } from '@trpc/client';
-import type { AnyRouter } from '@trpc/server';
-import { observable } from '@trpc/server/observable';
-import { createProtoCodec } from '../proto_codec/proto_codec.js';
-import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
+import { TRPCClientError, type TRPCLink } from "@trpc/client";
+import type { AnyRouter } from "@trpc/server";
+import { observable } from "@trpc/server/observable";
+import { createProtoCodec } from "../proto_codec/proto_codec.js";
+import { schemaFromRouter, type ProtoSchema } from "@trpc-proto/schema_ir";
 
 /** gRPC metadata / HTTP header key for bearer credentials. */
-const AUTH_METADATA_KEY = 'authorization';
+const AUTH_METADATA_KEY = "authorization";
 
 /** Default authorization scheme. Empty `AuthConfig.scheme` sends a raw token. */
-const AUTH_SCHEME_BEARER = 'Bearer';
+const AUTH_SCHEME_BEARER = "Bearer";
 
 function lookupRpc(schema: ProtoSchema, path: string) {
   for (const service of schema.services) {
@@ -21,7 +21,7 @@ function lookupRpc(schema: ProtoSchema, path: string) {
 
 export interface StubRequest {
   path: string;
-  type: 'query' | 'mutation' | 'subscription';
+  type: "query" | "mutation" | "subscription";
   /** JS value (pre-codec). */
   input: unknown;
   /** Runtime-encoded protobuf payload. Prefer this on the wire. */
@@ -38,7 +38,7 @@ export type StubCall = (request: StubRequest) => Promise<unknown>;
 
 export interface CallContext {
   path: string;
-  type: 'query' | 'mutation' | 'subscription';
+  type: "query" | "mutation" | "subscription";
   service: string;
   method: string;
   grpcPath: string;
@@ -78,7 +78,7 @@ function isBytes(value: unknown): value is Uint8Array {
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   return (
-    value != null && typeof value === 'object' && Symbol.asyncIterator in value
+    value != null && typeof value === "object" && Symbol.asyncIterator in value
   );
 }
 
@@ -100,12 +100,12 @@ export function authInterceptor(auth: AuthConfig): CallInterceptor {
   const scheme = auth.scheme === undefined ? AUTH_SCHEME_BEARER : auth.scheme;
   return async (ctx, next) => {
     const token =
-      typeof auth.token === 'function' ? await auth.token() : auth.token;
+      typeof auth.token === "function" ? await auth.token() : auth.token;
     if (token) {
       ctx.metadata.set(header, scheme ? `${scheme} ${token}` : token);
     }
     const extra =
-      typeof auth.metadata === 'function'
+      typeof auth.metadata === "function"
         ? await auth.metadata()
         : auth.metadata;
     if (extra) {
@@ -142,7 +142,7 @@ export function createProtoLink<TRouter extends AnyRouter>(
         const { service, method } = rpc;
         const ac = new AbortController();
         if (op.signal) {
-          op.signal.addEventListener('abort', () => ac.abort(), { once: true });
+          op.signal.addEventListener("abort", () => ac.abort(), { once: true });
         }
         const ctx: CallContext = {
           path: op.path,
@@ -184,12 +184,12 @@ export function createProtoLink<TRouter extends AnyRouter>(
                 const decoded = isBytes(item)
                   ? codec.decode(method.responseType, item)
                   : item;
-                observer.next({ result: { type: 'data', data: decoded } });
+                observer.next({ result: { type: "data", data: decoded } });
               }
               observer.complete();
               return;
             }
-            observer.next({ result: { type: 'data', data } });
+            observer.next({ result: { type: "data", data } });
             observer.complete();
           },
           (cause) => {

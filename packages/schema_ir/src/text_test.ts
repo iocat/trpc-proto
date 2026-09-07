@@ -1,5 +1,5 @@
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import type {
   ProcedureType,
   ProtoEnum,
@@ -10,8 +10,8 @@ import type {
   ProtoSchema,
   ProtoService,
   ProtoType,
-} from './types.js';
-import { fromString, toString } from './text.js';
+} from "./types.js";
+import { fromString, toString } from "./text.js";
 
 function field(
   name: string,
@@ -25,7 +25,7 @@ function field(
     type,
     repeated: opts.repeated ?? false,
     optional: opts.optional ?? true,
-    comment: opts.comment ?? '',
+    comment: opts.comment ?? "",
   };
 }
 
@@ -34,14 +34,14 @@ function stringField(
   number: number,
   opts?: { repeated?: boolean; optional?: boolean; comment?: string },
 ): ProtoField {
-  return field(name, number, { kind: 'scalar', type: 'string' }, opts);
+  return field(name, number, { kind: "scalar", type: "string" }, opts);
 }
 
 function message(
   name: string,
   fields: ProtoField[],
   subMessages: ProtoMessage[] = [],
-  comment = '',
+  comment = "",
 ): ProtoMessage {
   return { name, fields, subMessages, comment };
 }
@@ -49,7 +49,7 @@ function message(
 function en(
   name: string,
   values: { name: string; number: number }[],
-  comment = '',
+  comment = "",
 ): ProtoEnum {
   return { name, values, comment };
 }
@@ -59,7 +59,7 @@ function method(
   path: string,
   requestType: string,
   responseType: string,
-  type: ProcedureType = 'query',
+  type: ProcedureType = "query",
 ): ProtoMethod {
   return {
     name,
@@ -67,7 +67,7 @@ function method(
     type,
     requestType,
     responseType,
-    isResponseStreaming: type === 'subscription',
+    isResponseStreaming: type === "subscription",
   };
 }
 
@@ -77,15 +77,15 @@ function service(name: string, methods: ProtoMethod[]): ProtoService {
 
 function schema(opts: Partial<ProtoSchema> = {}): ProtoSchema {
   return {
-    syntax: 'proto3',
-    package: 'trpc',
+    syntax: "proto3",
+    package: "trpc",
     services: [],
     messages: [],
     enums: [],
     ...opts,
   };
 }
-function view(value: ProtoSchema): Omit<ProtoSchema, 'generateCache'> {
+function view(value: ProtoSchema): Omit<ProtoSchema, "generateCache"> {
   const { generateCache: _, options, ...rest } = value;
   return options === undefined ? rest : { ...rest, options };
 }
@@ -97,23 +97,23 @@ interface TextCase {
 
 const cases: TextCase[] = [
   {
-    name: 'empty schema',
+    name: "empty schema",
     schema: schema(),
     proto: 'syntax = "proto3";\n\npackage trpc;\n',
   },
   {
-    name: 'package',
-    schema: schema({ package: 'example.v1' }),
+    name: "package",
+    schema: schema({ package: "example.v1" }),
     proto: 'syntax = "proto3";\n\npackage example.v1;\n',
   },
   {
-    name: 'file language options',
+    name: "file language options",
     schema: schema({
-      package: 'example.v1',
+      package: "example.v1",
       options: {
-        go_package: 'example/backend/gen/examplev1',
+        go_package: "example/backend/gen/examplev1",
         java_multiple_files: true,
-        optimize_for: 'SPEED',
+        optimize_for: "SPEED",
       } satisfies ProtoFileOptions,
     }),
     proto: `syntax = "proto3";
@@ -126,33 +126,33 @@ option optimize_for = SPEED;
 `,
   },
   {
-    name: 'reserved dropped cache field numbers',
+    name: "reserved dropped cache field numbers",
     schema: schema({
-      messages: [message('User', [stringField('id', 1)])],
+      messages: [message("User", [stringField("id", 1)])],
       generateCache: {
         propertyGenCache: {
           User: {
             propertyGenCache: {
               id: {
                 tag: 1,
-                type: 'string',
+                type: "string",
                 propertyGenCache: {},
                 usedIds: {},
               },
               email: {
                 tag: 2,
-                type: 'string',
+                type: "string",
                 propertyGenCache: {},
                 usedIds: {},
               },
               age: {
                 tag: 4,
-                type: 'int32',
+                type: "int32",
                 propertyGenCache: {},
                 usedIds: {},
               },
             },
-            usedIds: { 1: 'id', 2: 'email', 4: 'age' },
+            usedIds: { 1: "id", 2: "email", 4: "age" },
           },
         },
       },
@@ -168,28 +168,28 @@ message User {
 `,
   },
   {
-    name: 'message fields comments nested map repeated',
+    name: "message fields comments nested map repeated",
     schema: schema({
       messages: [
         message(
-          'User',
+          "User",
           [
-            stringField('id', 1, { comment: 'unique id' }),
-            stringField('tags', 2, { repeated: true }),
+            stringField("id", 1, { comment: "unique id" }),
+            stringField("tags", 2, { repeated: true }),
             field(
-              'labels',
+              "labels",
               3,
               {
-                kind: 'map',
-                key: 'string',
-                value: { kind: 'scalar', type: 'int32' },
+                kind: "map",
+                key: "string",
+                value: { kind: "scalar", type: "int32" },
               },
               { optional: false },
             ),
-            field('address', 4, { kind: 'message', name: 'Address' }),
+            field("address", 4, { kind: "message", name: "Address" }),
           ],
-          [message('Address', [stringField('city', 1)])],
-          'A user',
+          [message("Address", [stringField("city", 1)])],
+          "A user",
         ),
       ],
     }),
@@ -212,16 +212,16 @@ message User {
 `,
   },
   {
-    name: 'enum values and comment',
+    name: "enum values and comment",
     schema: schema({
       enums: [
         en(
-          'UserRole',
+          "UserRole",
           [
-            { name: 'ADMIN', number: 0 },
-            { name: 'MEMBER', number: 1 },
+            { name: "ADMIN", number: 0 },
+            { name: "MEMBER", number: 1 },
           ],
-          'account role',
+          "account role",
         ),
       ],
     }),
@@ -237,12 +237,12 @@ enum UserRole {
 `,
   },
   {
-    name: 'service tRPC comments',
+    name: "service tRPC comments",
     schema: schema({
-      messages: [message('HelloRequest', [stringField('name', 1)])],
+      messages: [message("HelloRequest", [stringField("name", 1)])],
       services: [
-        service('AppService', [
-          method('Hello', 'hello', 'HelloRequest', 'HelloRequest'),
+        service("AppService", [
+          method("Hello", "hello", "HelloRequest", "HelloRequest"),
         ]),
       ],
     }),
@@ -261,19 +261,19 @@ service AppService {
 `,
   },
   {
-    name: 'subscription server-streaming rpc',
+    name: "subscription server-streaming rpc",
     schema: schema({
       messages: [
-        message('Note', [stringField('id', 1), stringField('body', 2)]),
+        message("Note", [stringField("id", 1), stringField("body", 2)]),
       ],
       services: [
-        service('NoteService', [
+        service("NoteService", [
           method(
-            'OnChange',
-            'note.onChange',
-            'google.protobuf.Empty',
-            'Note',
-            'subscription',
+            "OnChange",
+            "note.onChange",
+            "google.protobuf.Empty",
+            "Note",
+            "subscription",
           ),
         ]),
       ],
@@ -296,15 +296,15 @@ service NoteService {
 `,
   },
   {
-    name: 'google.protobuf.Empty import',
+    name: "google.protobuf.Empty import",
     schema: schema({
       services: [
-        service('AppService', [
+        service("AppService", [
           method(
-            'Ping',
-            'ping',
-            'google.protobuf.Empty',
-            'google.protobuf.Empty',
+            "Ping",
+            "ping",
+            "google.protobuf.Empty",
+            "google.protobuf.Empty",
           ),
         ]),
       ],
@@ -322,13 +322,13 @@ service AppService {
 `,
   },
   {
-    name: 'google.protobuf.Timestamp import',
+    name: "google.protobuf.Timestamp import",
     schema: schema({
       messages: [
-        message('Event', [
-          field('when', 1, {
-            kind: 'message',
-            name: 'google.protobuf.Timestamp',
+        message("Event", [
+          field("when", 1, {
+            kind: "message",
+            name: "google.protobuf.Timestamp",
           }),
         ]),
       ],
@@ -345,17 +345,17 @@ message Event {
 `,
   },
   {
-    name: 'google.protobuf.Value and Struct imports',
+    name: "google.protobuf.Value and Struct imports",
     schema: schema({
       messages: [
-        message('Payload', [
-          field('extra', 1, {
-            kind: 'message',
-            name: 'google.protobuf.Value',
+        message("Payload", [
+          field("extra", 1, {
+            kind: "message",
+            name: "google.protobuf.Value",
           }),
-          field('attrs', 2, {
-            kind: 'message',
-            name: 'google.protobuf.Struct',
+          field("attrs", 2, {
+            kind: "message",
+            name: "google.protobuf.Struct",
           }),
         ]),
       ],
@@ -373,17 +373,17 @@ message Payload {
 `,
   },
   {
-    name: 'google.protobuf.Duration and Any imports',
+    name: "google.protobuf.Duration and Any imports",
     schema: schema({
       messages: [
-        message('Job', [
-          field('wait', 1, {
-            kind: 'message',
-            name: 'google.protobuf.Duration',
+        message("Job", [
+          field("wait", 1, {
+            kind: "message",
+            name: "google.protobuf.Duration",
           }),
-          field('packed', 2, {
-            kind: 'message',
-            name: 'google.protobuf.Any',
+          field("packed", 2, {
+            kind: "message",
+            name: "google.protobuf.Any",
           }),
         ]),
       ],
@@ -402,17 +402,17 @@ message Job {
 `,
   },
   {
-    name: 'google.protobuf.FieldMask and wrappers',
+    name: "google.protobuf.FieldMask and wrappers",
     schema: schema({
       messages: [
-        message('Patch', [
-          field('mask', 1, {
-            kind: 'message',
-            name: 'google.protobuf.FieldMask',
+        message("Patch", [
+          field("mask", 1, {
+            kind: "message",
+            name: "google.protobuf.FieldMask",
           }),
-          field('name', 2, {
-            kind: 'message',
-            name: 'google.protobuf.StringValue',
+          field("name", 2, {
+            kind: "message",
+            name: "google.protobuf.StringValue",
           }),
         ]),
       ],
@@ -431,16 +431,16 @@ message Patch {
 `,
   },
   {
-    name: 'mutation rpc path',
+    name: "mutation rpc path",
     schema: schema({
       services: [
-        service('UserService', [
+        service("UserService", [
           method(
-            'Create',
-            'user.create',
-            'google.protobuf.Empty',
-            'google.protobuf.Empty',
-            'mutation',
+            "Create",
+            "user.create",
+            "google.protobuf.Empty",
+            "google.protobuf.Empty",
+            "mutation",
           ),
         ]),
       ],
@@ -459,7 +459,7 @@ service UserService {
   },
 ];
 
-describe('toString', () => {
+describe("toString", () => {
   for (const row of cases) {
     it(row.name, () => {
       assert.equal(toString(row.schema), row.proto);
@@ -467,7 +467,7 @@ describe('toString', () => {
   }
 });
 
-describe('fromString', () => {
+describe("fromString", () => {
   for (const row of cases) {
     it(row.name, () => {
       assert.deepEqual(view(fromString(row.proto)), view(row.schema));

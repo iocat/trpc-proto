@@ -1,7 +1,7 @@
-import type { TRPCLink } from '@trpc/client';
-import type { AnyRouter } from '@trpc/server';
-import { createGrpcWebFetchCall } from './protocol.js';
-import { createProtoLink, type ProtoLinkOptions } from '../grpc/proto_link.js';
+import type { TRPCLink } from "@trpc/client";
+import type { AnyRouter } from "@trpc/server";
+import { createGrpcWebFetchCall } from "./protocol.js";
+import { createProtoLink, type ProtoLinkOptions } from "../grpc/proto_link.js";
 
 export interface GrpcWebProxyLinkOptions<
   TRouter extends AnyRouter = AnyRouter,
@@ -14,5 +14,5 @@ export interface GrpcWebProxyLinkOptions<
 export function grpcWebProxyLink<TRouter extends AnyRouter>(
   opts: GrpcWebProxyLinkOptions<TRouter>,
 ): TRPCLink<TRouter> {
-  return createProtoLink(opts, createGrpcWebFetchCall(opts.url ?? ''));
+  return createProtoLink(opts, createGrpcWebFetchCall(opts.url ?? ""));
 }

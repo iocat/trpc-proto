@@ -80,21 +80,21 @@ pnpm build
 ## 1. Router
 
 ```ts
-import { initTRPC } from '@trpc/server';
+import { initTRPC } from "@trpc/server";
 import {
   createProtoTransformer,
   noopForNonTsBackend,
   type ProtoMeta,
-} from '@trpc-proto/runtime';
-import { z } from 'zod';
+} from "@trpc-proto/runtime";
+import { z } from "zod";
 
 const t = initTRPC.meta<ProtoMeta>().create({
   transformer: createProtoTransformer(),
   defaultMeta: {
     proto: {
-      package: 'example.v1',
-      cache: 'generated/schema.json',
-      options: { go_package: 'users/backend/gen/examplev1' },
+      package: "example.v1",
+      cache: "generated/schema.json",
+      options: { go_package: "users/backend/gen/examplev1" },
     },
   },
 });
@@ -104,7 +104,7 @@ const User = z
     id: z.string(),
     name: z.string(),
   })
-  .meta({ protoMessageName: 'User' });
+  .meta({ protoMessageName: "User" });
 
 export const appRouter = t.router({
   hello: t.procedure
@@ -153,12 +153,12 @@ message User {
 ```
 
 ```ts
-import { generate } from '@trpc-proto/plugin';
+import { generate } from "@trpc-proto/plugin";
 
 await generate({
-  routerFile: 'src/router.ts',
-  routerExport: 'appRouter',
-  outDir: 'generated',
+  routerFile: "src/router.ts",
+  routerExport: "appRouter",
+  outDir: "generated",
 });
 ```
 
@@ -167,21 +167,21 @@ await generate({
 `grpcLink` walks the live Zod parsers on `appRouter` (same subset). It dials gRPC itself (default `127.0.0.1:50051`). No `schema.json` on the client.
 
 ```ts
-import { createTRPCClient } from '@trpc/client';
-import { grpcLink } from '@trpc-proto/runtime';
-import { appRouter, type AppRouter } from './router.js';
+import { createTRPCClient } from "@trpc/client";
+import { grpcLink } from "@trpc-proto/runtime";
+import { appRouter, type AppRouter } from "./router.js";
 
 const client = createTRPCClient<AppRouter>({
   links: [
     grpcLink({
       router: appRouter,
-      address: '127.0.0.1:50051',
+      address: "127.0.0.1:50051",
       auth: { token: process.env.AUTH_TOKEN },
     }),
   ],
 });
 
-await client.user.getById.query({ id: '1' });
+await client.user.getById.query({ id: "1" });
 ```
 
 ## 4. Backend
@@ -189,11 +189,11 @@ await client.user.getById.query({ id: '1' });
 TypeScript tRPC — `serveGrpc` is the server-side counterpart of `grpcLink`:
 
 ```ts
-import { serveGrpc } from '@trpc-proto/runtime';
-import { appRouter } from './router.js';
+import { serveGrpc } from "@trpc-proto/runtime";
+import { appRouter } from "./router.js";
 
 await serveGrpc(appRouter, {
-  address: '127.0.0.1:50051',
+  address: "127.0.0.1:50051",
   createContext: () => ({}),
 });
 ```

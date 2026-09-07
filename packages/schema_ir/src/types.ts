@@ -4,27 +4,27 @@
  */
 
 export type ProtoScalar =
-  | 'double'
-  | 'float'
-  | 'int32'
-  | 'int64'
-  | 'uint32'
-  | 'uint64'
-  | 'sint32'
-  | 'sint64'
-  | 'fixed32'
-  | 'fixed64'
-  | 'sfixed32'
-  | 'sfixed64'
-  | 'bool'
-  | 'string'
-  | 'bytes';
+  | "double"
+  | "float"
+  | "int32"
+  | "int64"
+  | "uint32"
+  | "uint64"
+  | "sint32"
+  | "sint64"
+  | "fixed32"
+  | "fixed64"
+  | "sfixed32"
+  | "sfixed64"
+  | "bool"
+  | "string"
+  | "bytes";
 
 export type ProtoType =
-  | { kind: 'scalar'; type: ProtoScalar }
-  | { kind: 'enum'; name: string }
-  | { kind: 'message'; name: string }
-  | { kind: 'map'; key: ProtoScalar; value: ProtoType };
+  | { kind: "scalar"; type: ProtoScalar }
+  | { kind: "enum"; name: string }
+  | { kind: "message"; name: string }
+  | { kind: "map"; key: ProtoScalar; value: ProtoType };
 
 export interface ProtoField {
   name: string;
@@ -57,7 +57,7 @@ export interface ProtoEnum {
   comment: string;
 }
 
-export type ProcedureType = 'query' | 'mutation' | 'subscription';
+export type ProcedureType = "query" | "mutation" | "subscription";
 
 export interface ProtoMethod {
   /** gRPC method name, e.g. `GetById`. */
@@ -93,7 +93,7 @@ export interface SchemaGenerateCache {
 }
 
 /** Only proto3 is supported. */
-export type ProtoSyntax = 'proto3';
+export type ProtoSyntax = "proto3";
 
 /** File-level `option` names as they appear in .proto. */
 export interface ProtoFileOptions {
@@ -108,7 +108,7 @@ export interface ProtoFileOptions {
   ruby_package?: string;
   swift_prefix?: string;
   cc_enable_arenas?: boolean;
-  optimize_for?: 'SPEED' | 'CODE_SIZE' | 'LITE_RUNTIME';
+  optimize_for?: "SPEED" | "CODE_SIZE" | "LITE_RUNTIME";
   [option: string]: string | boolean | number | undefined;
 }
 

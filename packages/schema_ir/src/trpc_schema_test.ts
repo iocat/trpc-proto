@@ -1,17 +1,17 @@
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
-import { z, type ZodType } from 'zod';
-import { fromString, toString } from './text.js';
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { z, type ZodType } from "zod";
+import { fromString, toString } from "./text.js";
 import {
   translate,
   type RuntimeProcedure,
   type TranslateOptions,
-} from './trpc_schema.js';
+} from "./trpc_schema.js";
 import type {
   ProcedureType,
   PropertyGenCache,
   SchemaGenerateCache,
-} from './types.js';
+} from "./types.js";
 
 function proc(
   path: string,
@@ -23,7 +23,7 @@ function proc(
 ): RuntimeProcedure {
   return {
     path,
-    type: opts.type ?? 'query',
+    type: opts.type ?? "query",
     input: opts.input,
     output: opts.output,
   };
@@ -60,11 +60,11 @@ const User = z
     id: z.string(),
     name: z.string(),
   })
-  .meta({ protoMessageName: 'User' });
+  .meta({ protoMessageName: "User" });
 
 const Address = z
   .object({ city: z.string() })
-  .meta({ protoMessageName: 'Address' });
+  .meta({ protoMessageName: "Address" });
 
 interface TranslateCase {
   name: string;
@@ -75,14 +75,14 @@ interface TranslateCase {
 
 const cases: TranslateCase[] = [
   {
-    name: 'empty procedure list',
+    name: "empty procedure list",
     procedures: [],
-    expected: '',
+    expected: "",
   },
   {
-    name: 'root query with object input and output',
+    name: "root query with object input and output",
     procedures: [
-      proc('hello', {
+      proc("hello", {
         input: z.object({ name: z.string() }),
         output: z.object({ message: z.string() }),
       }),
@@ -101,9 +101,9 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'nested router path becomes a service',
+    name: "nested router path becomes a service",
     procedures: [
-      proc('user.getById', {
+      proc("user.getById", {
         input: z.object({ id: z.string() }),
         output: z.object({ id: z.string(), name: z.string() }),
       }),
@@ -123,8 +123,8 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'void input uses google.protobuf.Empty',
-    procedures: [proc('health', { output: z.object({ ok: z.string() }) })],
+    name: "void input uses google.protobuf.Empty",
+    procedures: [proc("health", { output: z.object({ ok: z.string() }) })],
     expected: `
       message AppHealthResponse {
         optional string ok = 1;
@@ -136,9 +136,9 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'scalar input wraps a value field',
+    name: "scalar input wraps a value field",
     procedures: [
-      proc('echo', {
+      proc("echo", {
         input: z.string(),
         output: z.string(),
       }),
@@ -157,9 +157,9 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'optional object field',
+    name: "optional object field",
     procedures: [
-      proc('search', {
+      proc("search", {
         input: z.object({ q: z.string().optional() }),
         output: z.object({ q: z.string() }),
       }),
@@ -178,14 +178,14 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'shared Zod identity with meta id is one message',
+    name: "shared Zod identity with meta id is one message",
     procedures: [
-      proc('user.getById', {
+      proc("user.getById", {
         input: z.object({ id: z.string() }),
         output: User,
       }),
-      proc('user.create', {
-        type: 'mutation',
+      proc("user.create", {
+        type: "mutation",
         input: User,
         output: User,
       }),
@@ -207,10 +207,10 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'nested object field references a message',
+    name: "nested object field references a message",
     procedures: [
-      proc('user.update', {
-        type: 'mutation',
+      proc("user.update", {
+        type: "mutation",
         input: z.object({ address: Address }),
         output: Address,
       }),
@@ -229,10 +229,10 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'inline nested object becomes a proto nested message',
+    name: "inline nested object becomes a proto nested message",
     procedures: [
-      proc('user.update', {
-        type: 'mutation',
+      proc("user.update", {
+        type: "mutation",
         input: z.object({
           address: z.object({ city: z.string() }),
         }),
@@ -252,17 +252,17 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'propertyGenCache reuses seeded field numbers',
+    name: "propertyGenCache reuses seeded field numbers",
     procedures: [
-      proc('hello', {
+      proc("hello", {
         input: z.object({ name: z.string() }),
         output: z.object({ message: z.string() }),
       }),
     ],
     options: {
       generateCache: genCache({
-        AppHelloRequest: msgCache({ name: { tag: 7, type: 'string' } }),
-        AppHelloResponse: msgCache({ message: { tag: 9, type: 'string' } }),
+        AppHelloRequest: msgCache({ name: { tag: 7, type: "string" } }),
+        AppHelloResponse: msgCache({ message: { tag: 9, type: "string" } }),
       }),
     },
     expected: `
@@ -279,16 +279,16 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'propertyGenCache assigns next number for a new field',
+    name: "propertyGenCache assigns next number for a new field",
     procedures: [
-      proc('hello', {
+      proc("hello", {
         input: z.object({ name: z.string(), title: z.string() }),
         output: z.object({ message: z.string() }),
       }),
     ],
     options: {
       generateCache: genCache({
-        AppHelloRequest: msgCache({ name: { tag: 1, type: 'string' } }),
+        AppHelloRequest: msgCache({ name: { tag: 1, type: "string" } }),
       }),
     },
     expected: `
@@ -306,9 +306,9 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'bool int double bigint date array enum email',
+    name: "bool int double bigint date array enum email",
     procedures: [
-      proc('mix', {
+      proc("mix", {
         input: z.object({
           ok: z.boolean(),
           count: z.int(),
@@ -316,7 +316,7 @@ const cases: TranslateCase[] = [
           big: z.bigint(),
           when: z.date(),
           tags: z.array(z.string()),
-          kind: z.enum(['A', 'B']),
+          kind: z.enum(["A", "B"]),
           email: z.email(),
         }),
       }),
@@ -343,11 +343,11 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'string bool int float literals',
+    name: "string bool int float literals",
     procedures: [
-      proc('lit', {
+      proc("lit", {
         input: z.object({
-          word: z.literal(['on', 'off']),
+          word: z.literal(["on", "off"]),
           ok: z.literal(true),
           count: z.literal([1, 2]),
           ratio: z.literal([1.5, 2.5]),
@@ -368,9 +368,9 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'int32 uint32 float32 formats',
+    name: "int32 uint32 float32 formats",
     procedures: [
-      proc('nums', {
+      proc("nums", {
         input: z.object({
           i32: z.int32(),
           u32: z.uint32(),
@@ -391,9 +391,9 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'record becomes a proto map',
+    name: "record becomes a proto map",
     procedures: [
-      proc('stats', {
+      proc("stats", {
         input: z.object({
           labels: z.record(z.string(), z.int()),
         }),
@@ -410,9 +410,9 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'nullable string unwraps to string',
+    name: "nullable string unwraps to string",
     procedures: [
-      proc('note', {
+      proc("note", {
         input: z.object({ text: z.string().nullable() }),
       }),
     ],
@@ -427,11 +427,11 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'union of string literals becomes an enum',
+    name: "union of string literals becomes an enum",
     procedures: [
-      proc('mode', {
+      proc("mode", {
         input: z.object({
-          mode: z.union([z.literal('on'), z.literal('off')]),
+          mode: z.union([z.literal("on"), z.literal("off")]),
         }),
       }),
     ],
@@ -450,9 +450,9 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'repeated inline object is a nested message',
+    name: "repeated inline object is a nested message",
     procedures: [
-      proc('pack', {
+      proc("pack", {
         input: z.object({
           items: z.array(z.object({ id: z.string() })),
         }),
@@ -472,14 +472,14 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'file header from proto meta',
-    procedures: [proc('health', { output: z.object({ ok: z.boolean() }) })],
+    name: "file header from proto meta",
+    procedures: [proc("health", { output: z.object({ ok: z.boolean() }) })],
     options: {
       proto: {
-        package: 'example.v1',
-        syntax: 'proto3',
+        package: "example.v1",
+        syntax: "proto3",
         options: {
-          go_package: 'example/backend/gen/examplev1',
+          go_package: "example/backend/gen/examplev1",
           java_multiple_files: true,
         },
       },
@@ -498,12 +498,12 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'discriminatedUnion becomes a proto oneof',
+    name: "discriminatedUnion becomes a proto oneof",
     procedures: [
-      proc('track', {
-        input: z.discriminatedUnion('kind', [
-          z.object({ kind: z.literal('click'), x: z.number() }),
-          z.object({ kind: z.literal('key'), key: z.string() }),
+      proc("track", {
+        input: z.discriminatedUnion("kind", [
+          z.object({ kind: z.literal("click"), x: z.number() }),
+          z.object({ kind: z.literal("key"), key: z.string() }),
         ]),
         output: z.object({ ok: z.boolean() }),
       }),
@@ -531,10 +531,10 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'subscription is a server-streaming rpc',
+    name: "subscription is a server-streaming rpc",
     procedures: [
-      proc('note.onChange', {
-        type: 'subscription',
+      proc("note.onChange", {
+        type: "subscription",
         output: z.object({ id: z.string(), body: z.string() }),
       }),
     ],
@@ -551,7 +551,7 @@ const cases: TranslateCase[] = [
   },
 ];
 
-describe('translate', () => {
+describe("translate", () => {
   for (const row of cases) {
     it(row.name, () => {
       const got = translate(row.procedures, row.options);
@@ -559,10 +559,10 @@ describe('translate', () => {
     });
   }
 
-  it('reserves dropped cache field numbers', () => {
+  it("reserves dropped cache field numbers", () => {
     const got = translate(
       [
-        proc('hello', {
+        proc("hello", {
           input: z.object({ name: z.string() }),
           output: z.object({ message: z.string() }),
         }),
@@ -570,9 +570,9 @@ describe('translate', () => {
       {
         generateCache: genCache({
           AppHelloRequest: msgCache({
-            name: { tag: 1, type: 'string' },
-            extra: { tag: 2, type: 'string' },
-            old: { tag: 4, type: 'string' },
+            name: { tag: 1, type: "string" },
+            extra: { tag: 2, type: "string" },
+            old: { tag: 4, type: "string" },
           }),
         }),
       },
@@ -580,13 +580,13 @@ describe('translate', () => {
     assert.match(toString(got), /reserved 2, 4;/);
   });
 
-  it('throws when literal values mix types', () => {
+  it("throws when literal values mix types", () => {
     assert.throws(
       () =>
         translate([
-          proc('mix', {
+          proc("mix", {
             input: z.object({
-              flag: z.literal(['yes', 1]),
+              flag: z.literal(["yes", 1]),
             }),
           }),
         ]),
@@ -594,11 +594,11 @@ describe('translate', () => {
     );
   });
 
-  it('throws on object union without discriminator', () => {
+  it("throws on object union without discriminator", () => {
     assert.throws(
       () =>
         translate([
-          proc('mix', {
+          proc("mix", {
             input: z.union([
               z.object({ a: z.string() }),
               z.object({ b: z.number() }),
@@ -609,11 +609,11 @@ describe('translate', () => {
     );
   });
 
-  it('throws when literal numbers mix integers and floats', () => {
+  it("throws when literal numbers mix integers and floats", () => {
     assert.throws(
       () =>
         translate([
-          proc('mix', {
+          proc("mix", {
             input: z.object({
               n: z.literal([1, 1.5]),
             }),
@@ -623,29 +623,29 @@ describe('translate', () => {
     );
   });
 
-  it('throws when protoMessageName is not PascalCase', () => {
+  it("throws when protoMessageName is not PascalCase", () => {
     assert.throws(
       () =>
         translate([
-          proc('bad', {
+          proc("bad", {
             input: z
               .object({ x: z.string() })
-              .meta({ protoMessageName: 'notPascal' }),
+              .meta({ protoMessageName: "notPascal" }),
           }),
         ]),
       /protoMessageName must be PascalCase/,
     );
   });
 
-  it('encodes protoUseKnownType as a well-known message', () => {
+  it("encodes protoUseKnownType as a well-known message", () => {
     const Duration = z
       .object({
         seconds: z.bigint(),
         nanos: z.int(),
       })
-      .meta({ protoUseKnownType: 'google.protobuf.Duration' });
+      .meta({ protoUseKnownType: "google.protobuf.Duration" });
     const got = translate([
-      proc('wait', {
+      proc("wait", {
         input: z.object({ delay: Duration }),
         output: z.object({ ok: z.boolean() }),
       }),
@@ -658,36 +658,36 @@ describe('translate', () => {
     assert.doesNotMatch(toString(got), /message Duration/);
   });
 
-  it('throws when protoUseKnownType is not well-known', () => {
+  it("throws when protoUseKnownType is not well-known", () => {
     assert.throws(
       () =>
         translate([
-          proc('bad', {
+          proc("bad", {
             input: z
               .object({ x: z.string() })
-              .meta({ protoUseKnownType: 'not.a.wkt' }),
+              .meta({ protoUseKnownType: "not.a.wkt" }),
           }),
         ]),
       /protoUseKnownType must be a google\.protobuf well-known type/,
     );
   });
 
-  it('forwards zod describe onto proto comments', () => {
+  it("forwards zod describe onto proto comments", () => {
     const Role = z
-      .enum(['admin', 'member'])
-      .describe('account role')
-      .meta({ id: 'UserRole' });
+      .enum(["admin", "member"])
+      .describe("account role")
+      .meta({ id: "UserRole" });
     const Person = z
       .object({
-        id: z.string().describe('unique id'),
+        id: z.string().describe("unique id"),
         role: Role,
       })
-      .describe('A registered user')
-      .meta({ protoMessageName: 'User' });
+      .describe("A registered user")
+      .meta({ protoMessageName: "User" });
 
     const got = translate([
-      proc('user.getById', {
-        input: z.object({ id: z.string().describe('lookup key') }),
+      proc("user.getById", {
+        input: z.object({ id: z.string().describe("lookup key") }),
         output: Person,
       }),
     ]);

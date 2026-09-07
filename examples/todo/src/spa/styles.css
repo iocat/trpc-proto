@@ -19,7 +19,7 @@ body {
   background: var(--pink);
   background-image: radial-gradient(#111 1.2px, transparent 1.2px);
   background-size: 18px 18px;
-  font-family: Outfit, 'Arial Rounded MT Bold', sans-serif;
+  font-family: Outfit, "Arial Rounded MT Bold", sans-serif;
 }
 
 header {
@@ -32,7 +32,7 @@ header {
 
 header h1 {
   margin: 0;
-  font-family: 'Archivo Black', Impact, sans-serif;
+  font-family: "Archivo Black", Impact, sans-serif;
   font-size: clamp(56px, 12vw, 112px);
   line-height: 0.8;
   letter-spacing: -0.04em;
@@ -128,7 +128,7 @@ section {
 
 h2 {
   margin: 0 0 16px;
-  font-family: 'Archivo Black', Impact, sans-serif;
+  font-family: "Archivo Black", Impact, sans-serif;
   font-size: 36px;
   text-transform: uppercase;
   letter-spacing: -0.03em;
@@ -216,7 +216,7 @@ tr:last-child td {
   border-bottom: 0;
 }
 
-input[type='checkbox'] {
+input[type="checkbox"] {
   width: 22px;
   height: 22px;
   accent-color: var(--pink);

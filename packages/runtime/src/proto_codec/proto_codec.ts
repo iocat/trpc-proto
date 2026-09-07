@@ -1,10 +1,10 @@
-import protobuf from 'protobufjs';
-import type { DataTransformer } from '@trpc/server';
+import protobuf from "protobufjs";
+import type { DataTransformer } from "@trpc/server";
 import type {
   ProtoMessage,
   ProtoSchema,
   ProtoType,
-} from '@trpc-proto/schema_ir';
+} from "@trpc-proto/schema_ir";
 
 export interface ProtoCodec {
   readonly schema: ProtoSchema;
@@ -17,51 +17,51 @@ function toCamel(name: string) {
 }
 
 function fieldTypeName(type: ProtoType): string {
-  if (type.kind === 'scalar') return type.type;
-  if (type.kind === 'map') {
-    throw new Error('map types use MapField');
+  if (type.kind === "scalar") return type.type;
+  if (type.kind === "map") {
+    throw new Error("map types use MapField");
   }
   return type.name;
 }
 function definePath(root: protobuf.Root, pkg: string) {
   let ns: protobuf.Namespace = root;
-  for (const part of pkg.split('.').filter(Boolean)) {
+  for (const part of pkg.split(".").filter(Boolean)) {
     ns = ns.define(part);
   }
   return ns;
 }
 
 function addWellKnown(root: protobuf.Root) {
-  const google = root.define('google').define('protobuf');
+  const google = root.define("google").define("protobuf");
   function add(name: string, fields: protobuf.Field[]) {
     if (google.get(name)) return;
     const type = new protobuf.Type(name);
     for (const field of fields) type.add(field);
     google.add(type);
   }
-  add('Empty', []);
-  add('Timestamp', [
-    new protobuf.Field('seconds', 1, 'int64'),
-    new protobuf.Field('nanos', 2, 'int32'),
+  add("Empty", []);
+  add("Timestamp", [
+    new protobuf.Field("seconds", 1, "int64"),
+    new protobuf.Field("nanos", 2, "int32"),
   ]);
-  add('Duration', [
-    new protobuf.Field('seconds', 1, 'int64'),
-    new protobuf.Field('nanos', 2, 'int32'),
+  add("Duration", [
+    new protobuf.Field("seconds", 1, "int64"),
+    new protobuf.Field("nanos", 2, "int32"),
   ]);
-  add('FieldMask', [new protobuf.Field('paths', 1, 'string', 'repeated')]);
+  add("FieldMask", [new protobuf.Field("paths", 1, "string", "repeated")]);
   const wrappers: Array<[string, string]> = [
-    ['DoubleValue', 'double'],
-    ['FloatValue', 'float'],
-    ['Int32Value', 'int32'],
-    ['Int64Value', 'int64'],
-    ['UInt32Value', 'uint32'],
-    ['UInt64Value', 'uint64'],
-    ['BoolValue', 'bool'],
-    ['StringValue', 'string'],
-    ['BytesValue', 'bytes'],
+    ["DoubleValue", "double"],
+    ["FloatValue", "float"],
+    ["Int32Value", "int32"],
+    ["Int64Value", "int64"],
+    ["UInt32Value", "uint32"],
+    ["UInt64Value", "uint64"],
+    ["BoolValue", "bool"],
+    ["StringValue", "string"],
+    ["BytesValue", "bytes"],
   ];
   for (const [name, type] of wrappers) {
-    add(name, [new protobuf.Field('value', 1, type)]);
+    add(name, [new protobuf.Field("value", 1, type)]);
   }
 }
 
@@ -75,7 +75,7 @@ function addMessageType(
   }
   const oneofs = new Map<string, protobuf.OneOf>();
   for (const field of message.fields) {
-    if (field.type.kind === 'map') {
+    if (field.type.kind === "map") {
       type.add(
         new protobuf.MapField(
           field.name,
@@ -86,7 +86,7 @@ function addMessageType(
       );
       continue;
     }
-    const rule = field.repeated ? 'repeated' : 'optional';
+    const rule = field.repeated ? "repeated" : "optional";
     const pbField = new protobuf.Field(
       field.name,
       field.number,
@@ -125,12 +125,12 @@ function buildRoot(schema: ProtoSchema): protobuf.Root {
 }
 
 function lookupType(root: protobuf.Root, schema: ProtoSchema, name: string) {
-  if (name.startsWith('google.protobuf.')) return root.lookupType(name);
+  if (name.startsWith("google.protobuf.")) return root.lookupType(name);
   return root.lookupType(`${schema.package}.${name}`) ?? root.lookupType(name);
 }
 
 function isWrapper(message: ProtoMessage) {
-  return message.fields.length === 1 && message.fields[0]?.name === 'value';
+  return message.fields.length === 1 && message.fields[0]?.name === "value";
 }
 
 function findMessage(
@@ -169,7 +169,7 @@ function dateToTimestamp(value: Date) {
 
 function timestampToDate(value: unknown): Date {
   if (value instanceof Date) return value;
-  if (!value || typeof value !== 'object') return new Date(NaN);
+  if (!value || typeof value !== "object") return new Date(NaN);
   const rec = value as { seconds?: string | number; nanos?: number };
   return new Date(
     Number(rec.seconds ?? 0) * 1000 + Number(rec.nanos ?? 0) / 1e6,
@@ -184,18 +184,18 @@ function toProtoValue(
 ): unknown {
   if (value == null) return value;
   if (
-    type.kind === 'scalar' &&
-    (type.type === 'int64' || type.type === 'uint64' || type.type === 'sint64')
+    type.kind === "scalar" &&
+    (type.type === "int64" || type.type === "uint64" || type.type === "sint64")
   ) {
-    return typeof value === 'bigint' ? value.toString() : value;
+    return typeof value === "bigint" ? value.toString() : value;
   }
-  if (type.kind === 'message' && type.name === 'google.protobuf.Timestamp') {
+  if (type.kind === "message" && type.name === "google.protobuf.Timestamp") {
     return value instanceof Date ? dateToTimestamp(value) : value;
   }
-  if (type.kind === 'message') {
+  if (type.kind === "message") {
     return toProtoObject(schema, type.name, value, scope);
   }
-  if (type.kind === 'map' && value && typeof value === 'object') {
+  if (type.kind === "map" && value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
       out[key] = toProtoValue(schema, type.value, item, scope);
@@ -213,18 +213,18 @@ function fromProtoValue(
 ): unknown {
   if (value == null) return value;
   if (
-    type.kind === 'scalar' &&
-    (type.type === 'int64' || type.type === 'sint64')
+    type.kind === "scalar" &&
+    (type.type === "int64" || type.type === "sint64")
   ) {
-    return typeof value === 'bigint' ? value : BigInt(String(value));
+    return typeof value === "bigint" ? value : BigInt(String(value));
   }
-  if (type.kind === 'message' && type.name === 'google.protobuf.Timestamp') {
+  if (type.kind === "message" && type.name === "google.protobuf.Timestamp") {
     return timestampToDate(value);
   }
-  if (type.kind === 'message') {
+  if (type.kind === "message") {
     return fromProtoObject(schema, type.name, value, scope);
   }
-  if (type.kind === 'map' && value && typeof value === 'object') {
+  if (type.kind === "map" && value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
       out[key] = fromProtoValue(schema, type.value, item, scope);
@@ -240,8 +240,8 @@ function toProtoObject(
   value: unknown,
   scope?: ProtoMessage,
 ): unknown {
-  if (name === 'google.protobuf.Empty') return {};
-  if (name === 'google.protobuf.Timestamp') {
+  if (name === "google.protobuf.Empty") return {};
+  if (name === "google.protobuf.Timestamp") {
     return value instanceof Date ? dateToTimestamp(value) : value;
   }
   const message = resolveMessage(schema, name, scope);
@@ -250,13 +250,13 @@ function toProtoObject(
   if (
     isWrapper(message) &&
     (payload == null ||
-      typeof payload !== 'object' ||
+      typeof payload !== "object" ||
       Array.isArray(payload) ||
       payload instanceof Date)
   ) {
     payload = { value: payload };
   }
-  if (!payload || typeof payload !== 'object') return payload;
+  if (!payload || typeof payload !== "object") return payload;
   const src = payload as Record<string, unknown>;
   if (message.discriminator) {
     const tag = src[message.discriminator];
@@ -266,7 +266,7 @@ function toProtoObject(
         field.name === tag ||
         toCamel(field.name) === tag,
     );
-    if (!arm || arm.type.kind !== 'message') return {};
+    if (!arm || arm.type.kind !== "message") return {};
     const rest: Record<string, unknown> = { ...src };
     delete rest[message.discriminator];
     return {
@@ -294,10 +294,10 @@ function fromProtoObject(
   value: unknown,
   scope?: ProtoMessage,
 ): unknown {
-  if (name === 'google.protobuf.Empty') return {};
-  if (name === 'google.protobuf.Timestamp') return timestampToDate(value);
+  if (name === "google.protobuf.Empty") return {};
+  if (name === "google.protobuf.Timestamp") return timestampToDate(value);
   const message = resolveMessage(schema, name, scope);
-  if (!message || !value || typeof value !== 'object') return value;
+  if (!message || !value || typeof value !== "object") return value;
   const src = value as Record<string, unknown>;
   if (message.discriminator) {
     for (const field of message.fields) {
@@ -305,7 +305,7 @@ function fromProtoObject(
       if (raw === undefined || raw === null) continue;
       const decoded = fromProtoValue(schema, field.type, raw, message);
       const rest =
-        decoded && typeof decoded === 'object' && !Array.isArray(decoded)
+        decoded && typeof decoded === "object" && !Array.isArray(decoded)
           ? (decoded as Record<string, unknown>)
           : {};
       return {

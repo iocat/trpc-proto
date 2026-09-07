@@ -1,11 +1,11 @@
-import * as grpc from '@grpc/grpc-js';
-import { TRPCError, type AnyRouter } from '@trpc/server';
-import { createProtoCodec } from '../proto_codec/proto_codec.js';
-import type { StubCall } from './link.js';
-import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
+import * as grpc from "@grpc/grpc-js";
+import { TRPCError, type AnyRouter } from "@trpc/server";
+import { createProtoCodec } from "../proto_codec/proto_codec.js";
+import type { StubCall } from "./link.js";
+import { schemaFromRouter, type ProtoSchema } from "@trpc-proto/schema_ir";
 
 /** Default insecure gRPC dial target for local development. */
-const DEFAULT_ADDRESS = '127.0.0.1:50051';
+const DEFAULT_ADDRESS = "127.0.0.1:50051";
 
 export interface GrpcProtoOptions {
   router: AnyRouter;
@@ -38,12 +38,12 @@ function bindStubHandlers(schema: ProtoSchema, invoke: Invoker): StubHandlers {
 
 type Procedure = {
   _def: {
-    type: 'query' | 'mutation' | 'subscription';
+    type: "query" | "mutation" | "subscription";
     resolver?: (opts: {
       ctx: unknown;
       input: unknown;
       path: string;
-      type: 'subscription';
+      type: "subscription";
       signal?: AbortSignal;
     }) => unknown;
     inputs?: Array<{
@@ -55,7 +55,7 @@ type Procedure = {
     path: string;
     getRawInput: () => Promise<unknown>;
     ctx: unknown;
-    type: 'query' | 'mutation' | 'subscription';
+    type: "query" | "mutation" | "subscription";
     signal?: AbortSignal;
     batchIndex?: number;
   }): Promise<unknown>;
@@ -71,14 +71,14 @@ function createInvoker(
     )[request.path];
     if (!procedure) {
       throw new TRPCError({
-        code: 'NOT_FOUND',
+        code: "NOT_FOUND",
         message: `No procedure on path "${request.path}"`,
       });
     }
     const ctx = opts?.createContext ? await opts.createContext() : {};
     if (
-      procedure._def.type === 'subscription' &&
-      typeof procedure._def.resolver === 'function'
+      procedure._def.type === "subscription" &&
+      typeof procedure._def.resolver === "function"
     ) {
       let input = request.input;
       for (const parser of procedure._def.inputs ?? []) {
@@ -90,7 +90,7 @@ function createInvoker(
         ctx,
         input,
         path: request.path,
-        type: 'subscription',
+        type: "subscription",
         signal: request.signal,
       });
     }
@@ -127,7 +127,7 @@ function lookupRpc(schema: ProtoSchema, path: string) {
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   return (
-    value != null && typeof value === 'object' && Symbol.asyncIterator in value
+    value != null && typeof value === "object" && Symbol.asyncIterator in value
   );
 }
 
@@ -140,9 +140,9 @@ function isObservable(value: unknown): value is {
 } {
   return (
     !!value &&
-    typeof value === 'object' &&
-    'subscribe' in value &&
-    typeof (value as { subscribe?: unknown }).subscribe === 'function'
+    typeof value === "object" &&
+    "subscribe" in value &&
+    typeof (value as { subscribe?: unknown }).subscribe === "function"
   );
 }
 
@@ -211,7 +211,7 @@ export function createGrpcStubCall(opts: GrpcProtoOptions): StubCall {
           })()
         : lookupRpc(schema, request.path);
     if (!rpc) {
-      return Promise.reject(new Error('no gRPC mapping for call'));
+      return Promise.reject(new Error("no gRPC mapping for call"));
     }
     const rpcPath =
       request.grpcPath ??
@@ -234,7 +234,7 @@ export function createGrpcStubCall(opts: GrpcProtoOptions): StubCall {
         metadata,
       );
       if (request.signal) {
-        request.signal.addEventListener('abort', () => stream.cancel(), {
+        request.signal.addEventListener("abort", () => stream.cancel(), {
           once: true,
         });
       }
@@ -242,7 +242,7 @@ export function createGrpcStubCall(opts: GrpcProtoOptions): StubCall {
         (async function* () {
           for await (const chunk of stream) {
             if (!(chunk instanceof Uint8Array)) {
-              throw new Error('expected protobuf bytes');
+              throw new Error("expected protobuf bytes");
             }
             yield codec.decode(rpc.method.responseType, chunk);
           }
@@ -278,7 +278,7 @@ export function createProtoStub(opts: GrpcProtoOptions): StubHandlers {
   return bindStubHandlers(schemaFromRouter(opts.router), (request) =>
     call({
       path: request.path,
-      type: 'query',
+      type: "query",
       input: request.input,
     }),
   );
@@ -299,58 +299,58 @@ export interface GrpcServerHandle {
 export function grpcStatus(err: TRPCError): grpc.status {
   switch (err.code) {
     // Client Errors & Malformed Input
-    case 'PARSE_ERROR':
-    case 'BAD_REQUEST':
-    case 'UNPROCESSABLE_CONTENT':
+    case "PARSE_ERROR":
+    case "BAD_REQUEST":
+    case "UNPROCESSABLE_CONTENT":
       return grpc.status.INVALID_ARGUMENT;
 
     // Authentication & Authorization
-    case 'UNAUTHORIZED':
+    case "UNAUTHORIZED":
       return grpc.status.UNAUTHENTICATED;
 
-    case 'FORBIDDEN':
-    case 'PAYMENT_REQUIRED':
+    case "FORBIDDEN":
+    case "PAYMENT_REQUIRED":
       return grpc.status.PERMISSION_DENIED;
 
     // Resource & Preconditions
-    case 'NOT_FOUND':
+    case "NOT_FOUND":
       return grpc.status.NOT_FOUND;
 
-    case 'CONFLICT':
+    case "CONFLICT":
       return grpc.status.ALREADY_EXISTS;
 
-    case 'PRECONDITION_FAILED':
-    case 'PRECONDITION_REQUIRED':
+    case "PRECONDITION_FAILED":
+    case "PRECONDITION_REQUIRED":
       return grpc.status.FAILED_PRECONDITION;
 
     // Request Constraints & Quotas
-    case 'PAYLOAD_TOO_LARGE':
+    case "PAYLOAD_TOO_LARGE":
       return grpc.status.RESOURCE_EXHAUSTED;
 
-    case 'TOO_MANY_REQUESTS':
+    case "TOO_MANY_REQUESTS":
       return grpc.status.RESOURCE_EXHAUSTED;
 
     // Timing & Cancellation
-    case 'TIMEOUT':
-    case 'GATEWAY_TIMEOUT':
+    case "TIMEOUT":
+    case "GATEWAY_TIMEOUT":
       return grpc.status.DEADLINE_EXCEEDED;
 
-    case 'CLIENT_CLOSED_REQUEST':
+    case "CLIENT_CLOSED_REQUEST":
       return grpc.status.CANCELLED;
 
     // Server & Transport Errors
-    case 'METHOD_NOT_SUPPORTED':
-    case 'NOT_IMPLEMENTED':
+    case "METHOD_NOT_SUPPORTED":
+    case "NOT_IMPLEMENTED":
       return grpc.status.UNIMPLEMENTED;
 
-    case 'SERVICE_UNAVAILABLE':
-    case 'BAD_GATEWAY':
+    case "SERVICE_UNAVAILABLE":
+    case "BAD_GATEWAY":
       return grpc.status.UNAVAILABLE;
 
-    case 'UNSUPPORTED_MEDIA_TYPE':
+    case "UNSUPPORTED_MEDIA_TYPE":
       return grpc.status.INVALID_ARGUMENT;
 
-    case 'INTERNAL_SERVER_ERROR':
+    case "INTERNAL_SERVER_ERROR":
       return grpc.status.INTERNAL;
 
     default:
@@ -412,7 +412,7 @@ export async function serveGrpc(
           call: grpc.ServerWritableStream<unknown, unknown>,
         ) => {
           const ac = new AbortController();
-          call.on('cancelled', () => ac.abort());
+          call.on("cancelled", () => ac.abort());
           void (async () => {
             try {
               const result = await invoke({
@@ -453,7 +453,7 @@ export async function serveGrpc(
     else resolve(port);
   });
   const port = await promise;
-  const host = address.replace(/:\d+$/, '');
+  const host = address.replace(/:\d+$/, "");
   return {
     address: `${host}:${port}`,
     port,

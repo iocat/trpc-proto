@@ -1,19 +1,19 @@
-import { initTRPC } from '@trpc/server';
-import { noopForNonTsBackend } from '@trpc-proto/runtime/noop';
-import { createProtoTransformer } from '@trpc-proto/runtime/proto_codec';
-import type { ProtoMeta } from '@trpc-proto/runtime';
-import { z } from 'zod';
+import { initTRPC } from "@trpc/server";
+import { noopForNonTsBackend } from "@trpc-proto/runtime/noop";
+import { createProtoTransformer } from "@trpc-proto/runtime/proto_codec";
+import type { ProtoMeta } from "@trpc-proto/runtime";
+import { z } from "zod";
 
 const t = initTRPC.meta<ProtoMeta>().create({
   allowOutsideOfServer: true,
   transformer: createProtoTransformer(),
   defaultMeta: {
     proto: {
-      package: 'todo.v1',
-      syntax: 'proto3',
-      cache: 'generated/schema.json',
+      package: "todo.v1",
+      syntax: "proto3",
+      cache: "generated/schema.json",
       options: {
-        go_package: 'todo/backend/gen/todov1',
+        go_package: "todo/backend/gen/todov1",
       },
     },
   },
@@ -27,7 +27,7 @@ const Todo = z
     done: z.boolean(),
     createdAt: z.date(),
   })
-  .meta({ protoMessageName: 'Todo' });
+  .meta({ protoMessageName: "Todo" });
 
 const TodoListInput = z.object({
   done: z.boolean().optional(),

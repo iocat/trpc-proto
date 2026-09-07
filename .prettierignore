@@ -1,0 +1,5 @@
+node_modules
+dist
+generated
+*.pb.go
+pnpm-lock.yaml
