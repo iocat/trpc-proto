@@ -1,10 +1,8 @@
 import type { ZodType } from 'zod';
+import { assumeExhaustiveAllowing } from '@trpc-proto/utility';
 import { isWellKnownType } from '../ir/wellknown.js';
 import type { ProtoObjectMeta, ProtoScalar, ProtoType } from '../ir/types.js';
 
-
-/** Remaining discriminating cases, intentionally unhandled. */
-function assumeExhaustiveAllowing<Allowed>(_value: Allowed): void {}
 
 export type ZodRuntime = ZodType & {
   type: string;
@@ -214,8 +212,10 @@ export class ZodNode {
             return { kind: 'scalar', type: 'int64' };
           default:
             assumeExhaustiveAllowing<
-              'uint32' | 'float32' | 'float64' | null | undefined
+              'uint32' | 'float32' | 'float64' | null | undefined,
+              typeof zod.format
             >(zod.format);
+
             return zod.isInt
               ? { kind: 'scalar', type: 'int32' }
               : { kind: 'scalar', type: 'double' };
@@ -264,8 +264,10 @@ export class ZodNode {
       }
       default:
         assumeExhaustiveAllowing<
-          'undefined' | 'object' | 'function' | 'symbol'
+          'undefined' | 'object' | 'function' | 'symbol',
+          typeof kind
         >(kind);
+
         return { kind: 'scalar', type: 'string' };
     }
   }

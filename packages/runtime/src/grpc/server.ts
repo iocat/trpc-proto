@@ -1,8 +1,10 @@
 import * as grpc from '@grpc/grpc-js';
 import { TRPCError, type AnyRouter } from '@trpc/server';
+import { isAsyncIterable } from '@trpc-proto/utility';
 import { createProtoCodec } from '../proto_codec/proto_codec.js';
 import type { StubCall } from './link.js';
 import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
+
 
 /** Default insecure gRPC dial target for local development. */
 const DEFAULT_ADDRESS = '127.0.0.1:50051';
@@ -125,11 +127,6 @@ function lookupRpc(schema: ProtoSchema, path: string) {
   return undefined;
 }
 
-function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-  return (
-    value != null && typeof value === 'object' && Symbol.asyncIterator in value
-  );
-}
 
 function isObservable(value: unknown): value is {
   subscribe: (obs: {

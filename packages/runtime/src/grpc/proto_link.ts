@@ -1,8 +1,10 @@
 import { TRPCClientError, type TRPCLink } from '@trpc/client';
 import type { AnyRouter } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
+import { isAsyncIterable, isBytes } from '@trpc-proto/utility';
 import { createProtoCodec } from '../proto_codec/proto_codec.js';
 import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
+
 
 /** gRPC metadata / HTTP header key for bearer credentials. */
 const AUTH_METADATA_KEY = 'authorization';
@@ -72,15 +74,6 @@ export interface ProtoLinkOptions<TRouter extends AnyRouter = AnyRouter> {
   auth?: AuthConfig;
 }
 
-function isBytes(value: unknown): value is Uint8Array {
-  return value instanceof Uint8Array;
-}
-
-function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-  return (
-    value != null && typeof value === 'object' && Symbol.asyncIterator in value
-  );
-}
 
 function compose(
   interceptors: CallInterceptor[],

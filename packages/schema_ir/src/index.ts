@@ -16,19 +16,23 @@ export type {
   ProtoType,
   SchemaGenerateCache,
 } from './ir/types.js';
-export { fromString, toString } from './ir/text.js';
-export {
-  assertPrevalidate,
-  formatIssues,
-  prevalidate,
-  PrevalidateError,
-} from './validate/prevalidate.js';
 export type {
   ProtoIssue,
   ProtoIssueCode,
   ProtoIssueLevel,
   ProtoPrevalidateInput,
   ProtoProcedureCheck,
+} from './validate/prevalidate.js';
+export type {
+  RuntimeProcedure,
+  TranslateOptions,
+} from './translate/trpc_schema.js';
+export { fromString, toString } from './ir/text.js';
+export {
+  assertPrevalidate,
+  formatIssues,
+  prevalidate,
+  PrevalidateError,
 } from './validate/prevalidate.js';
 export {
   WELL_KNOWN_IMPORTS,
@@ -44,8 +48,4 @@ export {
   protoMetaFromRouter,
   schemaFromRouter,
   translate,
-} from './translate/trpc_schema.js';
-export type {
-  RuntimeProcedure,
-  TranslateOptions,
 } from './translate/trpc_schema.js';

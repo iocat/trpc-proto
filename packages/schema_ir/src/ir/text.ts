@@ -1,4 +1,13 @@
 import protobuf from 'protobufjs';
+import {
+  assumeExhaustive,
+  dedent,
+  toPascalCase,
+  toScreamingSnake,
+} from '@trpc-proto/utility';
+
+
+
 import type {
   ProcedureType,
   PropertyGenCache,
@@ -38,35 +47,8 @@ const SCALARS = new Set<string>([
   'bytes',
 ]);
 
-function assumeExhaustive(value: never): never {
-  throw new Error(`unexpected value: ${String(value)}`);
-}
 
-function dedent(text: string): string {
-  const lines = text.replace(/^\n/, '').split('\n');
-  const indents = lines
-    .filter((line) => line.trim().length > 0)
-    .map((line) => line.match(/^ */)?.[0].length ?? 0);
-  const n = indents.length === 0 ? 0 : Math.min(...indents);
-  return lines.map((line) => line.slice(n)).join('\n');
-}
 
-function toPascalCase(name: string): string {
-  return name
-    .split(/[._-]/g)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
-}
-
-function toScreamingSnake(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[.-]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_/, '')
-    .toUpperCase();
-}
 
 function protoEnumValue(enumName: string, valueName: string): string {
   const prefix = toScreamingSnake(enumName);

@@ -1,5 +1,12 @@
 import type { AnyProcedure, AnyRouter } from '@trpc/server';
 import type { ZodType } from 'zod';
+import {
+  assumeExhaustive,
+  assumeExhaustiveAllowing,
+  toPascalCase,
+  toSnakeCase,
+} from '@trpc-proto/utility';
+
 import { createFieldAllocator } from './field_allocator.js';
 import { assertPrevalidate, prevalidate } from '../validate/prevalidate.js';
 import {
@@ -8,6 +15,8 @@ import {
   wellKnownKind,
 } from '../ir/wellknown.js';
 import { asRuntime, type ZodRuntime } from './zod_node.js';
+
+
 
 import type {
   ProcedureType,
@@ -388,7 +397,10 @@ class TrpcSchemaTranslator {
             message,
           };
         }
-        assumeExhaustiveAllowing<'intersection'>(inner.type);
+        assumeExhaustiveAllowing<'intersection', typeof inner.type>(
+          inner.type,
+        );
+
         throw new Error(
           `Unsupported Zod type "${inner.type}" at ${parentMessage}.${fieldName}`,
         );
@@ -437,7 +449,8 @@ class TrpcSchemaTranslator {
             repeated: false,
           };
         }
-        assumeExhaustiveAllowing<'union'>(inner.type);
+        assumeExhaustiveAllowing<'union', typeof inner.type>(inner.type);
+
         throw new Error(
           `Unsupported Zod type "${inner.type}" at ${parentMessage}.${fieldName}`,
         );
@@ -445,7 +458,10 @@ class TrpcSchemaTranslator {
       case 'literal':
         return { type: mapLiteral(inner), repeated: false };
       default: {
-        assumeExhaustiveAllowing<string>(inner.type);
+        assumeExhaustiveAllowing<typeof inner.type, typeof inner.type>(
+          inner.type,
+        );
+
         const scalar = mapScalar(inner);
         if (scalar) return { type: scalar, repeated: false };
         throw new Error(
@@ -513,7 +529,8 @@ class TrpcSchemaTranslator {
       this.#convertDiscriminatedUnion(inner, name, discriminator, true);
       return name;
     }
-    assumeExhaustiveAllowing<string>(inner.type);
+    assumeExhaustiveAllowing<typeof inner.type, typeof inner.type>(inner.type);
+
     const mapped =
       inner.type === 'literal' ? mapLiteral(inner) : mapScalar(inner);
     if (
@@ -719,14 +736,6 @@ function procedureProto(procedure: AnyProcedure): ProtoFileHeader | undefined {
   return meta?.proto;
 }
 
-function assumeExhaustive(value: never): never {
-  throw new Error(`unexpected value: ${String(value)}`);
-}
-
-/** Remaining discriminating cases, intentionally unhandled. Extra leftovers fail assignability to `Allowed`. */
-function assumeExhaustiveAllowing<Allowed>(_value: Allowed): void {}
-
-
 
 function emptyPropCache(): PropertyGenCache {
   return { propertyGenCache: {}, usedIds: {} };
@@ -855,7 +864,10 @@ function unwrap(zod: ZodType): { inner: ZodRuntime; optional: boolean } {
         );
         continue;
       default:
-        assumeExhaustiveAllowing<string>(inner.type);
+        assumeExhaustiveAllowing<typeof inner.type, typeof inner.type>(
+          inner.type,
+        );
+
         break;
     }
     break;
@@ -911,9 +923,11 @@ function mapScalar(zod: ZodRuntime): ProtoType | undefined {
         case 'uint64':
           return { kind: 'scalar', type: 'int64' };
         default:
-          assumeExhaustiveAllowing<'uint32' | 'float32' | 'float64' | null>(
-            zod.format as 'uint32' | 'float32' | 'float64' | null,
-          );
+          assumeExhaustiveAllowing<
+            'uint32' | 'float32' | 'float64' | null | undefined,
+            typeof zod.format
+          >(zod.format);
+
           return zod.isInt
             ? { kind: 'scalar', type: 'int32' }
             : { kind: 'scalar', type: 'double' };
@@ -925,7 +939,8 @@ function mapScalar(zod: ZodRuntime): ProtoType | undefined {
     case 'file':
       return { kind: 'scalar', type: 'bytes' };
     default:
-      assumeExhaustiveAllowing<string>(zod.type);
+      assumeExhaustiveAllowing<typeof zod.type, typeof zod.type>(zod.type);
+
       return undefined;
   }
 }
@@ -962,9 +977,11 @@ function mapLiteral(zod: ZodRuntime): ProtoType {
         : { kind: 'scalar', type: 'double' };
     }
     default:
-      assumeExhaustiveAllowing<'undefined' | 'object' | 'function' | 'symbol'>(
-        kind,
-      );
+      assumeExhaustiveAllowing<
+        'undefined' | 'object' | 'function' | 'symbol',
+        typeof kind
+      >(kind);
+
       return { kind: 'scalar', type: 'string' };
   }
 }
@@ -999,13 +1016,3 @@ function methodName(path: string): string {
   return toPascalCase(last);
 }
 
-function toPascalCase(name: string): string {
-  return name
-    .split(/[._-]/g)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
-}
-function toSnakeCase(name: string): string {
-  return name.replace(/([A-Z])/g, '_$1').toLowerCase();
-}

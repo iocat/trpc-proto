@@ -1,4 +1,5 @@
 import protobuf from 'protobufjs';
+import { toCamel } from '@trpc-proto/utility';
 
 import type {
   ProtoMessage,
@@ -12,9 +13,6 @@ export interface ProtoCodec {
   decode(messageName: string, bytes: Uint8Array): unknown;
 }
 
-function toCamel(name: string) {
-  return name.replace(/_([a-z])/g, (_, ch: string) => ch.toUpperCase());
-}
 
 function fieldTypeName(type: ProtoType): string {
   if (type.kind === 'scalar') return type.type;

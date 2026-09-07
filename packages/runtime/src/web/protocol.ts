@@ -1,4 +1,6 @@
+import { concat } from '@trpc-proto/utility';
 import type { StubCall } from '../grpc/proto_link.js';
+
 
 /**
  * Unary protobuf gRPC-Web content type.
@@ -118,16 +120,6 @@ export function decodeGrpcWeb(body: Uint8Array): GrpcWebDecode {
   return { messages, trailers };
 }
 
-function concat(chunks: Uint8Array[]) {
-  const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const out = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return out;
-}
 
 export function isGrpcWebContentType(value: string | undefined) {
   return Boolean(value?.toLowerCase().includes('application/grpc-web'));
