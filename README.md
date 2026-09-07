@@ -226,13 +226,13 @@ implemented wire behavior, CORS semantics, security boundary, and limitations.
 
 ## gRPC-Web backlog
 
-The current HTTP handler supports binary unary calls and server streaming
-through one reused grpc-js client. This table tracks the remaining transport work.
+The current HTTP handler supports raw and base64 unary calls, server streaming,
+and opt-in gzip request-message compression through one reused grpc-js client.
+This table tracks the remaining transport work.
 
 | Priority | Area | Backlog item | Acceptance |
 | --- | --- | --- | --- |
-| P0 | Text encoding | Negotiate `application/grpc-web-text` and incrementally decode/encode base64 chunks. | Binary and text requests and responses pass interoperability tests, including padding split across chunks. |
-| P0 | Framing | Validate frame flags, reject data after trailers, require final trailers, and reject truncated stream EOF. | Malformed framing has table-driven negative tests; trailers are always final. |
+| P0 | Framing | Validate unknown frame flags and reject data after trailers. | Malformed framing has table-driven negative tests; trailers are always final. |
 | P0 | Cancellation | Parse `grpc-timeout`, apply an upstream deadline, and cancel the grpc-js call when the browser disconnects or aborts. | Deadline and disconnect tests observe cancellation at the backend. |
 | P0 | Boundary | Limit request-body size and restrict forwarded gRPC service/method paths. | Oversized bodies and unknown methods are rejected before an upstream call. |
 | P1 | HTTP | Support and test HTTP/1.1 and HTTP/2 browser ingress. | The same unary and streaming suite passes over both ingress protocols. |

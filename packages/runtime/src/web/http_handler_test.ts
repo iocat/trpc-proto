@@ -7,13 +7,32 @@ import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
 import { createGrpcWebHttpHandler } from './http_handler.js';
 import { grpcWebLink } from './link.js';
+import { GrpcWebFrameCodec } from './codec/frame_codec.js';
 import {
-  decodeGrpcWeb,
-  encodeGrpcWebMessage,
+  GrpcWebProtocolCodec,
+  type GrpcWebProtocolValue,
+} from './codec/protocol_codec.js';
+import {
   GRPC_WEB_CONTENT_TYPE,
-} from './protocol.js';
+  GRPC_WEB_TEXT_CONTENT_TYPE,
+} from './content_type.js';
+import { createGrpcWebFetchCall } from './fetch_call.js';
 import { serveGrpc } from '../grpc/server.js';
 import type { ProtoMeta } from '@trpc-proto/schema_ir';
+const frameCodec = new GrpcWebFrameCodec();
+const protocolCodec = new GrpcWebProtocolCodec();
+async function decodeProtocol(
+  body: Uint8Array,
+  encoding: 'raw' | 'base64',
+): Promise<GrpcWebProtocolValue[]> {
+  const values: GrpcWebProtocolValue[] = [];
+  for await (const value of protocolCodec.decode(body, { encoding })) {
+    values.push(value);
+  }
+  return values;
+}
+
+
 
 describe('createGrpcWebHttpHandler', () => {
   it('round-trips through a gRPC-Web HTTP handler to serveGrpc', async () => {
@@ -31,7 +50,11 @@ describe('createGrpcWebHttpHandler', () => {
     const handleGrpcWeb = createGrpcWebHttpHandler({
       address: `127.0.0.1:${grpcServer.port}`,
     });
+    let requestContentType = '';
+    let requestCompression = '';
     const server = http.createServer(async (req, res) => {
+      requestContentType = String(req.headers['content-type'] ?? '');
+      requestCompression = String(req.headers['grpc-encoding'] ?? '');
       if (!(await handleGrpcWeb(req, res))) {
         res.writeHead(404);
         res.end();
@@ -47,11 +70,15 @@ describe('createGrpcWebHttpHandler', () => {
           grpcWebLink({
             router: appRouter,
             url: `http://127.0.0.1:${port}`,
+            encoding: 'base64',
+            compress: true,
           }),
         ],
       });
       const out = await client.hello.query({ name: 'Ada' });
       assert.deepEqual(out, { message: 'hello Ada' });
+      assert.equal(requestContentType, GRPC_WEB_TEXT_CONTENT_TYPE);
+      assert.equal(requestCompression, 'gzip');
     } finally {
       server.close();
       await grpcServer.close();
@@ -81,7 +108,8 @@ describe('createGrpcWebHttpHandler', () => {
         name: 'allowed',
         origin: 'https://app.example',
         method: 'POST',
-        headers: 'content-type, authorization, x-trace',
+        headers:
+          'content-type, authorization, grpc-accept-encoding, grpc-encoding, x-trace',
         status: 204,
       },
       {
@@ -174,7 +202,9 @@ describe('createGrpcWebHttpHandler', () => {
     const handleGrpcWeb = createGrpcWebHttpHandler({
       address: `127.0.0.1:${port}`,
     });
+    let requestContentType = '';
     const server = http.createServer(async (req, res) => {
+      requestContentType = String(req.headers['content-type'] ?? '');
       if (!(await handleGrpcWeb(req, res))) {
         res.writeHead(404);
         res.end();
@@ -186,23 +216,23 @@ describe('createGrpcWebHttpHandler', () => {
     const { port: webPort } = server.address() as { port: number };
 
     try {
-      const res = await fetch(
-        `http://127.0.0.1:${webPort}/demo.v1.AppService/Watch`,
-        {
-          method: 'POST',
-          headers: {
-            'content-type': GRPC_WEB_CONTENT_TYPE,
-            'x-grpc-web': '1',
-          },
-          body: Buffer.from(encodeGrpcWebMessage(new Uint8Array([0]))),
-        },
-      );
-      const decoded = decodeGrpcWeb(new Uint8Array(await res.arrayBuffer()));
-      assert.deepEqual(
-        decoded.messages.map((message) => [...message]),
-        [[1], [2, 3]],
-      );
-      assert.equal(decoded.trailers['grpc-status'], '0');
+      const call = createGrpcWebFetchCall({
+        baseUrl: `http://127.0.0.1:${webPort}`,
+        encoding: 'base64',
+      });
+      const response = await call({
+        path: 'watch',
+        type: 'subscription',
+        input: undefined,
+        bytes: new Uint8Array([0]),
+        grpcPath: '/demo.v1.AppService/Watch',
+      });
+      const messages: number[][] = [];
+      for await (const message of response as AsyncIterable<Uint8Array>) {
+        messages.push([...message]);
+      }
+      assert.equal(requestContentType, GRPC_WEB_TEXT_CONTENT_TYPE);
+      assert.deepEqual(messages, [[1], [2, 3]]);
     } finally {
       server.close();
       backend.forceShutdown();
@@ -282,7 +312,12 @@ describe('createGrpcWebHttpHandler', () => {
             'x-trace': 'abc',
             'x-grpc-web': '1',
           },
-          body: Buffer.from(encodeGrpcWebMessage(new Uint8Array([1]))),
+          body: Buffer.from(
+            await protocolCodec.encode(
+              { kind: 'message', payload: new Uint8Array([1]) },
+              { encoding: 'raw' },
+            ),
+          ),
         },
       );
       assert.equal(res.status, 200);
@@ -292,14 +327,18 @@ describe('createGrpcWebHttpHandler', () => {
       );
       assert.equal(
         res.headers.get('access-control-expose-headers'),
-        'grpc-status, grpc-message, x-grpc-web',
+        'grpc-status, grpc-message, grpc-accept-encoding, grpc-encoding, x-grpc-web',
       );
-      const decoded = decodeGrpcWeb(new Uint8Array(await res.arrayBuffer()));
+      const decoded = await decodeProtocol(
+        new Uint8Array(await res.arrayBuffer()),
+        'raw',
+      );
       assert.equal(seenAuth, 'Bearer secret');
       assert.equal(seenTrace, 'abc');
-      assert.equal(decoded.trailers['grpc-status'], '5');
-      assert.equal(decoded.trailers['grpc-message'], 'no such user');
-      assert.equal(decoded.trailers['x-error-id'], 'e1');
+      const trailers = decoded.find((value) => value.kind === 'trailers');
+      assert.equal(trailers?.status, 5);
+      assert.equal(trailers?.message, 'no such user');
+      assert.equal(trailers?.metadata?.['x-error-id'], 'e1');
       const denied = await fetch(
         `http://127.0.0.1:${webPort}/demo.v1.AppService/Hello`,
         {
@@ -309,7 +348,12 @@ describe('createGrpcWebHttpHandler', () => {
             origin: 'https://evil.example',
             'x-grpc-web': '1',
           },
-          body: Buffer.from(encodeGrpcWebMessage(new Uint8Array([1]))),
+          body: Buffer.from(
+            await protocolCodec.encode(
+              { kind: 'message', payload: new Uint8Array([1]) },
+              { encoding: 'raw' },
+            ),
+          ),
         },
       );
       assert.equal(denied.status, 403);
@@ -317,6 +361,70 @@ describe('createGrpcWebHttpHandler', () => {
     } finally {
       server.close();
       backend.forceShutdown();
+    }
+  });
+
+  it('rejects malformed requests and negotiates text error responses', async () => {
+    const handleGrpcWeb = createGrpcWebHttpHandler();
+    const server = http.createServer(async (req, res) => {
+      if (!(await handleGrpcWeb(req, res))) {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    const { port } = server.address() as { port: number };
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      assert.equal((await fetch(baseUrl)).status, 404);
+      assert.equal(
+        (
+          await fetch(`${baseUrl}/demo.v1.AppService/Hello`, {
+            method: 'POST',
+            headers: { 'content-type': 'text/plain' },
+          })
+        ).status,
+        404,
+      );
+
+      const compressedFrame = frameCodec.encode({
+        kind: 'message',
+        compressed: true,
+        payload: new Uint8Array([0x1f, 0x8b, 0x00]),
+      });
+      const response = await fetch(
+        `${baseUrl}/demo.v1.AppService/Hello`,
+        {
+          method: 'POST',
+          headers: {
+            accept: GRPC_WEB_TEXT_CONTENT_TYPE,
+            'content-type': GRPC_WEB_CONTENT_TYPE,
+            'x-grpc-web': '1',
+          },
+          body: compressedFrame,
+        },
+      );
+      assert.equal(response.status, 200);
+      assert.equal(
+        response.headers.get('content-type'),
+        GRPC_WEB_TEXT_CONTENT_TYPE,
+      );
+      assert.equal(response.headers.get('grpc-accept-encoding'), 'gzip');
+      const decoded = await decodeProtocol(
+        new Uint8Array(await response.arrayBuffer()),
+        'base64',
+      );
+      const trailers = decoded.find((value) => value.kind === 'trailers');
+      assert.equal(trailers?.status, 13);
+      assert.match(
+        trailers?.message ?? '',
+        /unsupported grpc-encoding.*identity/,
+      );
+    } finally {
+      server.close();
     }
   });
 });

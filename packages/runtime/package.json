@@ -27,7 +27,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "test": "tsx --test src/**/*_test.ts"
+    "test": "tsx --test \"src/**/*_test.ts\""
   },
   "peerDependencies": {
     "@grpc/grpc-js": "^1.12.0",

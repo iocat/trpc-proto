@@ -10,4 +10,5 @@ export type {
 } from './web/http_handler.js';
 export { grpcWebLink } from './web/link.js';
 export type { GrpcWebLinkOptions } from './web/link.js';
+export type { GrpcWebEncoding } from './web/content_type.js';
 export type { ProtoMeta } from '@trpc-proto/schema_ir';

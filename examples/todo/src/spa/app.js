@@ -10,6 +10,8 @@ function client() {
       grpcWebLink({
         router: appRouter,
         url: '',
+        encoding: 'base64',
+        compress: true,
         auth: { token: () => $('auth-token')?.value },
       }),
     ],

@@ -9,6 +9,8 @@ const client = createTRPCClient({
     grpcWebLink({
       router: appRouter,
       url: '',
+      encoding: 'raw',
+      compress: false,
     }),
   ],
 });

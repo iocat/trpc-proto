@@ -12,16 +12,16 @@ sequenceDiagram
     participant Backend as Native gRPC backend
 
     App->>WebLink: tRPC query, mutation, or subscription
-    WebLink->>Fetch: Prepare framed binary POST
+    WebLink->>Fetch: Prepare framed request body
     opt Cross-origin preflight
         Fetch->>Handler: OPTIONS with origin, method, and headers
         Handler-->>Fetch: 204 when allowed
     end
-    Fetch->>Handler: POST binary gRPC-Web frame over HTTP
+    Fetch->>Handler: POST gRPC-Web frames over HTTP
     Handler->>Handler: Validate origin, frame, and metadata
     Handler->>Client: One protobuf request message
     Client->>Backend: Native gRPC over multiplexed HTTP/2
-    loop Response messages
+    loop Unary once; server stream zero or more times
         Backend-->>Client: Protobuf response message
         Client-->>Handler: grpc-js data event
         Handler-->>Fetch: 0x00 gRPC-Web data frame
@@ -43,10 +43,15 @@ or production deployment readiness.
 
 | Component | File | Responsibility |
 | --- | --- | --- |
-| `grpcWebLink` | `src/web/link.ts` | tRPC client link that protobuf-encodes input and calls the Fetch transport. |
-| Fetch transport | `src/web/protocol.ts` | Builds binary gRPC-Web requests and decodes unary or server-streaming responses. |
-| `createGrpcWebHttpHandler` | `src/web/http_handler.ts` | Node HTTP handler that validates the web boundary and forwards requests to grpc-js. |
-| Frame helpers | `src/web/protocol.ts` | Encode and decode data and in-body trailer frames. |
+| `grpcWebLink` | `src/web/link.ts` | tRPC link that protobuf-encodes input and selects raw or base64 transport. |
+| Fetch transport | `src/web/fetch_call.ts` | Sends gRPC-Web requests and decodes unary or server-streaming responses. |
+| Content negotiation | `src/web/content_type.ts` | Maps content types to raw or base64 encoding and negotiates `Accept`. |
+| Codec contract | `src/web/codec/codec.ts` | Defines the shared `encode` and streaming `decode` interface. |
+| Frame codec | `src/web/codec/frame_codec.ts` | Encodes and incrementally decodes binary data and trailer frames. |
+| Compression codec | `src/web/codec/compression.ts` | Encodes and decodes message-local gzip streams. |
+| Base64 codec | `src/web/codec/base64_codec.ts` | Encodes and incrementally decodes base64 body chunks. |
+| Protocol codec | `src/web/codec/protocol_codec.ts` | Composes frame, compression, and body codecs through `encode` and `decode`. |
+| `createGrpcWebHttpHandler` | `src/web/http_handler.ts` | Validates the Node HTTP boundary and forwards requests to grpc-js. |
 
 The browser link and Node HTTP handler do not inspect protobuf payloads. The
 shared runtime codec translates tRPC values before and after transport.
@@ -64,13 +69,20 @@ const client = createTRPCClient<AppRouter>({
     grpcWebLink({
       router: appRouter,
       url: 'https://api.example.com',
+      encoding: 'base64',
+      compress: true,
     }),
   ],
 });
 ```
 
-`url` defaults to an empty string, which sends requests to the current origin.
-The procedure's translated service and method determine the URL pathname.
+`encoding` accepts `raw` or `base64` and defaults to `base64`. `raw` sends
+binary gRPC-Web frames directly. `base64` sends the same frames using the
+standard text content type and base64 body representation. `compress` defaults
+to `false`; when true, each request protobuf message is gzip-compressed before
+framing and optional base64 encoding. `url` defaults to an empty string, which
+sends requests to the current origin. The procedure's translated service and
+method determine the URL pathname.
 
 ### Node HTTP handler
 
@@ -99,21 +111,27 @@ tested.
 The upstream address defaults to `127.0.0.1:50051`. The upstream channel is
 insecure unless `credentials` is provided.
 
-## Binary wire format
+## Body representations
 
-Only binary protobuf gRPC-Web is implemented. Requests and responses use:
+The configuration names describe the bytes placed in the HTTP body. The
+standard gRPC-Web media types retain their protocol-defined binary and text
+names:
+
+| Configuration | Content type | HTTP body |
+| --- | --- | --- |
+| `raw` | `application/grpc-web+proto` | Raw length-prefixed binary frames without base64. |
+| `base64` (default) | `application/grpc-web-text+proto` | Base64 representation of length-prefixed binary frames. |
+
+The content-type parser also accepts both media types without `+proto`, as
+required by the gRPC-Web default-format rule, and ignores media parameters.
+
+Before optional base64 encoding, each frame is length-prefixed:
 
 ```text
-content-type: application/grpc-web+proto
-```
-
-Each frame is length-prefixed:
-
-```text
-+---------+--------------------+-------------------+
-| flags   | payload length     | payload           |
-| 1 byte  | 4 bytes, big-endian| length bytes      |
-+---------+--------------------+-------------------+
++---------+---------------------+-------------------+
+| flags   | payload length      | payload           |
+| 1 byte  | 4 bytes, big-endian | length bytes      |
++---------+---------------------+-------------------+
 ```
 
 Implemented flags:
@@ -121,25 +139,64 @@ Implemented flags:
 | Flag | Meaning | Current behavior |
 | --- | --- | --- |
 | `0x00` | Uncompressed protobuf data | Supported. |
-| `0x01` | Compressed protobuf data | Rejected. |
+| `0x01` | Compressed protobuf data | Supported with `grpc-encoding: gzip`. |
 | `0x80` | Uncompressed in-body trailers | Supported. |
 | `0x81` | Compressed in-body trailers | Rejected. |
 
-The decoders reject truncated frame headers and payloads. They do not yet
-reject every unknown flag combination or enforce that a trailer frame is the
-last frame.
+The raw frame decoder accepts arbitrary transport chunk boundaries and rejects
+truncated headers and payloads. It does not yet reject every unknown flag
+combination or enforce that a trailer frame is last.
+
+In base64 mode, each flushed frame is base64-encoded independently. Padding can
+therefore occur before the end of the HTTP body:
+
+```text
+base64(data frame)==base64(next data frame)=base64(trailer frame)==
+```
+
+The base64 decoder does not call `atob` on the complete response. It
+incrementally decodes complete base64 quartets, resets after padded segments,
+and retains incomplete quartets across Fetch chunks.
+
+## Message compression
+
+Message compression happens before framing and before optional base64:
+
+```text
+protobuf -> gzip -> 0x01 frame -> optional base64 -> HTTP
+```
+
+The Fetch transport always advertises `grpc-accept-encoding: gzip`. With
+`compress: true`, it gzip-compresses the request message, sets the frame's
+compressed flag, and sends `grpc-encoding: gzip`. The HTTP handler decompresses
+that message before forwarding its bytes through grpc-js.
+
+For responses, the Fetch transport checks the compressed flag on every data
+frame. Flagged messages are decompressed with the algorithm named by the
+response's `grpc-encoding`; unflagged messages remain unchanged, so one stream
+may mix compressed and uncompressed messages. Binary and text responses use
+the same message-compression path because base64 is removed before frames are
+decoded.
+
+The implementation supports gzip data messages through the Web Compression
+Streams API. Missing or unsupported `grpc-encoding` values and compressed
+trailer frames are rejected.
 
 ## Request flow
 
-The Fetch transport sends one framed protobuf message:
+The Fetch transport sends one framed protobuf message. In text mode the frame
+shown below is base64-encoded:
 
 ```text
 POST /<package>.<service>/<method>
-content-type: application/grpc-web+proto
+content-type: application/grpc-web[-text]+proto
+accept: application/grpc-web[-text]+proto
+grpc-accept-encoding: gzip
+grpc-encoding: gzip  # only with compress: true
 x-grpc-web: 1
 x-user-agent: grpc-web-javascript/0.1
 
-[0x00][uint32 length][protobuf payload]
+[0x00 or 0x01][uint32 length][protobuf or gzip payload]
 ```
 
 Interceptor metadata is added as HTTP request headers. The caller's
@@ -148,21 +205,18 @@ Interceptor metadata is added as HTTP request headers. The caller's
 The HTTP handler:
 
 1. Handles a configured CORS preflight, if applicable.
-2. Returns `false` unless the request is a `POST` with a gRPC-Web content type.
+2. Returns `false` unless the request is a `POST` with a supported gRPC-Web
+   content type.
 3. Applies configured origin validation.
 4. Reads the complete request body into memory.
-5. Requires exactly one data frame.
-6. Converts permitted request headers into grpc-js metadata.
-7. sends one native gRPC request message upstream.
+5. Base64-decodes a text body.
+6. Requires exactly one data frame.
+7. Gzip-decompresses a flagged request message.
+8. Converts permitted request headers into grpc-js metadata.
+9. Sends one native gRPC request message upstream.
 
 Client-streaming and bidirectional-streaming request bodies are not supported.
 There is no request-body size limit yet.
-
-`isGrpcWebContentType` currently recognizes any content type containing
-`application/grpc-web`. This includes `application/grpc-web-text`, but text
-base64 decoding is not implemented. A text request therefore reaches the
-binary decoder and fails. Applications should send
-`application/grpc-web+proto` only.
 
 ## Response and streaming flow
 
@@ -172,22 +226,31 @@ protobuf method descriptor:
 
 1. Each upstream `data` event becomes one `0x00` gRPC-Web data frame.
 2. The final grpc-js `status` event becomes one `0x80` trailer frame.
-3. The HTTP response ends after the trailer frame.
+3. Each frame is written raw for binary mode or independently base64-encoded
+   for text mode.
+4. The HTTP response ends after the trailer frame.
 
-A unary RPC naturally produces one data frame followed by trailers. A
-server-streaming RPC produces zero or more data frames followed by trailers.
-The removed `x-grpc-web-stream` private header is not part of the current
-protocol.
+grpc-js removes native gRPC message compression before invoking the handler's
+`data` callback. The handler therefore emits uncompressed `0x00` Web response
+frames even when an upstream native gRPC server selected gzip. It does not
+recompress upstream responses. The bundled example backends do not configure
+response compression.
+
+The handler chooses the first supported media type in `Accept`; when `Accept`
+does not select one, it uses the request encoding. A unary RPC naturally
+produces one data frame followed by trailers. A server-streaming RPC produces
+zero or more data frames followed by trailers.
 
 The Fetch transport handles the response according to the tRPC operation:
 
-- Query and mutation calls buffer the response, decode all frames, check the
-  status trailer, and return the first data message.
-- Subscription calls incrementally buffer Fetch chunks until complete frames
-  are available, yield each data payload, and finish at the trailer frame.
+- Query and mutation calls incrementally decode optional base64 and raw frames,
+  decompress a flagged data message, check the status trailer, and return the
+  first message.
+- Subscription calls use the same incremental protocol decoder, yield each
+  payload, and finish at the trailer frame.
 
-Binary frames may be split across arbitrary Fetch chunks. The incremental
-reader retains incomplete bytes until the complete frame is available.
+Both base64 quartets and binary frames may be split across arbitrary Fetch
+chunks. Each decoder retains its incomplete input for the next chunk.
 
 ## Trailers and errors
 
@@ -347,12 +410,16 @@ Current operational limitations:
 | --- | --- |
 | Binary unary request and response | Supported |
 | Binary server-streaming response | Supported |
-| Arbitrarily split binary response chunks | Supported |
+| Text unary request and response | Supported |
+| Text server-streaming response | Supported |
+| Independently padded base64 chunks | Supported |
+| Arbitrarily split response chunks | Supported |
 | In-body status trailers | Supported |
 | Request metadata and bearer authorization | Supported for string values |
 | Exact-origin CORS preflight | Opt-in |
-| Base64 `application/grpc-web-text` | Not supported |
-| Compressed messages or trailers | Not supported |
+| Gzip-compressed request messages | Opt-in with `compress: true` |
+| Gzip-compressed unary and streaming responses | Supported |
+| Compressed in-body trailers | Not supported |
 | Client streaming | Not supported |
 | Bidirectional streaming | Not supported |
 | HTTP/2 browser ingress | Not implemented or tested |
@@ -366,13 +433,21 @@ Current operational limitations:
 
 `src/web/http_handler_test.ts` covers:
 
-- Binary unary calls through `serveGrpc`.
-- Allowed and rejected CORS preflights.
+- Compressed base64 unary calls through `grpcWebLink` and `serveGrpc`.
+- Base64 server streaming through the Fetch transport.
+- Allowed and rejected CORS preflights, including compression headers.
 - Actual origin validation and response exposure headers.
-- Server streaming without private request headers.
 - String request metadata and gRPC status metadata.
 
-`src/web/protocol_test.ts` covers binary data/trailer framing and content-type
-recognition. Text mode, compression, HTTP/2 ingress, strict final trailers,
-deadlines, downstream cancellation, and operational safeguards are not yet
-covered because those capabilities are not implemented.
+`src/web/fetch_call_test.ts` covers compressed raw and base64 responses, mixed
+compressed and uncompressed streams, arbitrary base64 transport chunks,
+request compression headers, and missing response encodings.
+
+`src/web/codec/compression_test.ts`, `src/web/content_type_test.ts`,
+`src/web/codec/frame_codec_test.ts`,
+`src/web/codec/protocol_codec_test.ts`, and
+`src/web/codec/base64_codec_test.ts` cover gzip round trips, compressed frame
+flags, content negotiation, raw frame boundaries, independently padded base64
+segments, arbitrary base64 transport boundaries, and malformed input.
+HTTP/2 ingress, strict final trailers, deadlines, downstream cancellation, and
+operational safeguards remain unimplemented.

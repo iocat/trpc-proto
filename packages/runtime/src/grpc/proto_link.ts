@@ -4,7 +4,8 @@ import { observable } from '@trpc/server/observable';
 import { isAsyncIterable, isBytes } from '@trpc-proto/utility';
 import { createProtoCodec } from '../proto_codec/proto_codec.js';
 import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
-
+import type { MaybePromise } from '../types.js';
+export type { MaybePromise } from '../types.js';
 
 /** gRPC metadata / HTTP header key for bearer credentials. */
 const AUTH_METADATA_KEY = 'authorization';
@@ -56,7 +57,6 @@ export type CallInterceptor = (
   next: (ctx: CallContext) => Promise<unknown>,
 ) => Promise<unknown>;
 
-export type MaybePromise<T> = T | Promise<T>;
 
 /** Authorization metadata generated for each protobuf link call. */
 export interface AuthConfig {
