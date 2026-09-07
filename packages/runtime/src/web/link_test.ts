@@ -3,11 +3,11 @@ import { describe, it } from 'node:test';
 import { createTRPCClient } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
-import { grpcWebProxyLink } from './link.js';
+import { grpcWebLink } from './link.js';
 import type { ProtoMeta } from '@trpc-proto/schema_ir';
 
-describe('grpcWebProxyLink', () => {
-  it('uses grpcWebProxyLink on createTRPCClient', async () => {
+describe('grpcWebLink', () => {
+  it('uses grpcWebLink on createTRPCClient', async () => {
     const t = initTRPC.meta<ProtoMeta>().create({
       defaultMeta: { proto: { package: 'demo.v1' } },
     });
@@ -20,7 +20,7 @@ describe('grpcWebProxyLink', () => {
     type AppRouter = typeof appRouter;
     const client = createTRPCClient<AppRouter>({
       links: [
-        grpcWebProxyLink({
+        grpcWebLink({
           router: appRouter,
           interceptors: [async () => ({ message: 'hello Ada' })],
         }),

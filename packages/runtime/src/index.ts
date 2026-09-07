@@ -8,6 +8,6 @@ export type {
   GrpcWebCorsOptions,
   GrpcWebHttpHandlerOptions,
 } from './web/http_handler.js';
-export { grpcWebProxyLink } from './web/link.js';
-export type { GrpcWebProxyLinkOptions } from './web/link.js';
+export { grpcWebLink } from './web/link.js';
+export type { GrpcWebLinkOptions } from './web/link.js';
 export type { ProtoMeta } from '@trpc-proto/schema_ir';

@@ -6,7 +6,7 @@ import { createTRPCClient } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
 import { createGrpcWebHttpHandler } from './http_handler.js';
-import { grpcWebProxyLink } from './link.js';
+import { grpcWebLink } from './link.js';
 import {
   decodeGrpcWeb,
   encodeGrpcWebMessage,
@@ -44,7 +44,7 @@ describe('createGrpcWebHttpHandler', () => {
     try {
       const client = createTRPCClient<AppRouter>({
         links: [
-          grpcWebProxyLink({
+          grpcWebLink({
             router: appRouter,
             url: `http://127.0.0.1:${port}`,
           }),

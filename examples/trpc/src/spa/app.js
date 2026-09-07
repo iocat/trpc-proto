@@ -1,12 +1,12 @@
-import { createTRPCProxyClient } from '@trpc/client';
-import { grpcWebProxyLink } from '@trpc-proto/runtime/web';
+import { createTRPCClient } from '@trpc/client';
+import { grpcWebLink } from '@trpc-proto/runtime/web';
 import { appRouter } from '../router.ts';
 
 const $ = (id) => document.getElementById(id);
 
-const client = createTRPCProxyClient({
+const client = createTRPCClient({
   links: [
-    grpcWebProxyLink({
+    grpcWebLink({
       router: appRouter,
       url: '',
     }),

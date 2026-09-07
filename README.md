@@ -221,10 +221,13 @@ The handler answers valid preflight requests, rejects disallowed origins, method
 and headers before contacting gRPC, and adds the matching CORS headers to
 gRPC-Web responses. Omit `cors` for same-origin deployments.
 
+See the [gRPC-Web runtime protocol](packages/runtime/GRPC_WEB.md) for the
+implemented wire behavior, CORS semantics, security boundary, and limitations.
+
 ## gRPC-Web backlog
 
 The current HTTP handler supports binary unary calls and server streaming
-through one reused grpc-js client. This table tracks the remaining proxy work.
+through one reused grpc-js client. This table tracks the remaining transport work.
 
 | Priority | Area | Backlog item | Acceptance |
 | --- | --- | --- | --- |
