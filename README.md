@@ -6,7 +6,8 @@ This is **opinionated**. Only a subset of `appRouter` is a proto contract. That 
 
 ```
 packages/plugin      @trpc-proto/plugin          evaluate appRouter → .proto + schema.json
-packages/runtime     @trpc-proto/runtime         proto_codec, grpcLink, invoker
+packages/runtime     @trpc-proto/runtime         grpcLink, serveGrpc, gRPC-Web
+
 packages/schema_ir   @trpc-proto/schema_ir       ProtoSchema IR, prevalidate, proto text
 examples/users       @trpc-proto/example-users   users/org API + Go gRPC backend
 examples/todo        @trpc-proto/example-todo    todo API + Go gRPC backend
@@ -41,7 +42,8 @@ Prevalidate collects every issue, then aborts on errors (no stack). Generate pri
 | `z.object`, nested objects                                 | `message`                             |
 | `.meta({ protoMessageName: 'User' })`                      | named message; **must be PascalCase** |
 | `.meta({ protoUseKnownType: 'google.protobuf.Duration' })` | encode as that well-known type        |
-| `.meta({ id: 'UserRole' })`                                | named enum; **id must be PascalCase** |
+| `.meta({ protoEnumName: 'UserRole' })`                     | named enum; **must be PascalCase**    |
+
 
 | unnamed nested object | nested message named from the field |
 | `z.string`, template literal | `string` (`email` is still `string`) |
@@ -58,7 +60,8 @@ Prevalidate collects every issue, then aborts on errors (no stack). Generate pri
 | void / undefined / never / null input or output | `google.protobuf.Empty` |
 | `z.optional` / `z.nullable` | `optional` field |
 
-Rejected (translate throws): open unions, mixed-type literals, mixed int/float literals, non-PascalCase `protoMessageName` / `id`, non-scalar map keys, anything else `Unsupported Zod type`.
+Rejected (translate throws): open unions, mixed-type literals, mixed int/float literals, non-PascalCase `protoMessageName` / `protoEnumName`, non-scalar map keys, anything else `Unsupported Zod type`.
+
 
 Do not expect tRPC-only features (middleware-only procedures, output inference without `.output()`, superjson-only types) to round-trip through protobuf.
 
@@ -81,15 +84,10 @@ pnpm build
 
 ```ts
 import { initTRPC } from '@trpc/server';
-import {
-  createProtoTransformer,
-  noopForNonTsBackend,
-  type ProtoMeta,
-} from '@trpc-proto/runtime';
+import { noopForNonTsBackend, type ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
 
 const t = initTRPC.meta<ProtoMeta>().create({
-  transformer: createProtoTransformer(),
   defaultMeta: {
     proto: {
       package: 'example.v1',
@@ -98,6 +96,7 @@ const t = initTRPC.meta<ProtoMeta>().create({
     },
   },
 });
+
 
 const User = z
   .object({

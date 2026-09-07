@@ -1,5 +1,5 @@
 import protobuf from 'protobufjs';
-import type { DataTransformer } from '@trpc/server';
+
 import type {
   ProtoMessage,
   ProtoSchema,
@@ -350,27 +350,6 @@ export function createProtoCodec(schema: ProtoSchema): ProtoCodec {
         bytes: Uint8Array,
       });
       return fromProtoObject(schema, messageName, raw);
-    },
-  };
-}
-
-/**
- * Identity tRPC `DataTransformer`.
- *
- * tRPC transformers are path-blind (`serialize(value)` / `deserialize(value)`).
- * Protobuf needs the RPC's request/response message names, which only `grpcLink`
- * has (`schema` + `op.path` → `createProtoCodec().encode/decode`). Putting wire
- * encoding here would either guess the wrong message or double-encode.
- *
- * Pass this (or omit `transformer`) so tRPC does not wrap values before the link.
- */
-export function createProtoTransformer(): DataTransformer {
-  return {
-    serialize(object: unknown) {
-      return object;
-    },
-    deserialize(object: unknown) {
-      return object;
     },
   };
 }

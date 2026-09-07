@@ -8,41 +8,44 @@ export type {
   ProtoMessage,
   ProtoMeta,
   ProtoMethod,
+  ProtoObjectMeta,
   ProtoScalar,
   ProtoSchema,
   ProtoService,
   ProtoSyntax,
   ProtoType,
   SchemaGenerateCache,
-} from './types.js';
-export { fromString, toString } from './text.js';
+} from './ir/types.js';
+export { fromString, toString } from './ir/text.js';
 export {
   assertPrevalidate,
   formatIssues,
   prevalidate,
   PrevalidateError,
-} from './prevalidate.js';
+} from './validate/prevalidate.js';
 export type {
   ProtoIssue,
   ProtoIssueCode,
   ProtoIssueLevel,
   ProtoPrevalidateInput,
   ProtoProcedureCheck,
-} from './prevalidate.js';
+} from './validate/prevalidate.js';
 export {
   WELL_KNOWN_IMPORTS,
   isWellKnownType,
   protoServiceName,
   wellKnownImport,
   wellKnownKind,
-} from './wellknown.js';
-export { createFieldAllocator } from './field_allocator.js';
+} from './ir/wellknown.js';
+export { createFieldAllocator } from './translate/field_allocator.js';
 export {
   listProcedures,
   prevalidateRouter,
   protoMetaFromRouter,
   schemaFromRouter,
   translate,
-} from './trpc_schema.js';
-
-export type { RuntimeProcedure, TranslateOptions } from './trpc_schema.js';
+} from './translate/trpc_schema.js';
+export type {
+  RuntimeProcedure,
+  TranslateOptions,
+} from './translate/trpc_schema.js';

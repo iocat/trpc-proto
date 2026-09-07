@@ -1,11 +1,10 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
-import { createProtoTransformer } from '@trpc-proto/runtime/proto_codec';
 import type { ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
 const t = initTRPC.meta<ProtoMeta>().create({
   allowOutsideOfServer: true,
-  transformer: createProtoTransformer(),
+
   defaultMeta: {
     proto: {
       package: 'trpc.v1',

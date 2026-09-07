@@ -1,12 +1,11 @@
 import { initTRPC } from '@trpc/server';
 import { noopForNonTsBackend } from '@trpc-proto/runtime/noop';
-import { createProtoTransformer } from '@trpc-proto/runtime/proto_codec';
 import type { ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
 
 const t = initTRPC.meta<ProtoMeta>().create({
   allowOutsideOfServer: true,
-  transformer: createProtoTransformer(),
+
   defaultMeta: {
     proto: {
       package: 'todo.v1',

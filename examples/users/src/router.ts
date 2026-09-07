@@ -1,12 +1,11 @@
 import { initTRPC } from '@trpc/server';
 import { noopForNonTsBackend } from '@trpc-proto/runtime/noop';
-import { createProtoTransformer } from '@trpc-proto/runtime/proto_codec';
 import type { ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
 
 const t = initTRPC.meta<ProtoMeta>().create({
   allowOutsideOfServer: true,
-  transformer: createProtoTransformer(),
+
   defaultMeta: {
     proto: {
       package: 'example.v1',
@@ -25,7 +24,10 @@ const Address = z
   })
   .meta({ protoMessageName: 'Address' });
 
-const Role = z.enum(['admin', 'member', 'guest']).meta({ id: 'UserRole' });
+const Role = z
+  .enum(['admin', 'member', 'guest'])
+  .meta({ protoEnumName: 'UserRole' });
+
 
 const User = z
   .object({
@@ -79,10 +81,11 @@ const HelloOutput = z.object({ message: z.string() });
 
 const IssueStatus = z
   .enum(['backlog', 'todo', 'in_progress', 'done'])
-  .meta({ id: 'IssueStatus' });
+  .meta({ protoEnumName: 'IssueStatus' });
 const IssuePriority = z
   .enum(['none', 'low', 'medium', 'high', 'urgent'])
-  .meta({ id: 'IssuePriority' });
+  .meta({ protoEnumName: 'IssuePriority' });
+
 
 const Issue = z
   .object({

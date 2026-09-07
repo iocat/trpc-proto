@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { z, type ZodType } from 'zod';
-import { fromString, toString } from './text.js';
+import { fromString, toString } from '../ir/text.js';
 import {
   translate,
   type RuntimeProcedure,
@@ -11,7 +11,8 @@ import type {
   ProcedureType,
   PropertyGenCache,
   SchemaGenerateCache,
-} from './types.js';
+} from '../ir/types.js';
+
 
 function proc(
   path: string,
@@ -178,7 +179,8 @@ const cases: TranslateCase[] = [
     `,
   },
   {
-    name: 'shared Zod identity with meta id is one message',
+    name: 'shared Zod identity with protoMessageName is one message',
+
     procedures: [
       proc('user.getById', {
         input: z.object({ id: z.string() }),
@@ -637,6 +639,21 @@ describe('translate', () => {
     );
   });
 
+  it('throws when protoEnumName is not PascalCase', () => {
+    assert.throws(
+      () =>
+        translate([
+          proc('bad', {
+            input: z.object({
+              role: z.enum(['a']).meta({ protoEnumName: 'notPascal' }),
+            }),
+          }),
+        ]),
+      /protoEnumName must be PascalCase/,
+    );
+  });
+
+
   it('encodes protoUseKnownType as a well-known message', () => {
     const Duration = z
       .object({
@@ -676,7 +693,8 @@ describe('translate', () => {
     const Role = z
       .enum(['admin', 'member'])
       .describe('account role')
-      .meta({ id: 'UserRole' });
+      .meta({ protoEnumName: 'UserRole' });
+
     const Person = z
       .object({
         id: z.string().describe('unique id'),
