@@ -1,6 +1,6 @@
-import { createTRPCProxyClient } from "@trpc/client";
-import { grpcWebProxyLink } from "@trpc-proto/runtime/web";
-import { appRouter } from "../router.ts";
+import { createTRPCProxyClient } from '@trpc/client';
+import { grpcWebProxyLink } from '@trpc-proto/runtime/web';
+import { appRouter } from '../router.ts';
 
 const $ = (id) => document.getElementById(id);
 
@@ -8,7 +8,7 @@ const client = createTRPCProxyClient({
   links: [
     grpcWebProxyLink({
       router: appRouter,
-      url: "",
+      url: '',
     }),
   ],
 });
@@ -17,11 +17,11 @@ const edits = [];
 let sub;
 
 function paintStream() {
-  const out = $("stream-out");
+  const out = $('stream-out');
   if (!out) return;
   out.textContent = edits.length
     ? JSON.stringify(edits, null, 2)
-    : "listening for note.put…";
+    : 'listening for note.put…';
 }
 
 function listen() {
@@ -42,29 +42,29 @@ function listen() {
 }
 
 function route() {
-  return location.hash.replace(/^#\/?/, "") || "echo";
+  return location.hash.replace(/^#\/?/, '') || 'echo';
 }
 
 function markNav() {
   const current = route();
-  for (const link of document.querySelectorAll("nav a")) {
+  for (const link of document.querySelectorAll('nav a')) {
     link.classList.toggle(
-      "active",
-      link.getAttribute("href") === `#/${current}`,
+      'active',
+      link.getAttribute('href') === `#/${current}`,
     );
   }
 }
 
 function fail(err) {
-  $("status").className = "bad";
-  $("status").textContent = String(err.message || err);
+  $('status').className = 'bad';
+  $('status').textContent = String(err.message || err);
 }
 
 async function render() {
   markNav();
-  const app = $("app");
+  const app = $('app');
   try {
-    if (route() === "notes") {
+    if (route() === 'notes') {
       app.innerHTML = `
         <section>
           <h2>Notes</h2>
@@ -76,20 +76,20 @@ async function render() {
           <button class="secondary" id="get-btn">Get</button>
           <pre id="note-out"></pre>
         </section>`;
-      $("put-btn").onclick = async () => {
+      $('put-btn').onclick = async () => {
         const put = await client.note.put.mutate({
-          id: $("note-id").value,
-          body: $("note-body").value,
+          id: $('note-id').value,
+          body: $('note-body').value,
         });
-        $("note-out").textContent = JSON.stringify(put, null, 2);
+        $('note-out').textContent = JSON.stringify(put, null, 2);
       };
-      $("get-btn").onclick = async () => {
+      $('get-btn').onclick = async () => {
         const got = await client.note.get.query({
-          id: $("note-id").value,
+          id: $('note-id').value,
         });
-        $("note-out").textContent = JSON.stringify(got, null, 2);
+        $('note-out').textContent = JSON.stringify(got, null, 2);
       };
-    } else if (route() === "stream") {
+    } else if (route() === 'stream') {
       app.innerHTML = `
         <section>
           <h2>note.onChange</h2>
@@ -100,18 +100,18 @@ async function render() {
         </section>`;
       paintStream();
       listen();
-      $("sub-btn").onclick = () => {
+      $('sub-btn').onclick = () => {
         listen();
         paintStream();
       };
-      $("unsub-btn").onclick = () => {
+      $('unsub-btn').onclick = () => {
         sub?.unsubscribe();
         sub = undefined;
-        const out = $("stream-out");
+        const out = $('stream-out');
         if (out)
           out.textContent = edits.length
             ? `${JSON.stringify(edits, null, 2)}\n\n— paused —`
-            : "paused";
+            : 'paused';
       };
     } else {
       app.innerHTML = `
@@ -123,13 +123,13 @@ async function render() {
           <button class="secondary" id="echo-btn">Echo</button>
           <pre id="echo-out"></pre>
         </section>`;
-      $("health-btn").onclick = async () => {
+      $('health-btn').onclick = async () => {
         const health = await client.health.query();
-        $("echo-out").textContent = JSON.stringify(health, null, 2);
+        $('echo-out').textContent = JSON.stringify(health, null, 2);
       };
-      $("echo-btn").onclick = async () => {
-        const echo = await client.echo.query($("echo-text").value);
-        $("echo-out").textContent = echo;
+      $('echo-btn').onclick = async () => {
+        const echo = await client.echo.query($('echo-text').value);
+        $('echo-out').textContent = echo;
       };
     }
   } catch (err) {
@@ -137,10 +137,10 @@ async function render() {
   }
 }
 
-$("status").textContent = "ready";
-$("status").className = "ok";
+$('status').textContent = 'ready';
+$('status').className = 'ok';
 listen();
-window.addEventListener("hashchange", () => {
+window.addEventListener('hashchange', () => {
   void render();
 });
 void render();

@@ -1,4 +1,4 @@
-import protobuf from "protobufjs";
+import protobuf from 'protobufjs';
 import type {
   ProcedureType,
   PropertyGenCache,
@@ -13,29 +13,29 @@ import type {
   ProtoSyntax,
   ProtoType,
   SchemaGenerateCache,
-} from "./types.js";
+} from './types.js';
 import {
   isWellKnownType,
   wellKnownImport,
   wellKnownKind,
-} from "./wellknown.js";
+} from './wellknown.js';
 
 const SCALARS = new Set<string>([
-  "double",
-  "float",
-  "int32",
-  "int64",
-  "uint32",
-  "uint64",
-  "sint32",
-  "sint64",
-  "fixed32",
-  "fixed64",
-  "sfixed32",
-  "sfixed64",
-  "bool",
-  "string",
-  "bytes",
+  'double',
+  'float',
+  'int32',
+  'int64',
+  'uint32',
+  'uint64',
+  'sint32',
+  'sint64',
+  'fixed32',
+  'fixed64',
+  'sfixed32',
+  'sfixed64',
+  'bool',
+  'string',
+  'bytes',
 ]);
 
 function assumeExhaustive(value: never): never {
@@ -43,12 +43,12 @@ function assumeExhaustive(value: never): never {
 }
 
 function dedent(text: string): string {
-  const lines = text.replace(/^\n/, "").split("\n");
+  const lines = text.replace(/^\n/, '').split('\n');
   const indents = lines
     .filter((line) => line.trim().length > 0)
     .map((line) => line.match(/^ */)?.[0].length ?? 0);
   const n = indents.length === 0 ? 0 : Math.min(...indents);
-  return lines.map((line) => line.slice(n)).join("\n");
+  return lines.map((line) => line.slice(n)).join('\n');
 }
 
 function toPascalCase(name: string): string {
@@ -56,15 +56,15 @@ function toPascalCase(name: string): string {
     .split(/[._-]/g)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
+    .join('');
 }
 
 function toScreamingSnake(name: string): string {
   return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[.-]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_/, "")
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[.-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_/, '')
     .toUpperCase();
 }
 
@@ -90,23 +90,23 @@ function prepare(source: string): string {
 }
 
 function publicTypeName(name: string): string {
-  const trimmed = name.replace(/^\./, "");
-  if (trimmed.startsWith("google.protobuf.")) return trimmed;
-  const parts = trimmed.split(".");
+  const trimmed = name.replace(/^\./, '');
+  if (trimmed.startsWith('google.protobuf.')) return trimmed;
+  const parts = trimmed.split('.');
   return parts[parts.length - 1] ?? trimmed;
 }
 
 function namedType(name: string, enumNames: Set<string>): ProtoType {
   const publicName = publicTypeName(name);
   if (SCALARS.has(publicName))
-    return { kind: "scalar", type: publicName as ProtoScalar };
+    return { kind: 'scalar', type: publicName as ProtoScalar };
   if (isWellKnownType(publicName)) {
     return { kind: wellKnownKind(publicName), name: publicName };
   }
   if (enumNames.has(publicName) || enumNames.has(name)) {
-    return { kind: "enum", name: publicName };
+    return { kind: 'enum', name: publicName };
   }
-  return { kind: "message", name: publicName };
+  return { kind: 'message', name: publicName };
 }
 
 function collectEnumNames(ns: protobuf.Namespace, into: Set<string>) {
@@ -122,13 +122,13 @@ function fromField(field: protobuf.Field, enumNames: Set<string>): ProtoField {
       name: field.name,
       number: field.id,
       type: {
-        kind: "map",
+        kind: 'map',
         key: field.keyType as ProtoScalar,
         value: namedType(field.type, enumNames),
       },
       repeated: false,
       optional: false,
-      comment: field.comment ?? "",
+      comment: field.comment ?? '',
     };
   }
   const oneof =
@@ -141,7 +141,7 @@ function fromField(field: protobuf.Field, enumNames: Set<string>): ProtoField {
     type: namedType(field.type, enumNames),
     repeated: field.repeated,
     optional: Boolean(field.optional),
-    comment: field.comment ?? "",
+    comment: field.comment ?? '',
     ...(oneof ? { oneof, discriminatorValue: field.name } : {}),
   };
 }
@@ -162,7 +162,7 @@ function fromMessage(
     name: type.name,
     fields: type.fieldsArray.map((field) => fromField(field, enumNames)),
     subMessages,
-    comment: type.comment ?? "",
+    comment: type.comment ?? '',
     ...(discriminator ? { discriminator } : {}),
   };
 }
@@ -173,18 +173,18 @@ function fromEnum(en: protobuf.Enum): ProtoEnum {
     name: name.startsWith(`${prefix}_`) ? name.slice(prefix.length + 1) : name,
     number,
   }));
-  return { name: en.name, values, comment: en.comment ?? "" };
+  return { name: en.name, values, comment: en.comment ?? '' };
 }
 
 function fromService(service: protobuf.Service): ProtoService {
   const methods: ProtoMethod[] = service.methodsArray.map((method) => {
     const note = /^(?:\/\/\s*)?tRPC (query|mutation|subscription) (.+)$/.exec(
-      (method.comment ?? "").trim(),
+      (method.comment ?? '').trim(),
     );
     return {
       name: method.name,
       path: note?.[2] ?? method.name,
-      type: (note?.[1] as ProcedureType | undefined) ?? "query",
+      type: (note?.[1] as ProcedureType | undefined) ?? 'query',
       requestType: publicTypeName(method.requestType),
       responseType: publicTypeName(method.responseType),
       isResponseStreaming: method.responseStream === true,
@@ -200,7 +200,7 @@ export function fromString(source: string): ProtoSchema {
     keepCase: true,
     alternateCommentMode: true,
   });
-  const packageName = parsed.package || "trpc";
+  const packageName = parsed.package || 'trpc';
   const ns =
     (parsed.package
       ? (parsed.root.lookup(parsed.package) as protobuf.Namespace | null)
@@ -219,7 +219,7 @@ export function fromString(source: string): ProtoSchema {
     }
   }
   return {
-    syntax: "proto3",
+    syntax: 'proto3',
     package: packageName,
     options: fileOptionsFromRoot(ns),
     services,
@@ -236,9 +236,9 @@ function fileOptionsFromRoot(
   const options: ProtoFileOptions = {};
   for (const [key, value] of Object.entries(raw)) {
     if (
-      typeof value === "string" ||
-      typeof value === "boolean" ||
-      typeof value === "number"
+      typeof value === 'string' ||
+      typeof value === 'boolean' ||
+      typeof value === 'number'
     ) {
       options[key] = value;
     }
@@ -259,12 +259,12 @@ function emitComment(
 
 function renderType(type: ProtoType): string {
   switch (type.kind) {
-    case "scalar":
+    case 'scalar':
       return type.type;
-    case "enum":
-    case "message":
+    case 'enum':
+    case 'message':
       return type.name;
-    case "map":
+    case 'map':
       return `map<${type.key}, ${renderType(type.value)}>`;
     default:
       return assumeExhaustive(type);
@@ -275,7 +275,7 @@ function formatReservedNumbers(tags: number[]): string {
   const sorted = [...new Set(tags)].sort((a, b) => a - b);
   const parts: string[] = [];
   let start = sorted[0];
-  if (start === undefined) return "";
+  if (start === undefined) return '';
   let prev = start;
   for (let index = 1; index <= sorted.length; index += 1) {
     const next = sorted[index];
@@ -288,7 +288,7 @@ function formatReservedNumbers(tags: number[]): string {
       start = prev = next;
     }
   }
-  return parts.join(", ");
+  return parts.join(', ');
 }
 
 function reservedNumbers(
@@ -317,20 +317,20 @@ function emitField(
   inOneof: boolean,
 ) {
   emitComment(lines, field.comment, indent);
-  let prefix = "";
+  let prefix = '';
   if (!inOneof) {
     switch (field.type.kind) {
-      case "map":
-        prefix = "";
+      case 'map':
+        prefix = '';
         break;
-      case "scalar":
-      case "enum":
-      case "message":
+      case 'scalar':
+      case 'enum':
+      case 'message':
         prefix = field.repeated
-          ? "repeated "
+          ? 'repeated '
           : field.optional
-            ? "optional "
-            : "";
+            ? 'optional '
+            : '';
         break;
       default:
         assumeExhaustive(field.type);
@@ -382,12 +382,12 @@ function emitMessage(
   if (reserved) {
     lines.push(`${indent}  reserved ${reserved};`);
   }
-  lines.push(`${indent}}`, "");
+  lines.push(`${indent}}`, '');
 }
 
 function typeNamesOf(type: ProtoType): string[] {
-  if (type.kind === "message" || type.kind === "enum") return [type.name];
-  if (type.kind === "map") return typeNamesOf(type.value);
+  if (type.kind === 'message' || type.kind === 'enum') return [type.name];
+  if (type.kind === 'map') return typeNamesOf(type.value);
   return [];
 }
 
@@ -408,20 +408,20 @@ function formatOptionValue(
   key: string,
   value: string | boolean | number,
 ): string {
-  if (typeof value === "boolean" || typeof value === "number") {
+  if (typeof value === 'boolean' || typeof value === 'number') {
     return String(value);
   }
-  if (key === "optimize_for") return value;
-  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+  if (key === 'optimize_for') return value;
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 }
 
 /** Serialize schema IR to proto3 text. */
 export function toString(schema: ProtoSchema): string {
   const lines: string[] = [
     `syntax = "${schema.syntax}";`,
-    "",
+    '',
     `package ${schema.package};`,
-    "",
+    '',
   ];
 
   const methods = schema.services.flatMap((service) => service.methods);
@@ -438,7 +438,7 @@ export function toString(schema: ProtoSchema): string {
     ),
   ].sort();
   for (const path of imports) lines.push(`import "${path}";`);
-  if (imports.length > 0) lines.push("");
+  if (imports.length > 0) lines.push('');
 
   const fileOptions = schema.options ?? {};
   const optionKeys = Object.keys(fileOptions).filter(
@@ -449,22 +449,22 @@ export function toString(schema: ProtoSchema): string {
     if (value === undefined) continue;
     lines.push(`option ${key} = ${formatOptionValue(key, value)};`);
   }
-  if (optionKeys.length > 0) lines.push("");
+  if (optionKeys.length > 0) lines.push('');
 
   for (const en of schema.enums) {
     const enumName = toPascalCase(en.name);
-    emitComment(lines, en.comment, "");
+    emitComment(lines, en.comment, '');
     lines.push(`enum ${enumName} {`);
     for (const value of en.values) {
       lines.push(
         `  ${protoEnumValue(enumName, value.name)} = ${value.number};`,
       );
     }
-    lines.push("}", "");
+    lines.push('}', '');
   }
 
   for (const message of schema.messages) {
-    emitMessage(lines, message, "", schema.generateCache);
+    emitMessage(lines, message, '', schema.generateCache);
   }
 
   for (const service of schema.services) {
@@ -472,11 +472,11 @@ export function toString(schema: ProtoSchema): string {
     for (const method of service.methods) {
       lines.push(
         `  // tRPC ${method.type} ${method.path}`,
-        `  rpc ${method.name} (${method.requestType}) returns (${method.isResponseStreaming ? "stream " : ""}${method.responseType});`,
+        `  rpc ${method.name} (${method.requestType}) returns (${method.isResponseStreaming ? 'stream ' : ''}${method.responseType});`,
       );
     }
-    lines.push("}", "");
+    lines.push('}', '');
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }

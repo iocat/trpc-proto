@@ -1,5 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   listProcedures,
   prevalidateRouter,
@@ -10,10 +10,10 @@ import {
   type ProtoSchema,
   type RuntimeProcedure,
   type SchemaGenerateCache,
-} from "@trpc-proto/schema_ir";
-import { loadAppRouter, type LoadOptions } from "./load.js";
+} from '@trpc-proto/schema_ir';
+import { loadAppRouter, type LoadOptions } from './load.js';
 
-export { translate } from "@trpc-proto/schema_ir";
+export { translate } from '@trpc-proto/schema_ir';
 
 export interface GenerateOptions extends LoadOptions, ProtoMeta {
   outDir?: string;
@@ -29,7 +29,7 @@ export interface GenerateResult {
   proto: string;
   files: string[];
 }
-const DEFAULT_PACKAGE = "trpc";
+const DEFAULT_PACKAGE = 'trpc';
 
 export async function generate(
   options: GenerateOptions = {},
@@ -39,20 +39,20 @@ export async function generate(
   const procedures = listProcedures(router);
   const fromRouter = protoMetaFromRouter(router).proto;
   const fromOpts = options.proto ?? {};
-  const outDir = options.outDir ?? "generated";
+  const outDir = options.outDir ?? 'generated';
   const packageName =
     options.packageName ??
     fromOpts.package ??
     fromRouter?.package ??
     DEFAULT_PACKAGE;
   const cachePath = path.resolve(
-    fromOpts.cache ?? fromRouter?.cache ?? path.join(outDir, "schema.json"),
+    fromOpts.cache ?? fromRouter?.cache ?? path.join(outDir, 'schema.json'),
   );
   const schema = translate(procedures, {
     ...options,
     generateCache: options.generateCache ?? loadGenerateCache(cachePath),
     proto: {
-      syntax: fromOpts.syntax ?? fromRouter?.syntax ?? "proto3",
+      syntax: fromOpts.syntax ?? fromRouter?.syntax ?? 'proto3',
       package: packageName,
       cache: cachePath,
       options: fromOpts.options ?? fromRouter?.options,
@@ -69,9 +69,9 @@ export async function generate(
 
 function loadGenerateCache(cachePath: string): SchemaGenerateCache | undefined {
   if (!fs.existsSync(cachePath)) return undefined;
-  const raw = JSON.parse(fs.readFileSync(cachePath, "utf8")) as {
+  const raw = JSON.parse(fs.readFileSync(cachePath, 'utf8')) as {
     generateCache?: SchemaGenerateCache;
-    propertyGenCache?: SchemaGenerateCache["propertyGenCache"];
+    propertyGenCache?: SchemaGenerateCache['propertyGenCache'];
   };
   if (raw.generateCache) return raw.generateCache;
   if (raw.propertyGenCache) return { propertyGenCache: raw.propertyGenCache };
@@ -81,15 +81,15 @@ function loadGenerateCache(cachePath: string): SchemaGenerateCache | undefined {
 function writeOutputs(
   schema: ProtoSchema,
   proto: string,
-  outDir = "generated",
+  outDir = 'generated',
   cachePath?: string,
 ) {
   fs.mkdirSync(outDir, { recursive: true });
   const protoPath = path.join(
     outDir,
-    `${schema.package.replaceAll(".", "_")}.proto`,
+    `${schema.package.replaceAll('.', '_')}.proto`,
   );
-  const schemaPath = cachePath ?? path.join(outDir, "schema.json");
+  const schemaPath = cachePath ?? path.join(outDir, 'schema.json');
   fs.mkdirSync(path.dirname(schemaPath), { recursive: true });
   fs.writeFileSync(protoPath, proto);
   fs.writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`);

@@ -23,7 +23,7 @@ body {
     linear-gradient(rgba(22, 53, 92, 0.55) 1px, transparent 1px),
     linear-gradient(90deg, rgba(22, 53, 92, 0.55) 1px, transparent 1px);
   background-size: 32px 32px;
-  font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+  font-family: 'IBM Plex Sans', 'Helvetica Neue', sans-serif;
 }
 
 .frame {
@@ -44,7 +44,7 @@ header {
 
 .kicker {
   margin: 8px 0 0;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -53,7 +53,7 @@ header {
 
 header h1 {
   margin: 6px 0 0;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 34px;
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -82,7 +82,7 @@ header .auth {
 }
 
 #status {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -108,7 +108,7 @@ nav a {
   text-align: center;
   color: var(--muted);
   text-decoration: none;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -134,7 +134,7 @@ section {
 
 h2 {
   margin: 0 0 16px;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.2em;
@@ -151,7 +151,7 @@ section p {
 label {
   display: block;
   margin: 12px 0 4px;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 10px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -168,7 +168,7 @@ textarea {
   background: #06101f;
   border: 1px solid var(--line);
   border-radius: 0;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 13px;
 }
 
@@ -216,7 +216,7 @@ table {
   width: 100%;
   margin-top: 14px;
   border-collapse: collapse;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 12px;
 }
 
@@ -241,7 +241,7 @@ pre {
   background: #040b18;
   border: 1px solid var(--line);
   color: var(--cyan);
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 12px;
   overflow: auto;
 }

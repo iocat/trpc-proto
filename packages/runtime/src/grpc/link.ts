@@ -1,9 +1,9 @@
-import type { TRPCLink } from "@trpc/client";
-import type { AnyRouter } from "@trpc/server";
-import { createGrpcStubCall } from "./server.js";
-import { createProtoLink, type ProtoLinkOptions } from "./proto_link.js";
+import type { TRPCLink } from '@trpc/client';
+import type { AnyRouter } from '@trpc/server';
+import { createGrpcStubCall } from './server.js';
+import { createProtoLink, type ProtoLinkOptions } from './proto_link.js';
 
-export { authInterceptor, createProtoLink } from "./proto_link.js";
+export { authInterceptor, createProtoLink } from './proto_link.js';
 export type {
   AuthConfig,
   CallContext,
@@ -12,7 +12,7 @@ export type {
   ProtoLinkOptions,
   StubCall,
   StubRequest,
-} from "./proto_link.js";
+} from './proto_link.js';
 
 export interface GrpcLinkOptions<
   TRouter extends AnyRouter = AnyRouter,

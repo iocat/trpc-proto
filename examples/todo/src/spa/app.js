@@ -1,6 +1,6 @@
-import { createTRPCProxyClient } from "@trpc/client";
-import { grpcWebProxyLink } from "@trpc-proto/runtime/web";
-import { appRouter } from "../router.ts";
+import { createTRPCProxyClient } from '@trpc/client';
+import { grpcWebProxyLink } from '@trpc-proto/runtime/web';
+import { appRouter } from '../router.ts';
 
 const $ = (id) => document.getElementById(id);
 
@@ -9,22 +9,22 @@ function client() {
     links: [
       grpcWebProxyLink({
         router: appRouter,
-        url: "",
-        auth: { token: () => $("auth-token")?.value },
+        url: '',
+        auth: { token: () => $('auth-token')?.value },
       }),
     ],
   });
 }
 
 function route() {
-  return location.hash.replace(/^#\/?/, "") || "list";
+  return location.hash.replace(/^#\/?/, '') || 'list';
 }
 
 function markNav() {
   const current = route();
-  for (const link of document.querySelectorAll("nav a")) {
-    const href = link.getAttribute("href") ?? "";
-    link.classList.toggle("active", href === `#/${current}`);
+  for (const link of document.querySelectorAll('nav a')) {
+    const href = link.getAttribute('href') ?? '';
+    link.classList.toggle('active', href === `#/${current}`);
   }
 }
 
@@ -63,48 +63,48 @@ function createView() {
 }
 
 async function refresh() {
-  const filter = $("filter").value;
+  const filter = $('filter').value;
   const payload =
-    filter === "open"
+    filter === 'open'
       ? { done: false }
-      : filter === "done"
+      : filter === 'done'
         ? { done: true }
         : {};
   const listed = await client().todo.list.query(payload);
-  $("todo-rows").innerHTML = (listed.items || [])
+  $('todo-rows').innerHTML = (listed.items || [])
     .map((todo) => {
-      const titleClass = todo.done ? ' class="done"' : "";
+      const titleClass = todo.done ? ' class="done"' : '';
       return `<tr data-id="${todo.id}">
-        <td><input type="checkbox" class="toggle"${todo.done ? " checked" : ""} /></td>
+        <td><input type="checkbox" class="toggle"${todo.done ? ' checked' : ''} /></td>
         <td${titleClass}>${todo.title}</td>
-        <td>${todo.notes || ""}</td>
+        <td>${todo.notes || ''}</td>
         <td><button class="secondary tiny del">Delete</button></td>
       </tr>`;
     })
-    .join("");
+    .join('');
 }
 
 function fail(err) {
-  $("status").className = "bad";
-  $("status").textContent = String(err.message || err);
+  $('status').className = 'bad';
+  $('status').textContent = String(err.message || err);
 }
 
 function bindList() {
-  $("list-btn").onclick = () => refresh().catch(fail);
-  $("filter").onchange = () => refresh().catch(fail);
-  $("todo-rows").onclick = async (event) => {
-    const row = event.target.closest("tr");
+  $('list-btn').onclick = () => refresh().catch(fail);
+  $('filter').onchange = () => refresh().catch(fail);
+  $('todo-rows').onclick = async (event) => {
+    const row = event.target.closest('tr');
     if (!row) return;
     const id = row.dataset.id;
     try {
-      if (event.target.classList.contains("toggle")) {
+      if (event.target.classList.contains('toggle')) {
         await client().todo.setDone.mutate({
           id,
           done: event.target.checked,
         });
         await refresh();
       }
-      if (event.target.classList.contains("del")) {
+      if (event.target.classList.contains('del')) {
         await client().todo.remove.mutate({ id });
         await refresh();
       }
@@ -116,13 +116,13 @@ function bindList() {
 }
 
 function bindCreate() {
-  $("create-btn").onclick = async () => {
+  $('create-btn').onclick = async () => {
     try {
       const created = await client().todo.create.mutate({
-        title: $("title").value,
-        notes: $("notes").value || undefined,
+        title: $('title').value,
+        notes: $('notes').value || undefined,
       });
-      $("create-out").textContent = JSON.stringify(created, null, 2);
+      $('create-out').textContent = JSON.stringify(created, null, 2);
     } catch (err) {
       fail(err);
     }
@@ -131,9 +131,9 @@ function bindCreate() {
 
 async function render() {
   markNav();
-  const app = $("app");
+  const app = $('app');
   try {
-    if (route() === "new") {
+    if (route() === 'new') {
       app.innerHTML = createView();
       bindCreate();
     } else {
@@ -145,9 +145,9 @@ async function render() {
   }
 }
 
-$("status").textContent = "ready";
-$("status").className = "ok";
-window.addEventListener("hashchange", () => {
+$('status').textContent = 'ready';
+$('status').className = 'ok';
+window.addEventListener('hashchange', () => {
   void render();
 });
 void render();

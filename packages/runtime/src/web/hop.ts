@@ -1,5 +1,5 @@
-import * as grpc from "@grpc/grpc-js";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import * as grpc from '@grpc/grpc-js';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   decodeGrpcWeb,
   encodeGrpcWebMessage,
@@ -9,41 +9,41 @@ import {
   grpcWebErrorFrame,
   grpcWebOkFrame,
   isGrpcWebContentType,
-} from "./protocol.js";
+} from './protocol.js';
 
-const DEFAULT_ADDRESS = "127.0.0.1:50051";
+const DEFAULT_ADDRESS = '127.0.0.1:50051';
 
 /** Do not set these request headers as gRPC metadata. */
 const SKIP_METADATA_HEADERS = new Set([
-  "accept",
-  "accept-encoding",
-  "connection",
-  "content-length",
-  "content-type",
-  "host",
-  "keep-alive",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "proxy-connection",
-  "te",
-  "trailer",
-  "transfer-encoding",
-  "upgrade",
-  "user-agent",
-  "x-grpc-web",
-  "x-grpc-web-stream",
-  "x-user-agent",
+  'accept',
+  'accept-encoding',
+  'connection',
+  'content-length',
+  'content-type',
+  'host',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'user-agent',
+  'x-grpc-web',
+  'x-grpc-web-stream',
+  'x-user-agent',
 ]);
 
 function contentType(req: IncomingMessage): string | undefined {
-  const value = req.headers["content-type"];
-  return typeof value === "string" ? value : undefined;
+  const value = req.headers['content-type'];
+  return typeof value === 'string' ? value : undefined;
 }
 
 async function readBody(req: IncomingMessage): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   for await (const chunk of req) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
   return Buffer.concat(chunks);
 }
@@ -53,8 +53,8 @@ function metadataFromRequest(req: IncomingMessage): grpc.Metadata {
   for (const [key, value] of Object.entries(req.headers)) {
     if (value == null) continue;
     const name = key.toLowerCase();
-    if (SKIP_METADATA_HEADERS.has(name) || name.startsWith(":")) continue;
-    const text = Array.isArray(value) ? value.join(",") : value;
+    if (SKIP_METADATA_HEADERS.has(name) || name.startsWith(':')) continue;
+    const text = Array.isArray(value) ? value.join(',') : value;
 
     if (text) metadata.set(name, text);
   }
@@ -72,13 +72,13 @@ function trailerRecord(md?: grpc.Metadata): Record<string, string> {
 }
 
 function grpcWebHeaders(): Record<string, string> {
-  return { "content-type": GRPC_WEB_CONTENT_TYPE };
+  return { 'content-type': GRPC_WEB_CONTENT_TYPE };
 }
 
 function decodeUnaryFrame(body: Uint8Array): Uint8Array {
   const decoded = decodeGrpcWeb(body);
   if (decoded.messages.length !== 1 || !decoded.messages[0]) {
-    throw new Error("unary gRPC-Web expects one data frame");
+    throw new Error('unary gRPC-Web expects one data frame');
   }
   return decoded.messages[0];
 }
@@ -109,7 +109,7 @@ export function createGrpcWebHop(
       (err, res) => {
         if (err) {
           const status =
-            typeof err.code === "number" ? err.code : grpc.status.UNKNOWN;
+            typeof err.code === 'number' ? err.code : grpc.status.UNKNOWN;
           resolve(
             grpcWebErrorFrame(
               status,
@@ -140,12 +140,12 @@ export function createGrpcWebHop(
         metadata,
       );
       res.writeHead(200, grpcWebHeaders());
-      call.on("data", (msg: Buffer) => {
+      call.on('data', (msg: Buffer) => {
         if (!res.writableEnded) {
           res.write(Buffer.from(encodeGrpcWebMessage(new Uint8Array(msg))));
         }
       });
-      call.on("status", (st: grpc.StatusObject) => {
+      call.on('status', (st: grpc.StatusObject) => {
         if (res.writableEnded) {
           resolve();
           return;
@@ -161,7 +161,7 @@ export function createGrpcWebHop(
         );
         resolve();
       });
-      call.on("error", () => {
+      call.on('error', () => {
         // `status` always follows; do not write here (avoids write-after-end).
       });
     });
@@ -169,10 +169,10 @@ export function createGrpcWebHop(
 
   return {
     async handle(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-      if (req.method !== "POST" || !isGrpcWebContentType(contentType(req))) {
+      if (req.method !== 'POST' || !isGrpcWebContentType(contentType(req))) {
         return false;
       }
-      const url = new URL(req.url ?? "/", "http://grpc-web.invalid");
+      const url = new URL(req.url ?? '/', 'http://grpc-web.invalid');
       const metadata = metadataFromRequest(req);
       const body = await readBody(req);
       let message: Uint8Array;
@@ -185,12 +185,12 @@ export function createGrpcWebHop(
         );
         res.writeHead(200, {
           ...grpcWebHeaders(),
-          "content-length": String(payload.length),
+          'content-length': String(payload.length),
         });
         res.end(payload);
         return true;
       }
-      if (req.headers[GRPC_WEB_STREAM_HEADER] === "1") {
+      if (req.headers[GRPC_WEB_STREAM_HEADER] === '1') {
         await stream(url.pathname, message, metadata, res);
         return true;
       }
@@ -198,7 +198,7 @@ export function createGrpcWebHop(
       const payload = Buffer.from(out);
       res.writeHead(200, {
         ...grpcWebHeaders(),
-        "content-length": String(payload.length),
+        'content-length': String(payload.length),
       });
       res.end(payload);
       return true;

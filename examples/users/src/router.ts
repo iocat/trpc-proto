@@ -1,18 +1,18 @@
-import { initTRPC } from "@trpc/server";
-import { noopForNonTsBackend } from "@trpc-proto/runtime/noop";
-import { createProtoTransformer } from "@trpc-proto/runtime/proto_codec";
-import type { ProtoMeta } from "@trpc-proto/runtime";
-import { z } from "zod";
+import { initTRPC } from '@trpc/server';
+import { noopForNonTsBackend } from '@trpc-proto/runtime/noop';
+import { createProtoTransformer } from '@trpc-proto/runtime/proto_codec';
+import type { ProtoMeta } from '@trpc-proto/runtime';
+import { z } from 'zod';
 
 const t = initTRPC.meta<ProtoMeta>().create({
   allowOutsideOfServer: true,
   transformer: createProtoTransformer(),
   defaultMeta: {
     proto: {
-      package: "example.v1",
-      cache: "generated/schema.json",
+      package: 'example.v1',
+      cache: 'generated/schema.json',
       options: {
-        go_package: "users/backend/gen/examplev1",
+        go_package: 'users/backend/gen/examplev1',
       },
     },
   },
@@ -20,12 +20,12 @@ const t = initTRPC.meta<ProtoMeta>().create({
 
 const Address = z
   .object({
-    city: z.string().describe("The city of the address"),
-    country: z.string().optional().describe("The country of this address"),
+    city: z.string().describe('The city of the address'),
+    country: z.string().optional().describe('The country of this address'),
   })
-  .meta({ protoMessageName: "Address" });
+  .meta({ protoMessageName: 'Address' });
 
-const Role = z.enum(["admin", "member", "guest"]).meta({ id: "UserRole" });
+const Role = z.enum(['admin', 'member', 'guest']).meta({ id: 'UserRole' });
 
 const User = z
   .object({
@@ -41,7 +41,7 @@ const User = z
     score: z.number(),
     balance: z.bigint(),
   })
-  .meta({ protoMessageName: "User" });
+  .meta({ protoMessageName: 'User' });
 
 const UserCreateInput = z.object({
   name: z.string().min(1),
@@ -68,21 +68,21 @@ const WorkspaceStats = z
     users: z.int(),
     labels: z.record(z.string(), z.int()),
   })
-  .meta({ protoMessageName: "WorkspaceStats" });
+  .meta({ protoMessageName: 'WorkspaceStats' });
 
 const HealthOutput = z.object({ ok: z.boolean(), version: z.string() });
 const HelloInput = z.object({
   description: z.string(),
-  fullName: z.string().describe("use full name instead"),
+  fullName: z.string().describe('use full name instead'),
 });
 const HelloOutput = z.object({ message: z.string() });
 
 const IssueStatus = z
-  .enum(["backlog", "todo", "in_progress", "done"])
-  .meta({ id: "IssueStatus" });
+  .enum(['backlog', 'todo', 'in_progress', 'done'])
+  .meta({ id: 'IssueStatus' });
 const IssuePriority = z
-  .enum(["none", "low", "medium", "high", "urgent"])
-  .meta({ id: "IssuePriority" });
+  .enum(['none', 'low', 'medium', 'high', 'urgent'])
+  .meta({ id: 'IssuePriority' });
 
 const Issue = z
   .object({
@@ -96,7 +96,7 @@ const Issue = z
     createdAt: z.date(),
     teamId: z.string().optional(),
   })
-  .meta({ protoMessageName: "Issue" });
+  .meta({ protoMessageName: 'Issue' });
 
 const IssueListInput = z.object({
   q: z.string().optional(),
@@ -148,7 +148,7 @@ const Team = z
     memberIds: z.array(z.string()),
     createdAt: z.date(),
   })
-  .meta({ protoMessageName: "Team" });
+  .meta({ protoMessageName: 'Team' });
 
 const TeamListOutput = z.object({
   items: z.array(Team),

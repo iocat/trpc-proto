@@ -41,7 +41,7 @@ function* allocate(
     sent = yield tag;
   }
 
-  throw new Error("Exhausted maximum Protobuf field numbers.");
+  throw new Error('Exhausted maximum Protobuf field numbers.');
 }
 
 /**
