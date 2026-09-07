@@ -27,7 +27,7 @@ const Todo = z
     done: z.boolean(),
     createdAt: z.date(),
   })
-  .meta({ id: 'Todo' });
+  .meta({ protoMessageName: 'Todo' });
 
 const TodoListInput = z.object({
   done: z.boolean().optional(),

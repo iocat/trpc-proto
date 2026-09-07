@@ -17,6 +17,7 @@ import type {
   ProtoMessage,
   ProtoMeta,
   ProtoMethod,
+  ProtoObjectMeta,
   ProtoScalar,
   ProtoSchema,
   ProtoService,
@@ -30,7 +31,6 @@ export interface TranslateOptions {
   rootService?: string;
   generateCache?: SchemaGenerateCache;
 }
-
 
 export interface RuntimeProcedure {
   path: string;
@@ -255,6 +255,39 @@ function omitShapeKey(zod: ZodRuntime, key: string): ZodRuntime {
   };
 }
 
+function isProtoObjectMeta(value: unknown): value is ProtoObjectMeta {
+  return (
+    (!!value && (value as ProtoObjectMeta).protoMessageName) ||
+    (value as ProtoObjectMeta).protoUseKnownType
+  );
+}
+
+function extractProtoObjectMeta(zod: ZodRuntime): ProtoObjectMeta {
+  const meta = zod.meta?.();
+  const objectMeta =
+    meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : {};
+  return isProtoObjectMeta(objectMeta) ? objectMeta : {};
+}
+
+function protoUseKnownTypeOf(zod: ZodRuntime): string | undefined {
+  const value = extractProtoObjectMeta(zod).protoUseKnownType;
+  if (value == null) return undefined;
+  if (typeof value !== 'string' || !isWellKnownType(value)) {
+    throw new Error(
+      `protoUseKnownType must be a google.protobuf well-known type, got ${String(value)}`,
+    );
+  }
+  return value;
+}
+
+/** Objects use `protoMessageName`. Enums and other named types still use `id`. */
+function protoMessageNameOf(zod: ZodRuntime): string | undefined {
+  const meta = extractProtoObjectMeta(zod);
+  if (typeof meta.protoMessageName === 'string') return meta.protoMessageName;
+  if (zod.type === 'object') return undefined;
+  return typeof meta.id === 'string' ? meta.id : undefined;
+}
+
 function unwrap(zod: ZodType): { inner: ZodRuntime; optional: boolean } {
   let inner = asRuntime(zod);
   let optional = false;
@@ -430,17 +463,23 @@ class Translator {
   messageName(zod: ZodRuntime, fallback: string): string {
     const cached = this.seen.get(zod);
     if (cached) return cached;
-    const id = zod.meta?.()?.id;
-    if (id && isWellKnownType(id)) {
-      this.seen.set(zod, id);
-      return id;
+    const wellKnown = protoUseKnownTypeOf(zod);
+    if (wellKnown) {
+      this.seen.set(zod, wellKnown);
+      return wellKnown;
     }
-    if (id && toPascalCase(id) !== id) {
+
+    const named = protoMessageNameOf(zod);
+    if (named && toPascalCase(named) !== named) {
+      const key =
+        typeof extractProtoObjectMeta(zod).protoMessageName === 'string'
+          ? 'protoMessageName'
+          : 'id';
       throw new Error(
-        `id must be PascalCase, expected ${toPascalCase(id)}, got ${id}`,
+        `${key} must be PascalCase, expected ${toPascalCase(named)}, got ${named}`,
       );
     }
-    const name = toPascalCase(id ?? fallback);
+    const name = toPascalCase(named ?? fallback);
     this.seen.set(zod, name);
     return name;
   }
@@ -635,13 +674,15 @@ class Translator {
         return { ...mapped, repeated: true };
       }
       case 'object': {
-        const named = inner.meta?.()?.id;
-        if (named && isWellKnownType(named)) {
+        const known = protoUseKnownTypeOf(inner);
+        if (known) {
           return {
-            type: { kind: wellKnownKind(named), name: named },
+            type: { kind: wellKnownKind(known), name: known },
             repeated: false,
           };
         }
+        const named = protoMessageNameOf(inner);
+
         if (named) {
           const name = this.messageName(inner, named);
           this.convertObject(inner, name, true);
@@ -715,7 +756,8 @@ class Translator {
         const left = asRuntime(inner.def.left ?? inner);
         const right = asRuntime(inner.def.right ?? inner);
         if (left.type === 'object' && right.type === 'object') {
-          const named = inner.meta?.()?.id;
+          const named = protoMessageNameOf(inner);
+
           const merged = {
             ...left,
             def: {
@@ -751,7 +793,8 @@ class Translator {
       case 'union': {
         const discriminator = unionDiscriminator(inner);
         if (discriminator) {
-          const named = inner.meta?.()?.id;
+          const named = protoMessageNameOf(inner);
+
           if (named) {
             const name = this.messageName(inner, named);
             this.convertDiscriminatedUnion(inner, name, discriminator, true);
@@ -849,12 +892,13 @@ class Translator {
     return messageName;
   }
 
-  ioType(zod: ZodType | undefined, fallbackName: string): string {
+  rpcMessageType(zod: ZodType | undefined, fallbackName: string): string {
     if (!zod) return 'google.protobuf.Empty';
     const { inner } = unwrap(zod);
     if (isEmptyType(inner)) return 'google.protobuf.Empty';
-    const id = inner.meta?.()?.id;
-    if (id && isWellKnownType(id)) return id;
+    const known = protoUseKnownTypeOf(inner);
+    if (known) return known;
+
     if (inner.type === 'object') {
       const name = this.messageName(inner, fallbackName);
       this.convertObject(inner, name);
@@ -922,14 +966,15 @@ export function translate(
   for (const procedure of procedures) {
     const service = serviceName(procedure.path, rootService);
     const method = methodName(procedure.path);
-    const requestType = translator.ioType(
+    const requestType = translator.rpcMessageType(
       procedure.input,
       `${service}${method}Request`,
     );
-    const responseType = translator.ioType(
+    const responseType = translator.rpcMessageType(
       procedure.output,
       `${service}${method}Response`,
     );
+
     const methods = services.get(service) ?? [];
     methods.push({
       name: method,

@@ -266,7 +266,11 @@ nav a.active {
   flex-direction: column;
   min-width: 0;
   background:
-    radial-gradient(1200px 400px at 80% -10%, rgba(139, 124, 255, 0.08), transparent 50%),
+    radial-gradient(
+      1200px 400px at 80% -10%,
+      rgba(139, 124, 255, 0.08),
+      transparent 50%
+    ),
     var(--bg);
 }
 
@@ -843,7 +847,6 @@ nav a.active {
   background: transparent;
 }
 
-
 .hero {
   display: flex;
   justify-content: space-between;
@@ -862,7 +865,6 @@ nav a.active {
   margin: 6px 0 0;
   color: var(--mute);
 }
-
 
 @media (max-width: 860px) {
   .shell {

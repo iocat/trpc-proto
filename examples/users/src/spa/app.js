@@ -83,7 +83,8 @@ function initials(name) {
 
 function colorFor(id) {
   let n = 0;
-  for (const ch of String(id || '')) n = (n + ch.charCodeAt(0)) % AVATAR_COLORS.length;
+  for (const ch of String(id || ''))
+    n = (n + ch.charCodeAt(0)) % AVATAR_COLORS.length;
   return AVATAR_COLORS[n];
 }
 
@@ -155,7 +156,9 @@ function issueRow(issue, index) {
   const avatar = person
     ? `<span class="avatar" style="background:${colorFor(person.id)};margin-left:8px">${initials(person.name)}</span>`
     : '';
-  const key = team ? `<span class="key" style="margin-right:8px">${escapeHtml(team.key)}</span>` : '';
+  const key = team
+    ? `<span class="key" style="margin-right:8px">${escapeHtml(team.key)}</span>`
+    : '';
   return `<article class="issue-row${flashId === issue.id ? ' flash' : ''}" data-id="${issue.id}" style="animation-delay:${delay}ms">
     <span class="id">${issue.id}</span>
     <span class="title">${key}${escapeHtml(issue.title)}</span>
@@ -166,7 +169,8 @@ function issueRow(issue, index) {
 
 function filtered(view, status, teamId) {
   let list = issues.slice();
-  if (view === 'inbox') list = list.filter((issue) => issueStatus(issue) !== 'done');
+  if (view === 'inbox')
+    list = list.filter((issue) => issueStatus(issue) !== 'done');
   if (status) list = list.filter((issue) => issueStatus(issue) === status);
   if (teamId) list = list.filter((issue) => issue.teamId === teamId);
   return list;
@@ -201,7 +205,9 @@ function listView(view, teamId) {
     return `<div class="toolbar">${chips}</div>${groups || '<div class="empty">No issues yet</div>'}`;
   }
   return `<div class="toolbar">${chips}</div>${
-    list.length ? list.map(issueRow).join('') : '<div class="empty">Inbox zero</div>'
+    list.length
+      ? list.map(issueRow).join('')
+      : '<div class="empty">Inbox zero</div>'
   }`;
 }
 
@@ -321,14 +327,14 @@ async function load() {
   paintRail();
 }
 
-
-
 function teamPage(team) {
   if (!team) return `<div class="empty">Team not found</div>`;
   const members = (team.memberIds || [])
     .map((id) => userById(id))
     .filter(Boolean);
-  const outsiders = users.filter((user) => !(team.memberIds || []).includes(user.id));
+  const outsiders = users.filter(
+    (user) => !(team.memberIds || []).includes(user.id),
+  );
   const chips = members
     .map(
       (user) => `<span class="member">
@@ -345,7 +351,10 @@ function teamPage(team) {
         <select id="add-member" aria-label="Add member">
           <option value="" selected>Choose a person</option>
           ${outsiders
-            .map((user) => `<option value="${user.id}">${escapeHtml(user.name)}</option>`)
+            .map(
+              (user) =>
+                `<option value="${user.id}">${escapeHtml(user.name)}</option>`,
+            )
             .join('')}
         </select>
       </label>`
@@ -392,7 +401,10 @@ function paintRail() {
   $('count-all').textContent = String(issues.length || '');
   $('rail-teams').innerHTML = teams
     .map(
-      (team, i) => `<a class="rail-key" href="#/teams/${team.id}" data-id="${team.id}" style="animation-delay:${i * 40}ms">
+      (
+        team,
+        i,
+      ) => `<a class="rail-key" href="#/teams/${team.id}" data-id="${team.id}" style="animation-delay:${i * 40}ms">
         <span class="key">${escapeHtml(team.key)}</span>${escapeHtml(team.name)}
       </a>`,
     )
@@ -400,7 +412,10 @@ function paintRail() {
   $('rail-team').innerHTML = users
     .slice(0, 6)
     .map(
-      (user, i) => `<div class="rail-person" style="animation-delay:${i * 40}ms">
+      (
+        user,
+        i,
+      ) => `<div class="rail-person" style="animation-delay:${i * 40}ms">
         <span class="avatar" style="background:${colorFor(user.id)}">${initials(user.name)}</span>
         ${escapeHtml(user.name)}
       </div>`,
@@ -408,7 +423,6 @@ function paintRail() {
     .join('');
   markNav();
 }
-
 
 function listen() {
   if (sub) return;
@@ -420,7 +434,10 @@ function listen() {
       flashId = issue.id;
       paintRail();
       const { name, id } = parseRoute();
-      if ((name === 'inbox' || name === 'issues' || name === 'teams') && !(name === 'issues' && id)) {
+      if (
+        (name === 'inbox' || name === 'issues' || name === 'teams') &&
+        !(name === 'issues' && id)
+      ) {
         void render(false);
       }
       ok('live update');
@@ -502,7 +519,9 @@ function openInvite() {
   const veil = $('veil');
   veil.hidden = false;
   const teamPick = `<option value="">No team yet</option>${teams
-    .map((team) => `<option value="${team.id}">${escapeHtml(team.key)}</option>`)
+    .map(
+      (team) => `<option value="${team.id}">${escapeHtml(team.key)}</option>`,
+    )
     .join('')}`;
   veil.innerHTML = `<form class="sheet" id="invite">
     <h2>Invite person</h2>
@@ -630,7 +649,9 @@ function openCommand() {
   input.onkeydown = (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      const first = items.filter((item) => item.label.toLowerCase().includes(q))[0];
+      const first = items.filter((item) =>
+        item.label.toLowerCase().includes(q),
+      )[0];
       closeVeil();
       first?.run();
     }
@@ -680,7 +701,8 @@ async function render(reload = true) {
       return;
     }
     if (name === 'teams') {
-      const team = teamById(id) || (id ? await api().team.getById.query({ id }) : null);
+      const team =
+        teamById(id) || (id ? await api().team.getById.query({ id }) : null);
       setCrumb(team ? `${team.key} · ${team.name}` : 'Team');
       view.innerHTML = teamPage(team);
       bindRows(view);
@@ -689,7 +711,10 @@ async function render(reload = true) {
         add.onchange = async () => {
           if (!add.value) return;
           try {
-            await api().team.addMember.mutate({ teamId: team.id, userId: add.value });
+            await api().team.addMember.mutate({
+              teamId: team.id,
+              userId: add.value,
+            });
             await render(true);
             ok('member added');
           } catch (err) {
@@ -701,7 +726,10 @@ async function render(reload = true) {
         btn.onclick = async (event) => {
           event.stopPropagation();
           try {
-            await api().team.removeMember.mutate({ teamId: team.id, userId: btn.dataset.id });
+            await api().team.removeMember.mutate({
+              teamId: team.id,
+              userId: btn.dataset.id,
+            });
             await render(true);
             ok('removed');
           } catch (err) {
@@ -720,7 +748,6 @@ async function render(reload = true) {
           const hello = await api().hello.query({
             fullName: $('pulse-name').value,
             description: 'workspace pulse',
-
           });
           const echo = await api().echo.query($('pulse-echo').value);
           $('pulse-out').textContent = `${hello.message}\necho ${echo}`;
@@ -732,7 +759,8 @@ async function render(reload = true) {
     }
     if (name === 'issues' && id) {
       const issue =
-        issues.find((row) => row.id === id) || (await api().issue.getById.query({ id }));
+        issues.find((row) => row.id === id) ||
+        (await api().issue.getById.query({ id }));
       setCrumb(issue?.id || 'Issue');
       view.innerHTML = detailView(issue);
       const save = async (patch) => {
@@ -751,8 +779,10 @@ async function render(reload = true) {
         save({ id, priority: protoPriority(event.target.value) });
       $('issue-assignee').onchange = (event) =>
         save({ id, assigneeId: event.target.value || '' });
-      $('issue-team').onchange = (event) => save({ id, teamId: event.target.value || '' });
-      $('issue-desc').onchange = (event) => save({ id, description: event.target.value });
+      $('issue-team').onchange = (event) =>
+        save({ id, teamId: event.target.value || '' });
+      $('issue-desc').onchange = (event) =>
+        save({ id, description: event.target.value });
       return;
     }
     setCrumb(name === 'issues' ? 'All issues' : 'Inbox');
@@ -780,7 +810,8 @@ window.addEventListener('hashchange', () => {
 
 window.addEventListener('keydown', (event) => {
   const typing =
-    event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+    event.target instanceof HTMLInputElement ||
+    event.target instanceof HTMLTextAreaElement;
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();
     openCommand();

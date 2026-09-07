@@ -130,6 +130,14 @@ export interface ProtoMeta {
   proto?: ProtoFileHeader;
 }
 
+/**
+ * Zod object metadata fragment.
+ */
+export interface ProtoObjectMeta {
+  protoMessageName?: string;
+  protoUseKnownType?: string;
+}
+
 export interface ProtoSchema {
   syntax: ProtoSyntax;
   package: string;

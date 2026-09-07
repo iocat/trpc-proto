@@ -36,26 +36,29 @@ Prevalidate collects every issue, then aborts on errors (no stack). Generate pri
 
 ### Zod → proto
 
-| Zod                                             | Proto                                             |
-| ----------------------------------------------- | ------------------------------------------------- |
-| `z.object`, nested objects                      | `message`                                         |
-| `.meta({ id: 'User' })`                         | named message/enum; **id must be PascalCase**     |
-| unnamed nested object                           | nested message named from the field               |
-| `z.string`, template literal                    | `string` (`email` is still `string`)              |
-| `z.boolean`                                     | `bool`                                            |
-| `z.number` / `z.int`                            | `double` / `int32` (int formats: int32, int64, …) |
-| `z.bigint`                                      | `int64`                                           |
-| `z.date`                                        | `google.protobuf.Timestamp`                       |
-| `z.enum`, same-type literal union               | `enum`                                            |
-| `z.discriminatedUnion`                          | `oneof` of variant messages                       |
-| `z.array` / `z.set`                             | `repeated`                                        |
-| `z.record` / `z.map`                            | `map<key, value>` (scalar keys)                   |
-| `z.any` / `z.unknown`                           | `google.protobuf.Value`                           |
-| `z.record` of any/unknown                       | `google.protobuf.Struct`                          |
-| void / undefined / never / null input or output | `google.protobuf.Empty`                           |
-| `z.optional` / `z.nullable`                     | `optional` field                                  |
+| Zod                                                        | Proto                                 |
+| ---------------------------------------------------------- | ------------------------------------- |
+| `z.object`, nested objects                                 | `message`                             |
+| `.meta({ protoMessageName: 'User' })`                      | named message; **must be PascalCase** |
+| `.meta({ protoUseKnownType: 'google.protobuf.Duration' })` | encode as that well-known type        |
+| `.meta({ id: 'UserRole' })`                                | named enum; **id must be PascalCase** |
 
-Rejected (translate throws): open unions, mixed-type literals, mixed int/float literals, non-PascalCase `id`, non-scalar map keys, anything else `Unsupported Zod type`.
+| unnamed nested object | nested message named from the field |
+| `z.string`, template literal | `string` (`email` is still `string`) |
+| `z.boolean` | `bool` |
+| `z.number` / `z.int` | `double` / `int32` (int formats: int32, int64, …) |
+| `z.bigint` | `int64` |
+| `z.date` | `google.protobuf.Timestamp` |
+| `z.enum`, same-type literal union | `enum` |
+| `z.discriminatedUnion` | `oneof` of variant messages |
+| `z.array` / `z.set` | `repeated` |
+| `z.record` / `z.map` | `map<key, value>` (scalar keys) |
+| `z.any` / `z.unknown` | `google.protobuf.Value` |
+| `z.record` of any/unknown | `google.protobuf.Struct` |
+| void / undefined / never / null input or output | `google.protobuf.Empty` |
+| `z.optional` / `z.nullable` | `optional` field |
+
+Rejected (translate throws): open unions, mixed-type literals, mixed int/float literals, non-PascalCase `protoMessageName` / `id`, non-scalar map keys, anything else `Unsupported Zod type`.
 
 Do not expect tRPC-only features (middleware-only procedures, output inference without `.output()`, superjson-only types) to round-trip through protobuf.
 
@@ -101,7 +104,7 @@ const User = z
     id: z.string(),
     name: z.string(),
   })
-  .meta({ id: 'User' });
+  .meta({ protoMessageName: 'User' });
 
 export const appRouter = t.router({
   hello: t.procedure

@@ -60,7 +60,6 @@ function fail(err) {
   $('status').textContent = String(err.message || err);
 }
 
-
 async function render() {
   markNav();
   const app = $('app');
@@ -109,9 +108,10 @@ async function render() {
         sub?.unsubscribe();
         sub = undefined;
         const out = $('stream-out');
-        if (out) out.textContent = edits.length
-          ? `${JSON.stringify(edits, null, 2)}\n\n— paused —`
-          : 'paused';
+        if (out)
+          out.textContent = edits.length
+            ? `${JSON.stringify(edits, null, 2)}\n\n— paused —`
+            : 'paused';
       };
     } else {
       app.innerHTML = `

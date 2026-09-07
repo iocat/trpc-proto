@@ -60,9 +60,11 @@ const User = z
     id: z.string(),
     name: z.string(),
   })
-  .meta({ id: 'User' });
+  .meta({ protoMessageName: 'User' });
 
-const Address = z.object({ city: z.string() }).meta({ id: 'Address' });
+const Address = z
+  .object({ city: z.string() })
+  .meta({ protoMessageName: 'Address' });
 
 interface TranslateCase {
   name: string;
@@ -621,15 +623,52 @@ describe('translate', () => {
     );
   });
 
-  it('throws when meta id is not PascalCase', () => {
+  it('throws when protoMessageName is not PascalCase', () => {
     assert.throws(
       () =>
         translate([
           proc('bad', {
-            input: z.object({ x: z.string() }).meta({ id: 'notPascal' }),
+            input: z
+              .object({ x: z.string() })
+              .meta({ protoMessageName: 'notPascal' }),
           }),
         ]),
-      /id must be PascalCase/,
+      /protoMessageName must be PascalCase/,
+    );
+  });
+
+  it('encodes protoUseKnownType as a well-known message', () => {
+    const Duration = z
+      .object({
+        seconds: z.bigint(),
+        nanos: z.int(),
+      })
+      .meta({ protoUseKnownType: 'google.protobuf.Duration' });
+    const got = translate([
+      proc('wait', {
+        input: z.object({ delay: Duration }),
+        output: z.object({ ok: z.boolean() }),
+      }),
+    ]);
+    assert.match(
+      toString(got),
+      /optional google\.protobuf\.Duration delay = 1;/,
+    );
+    assert.match(toString(got), /import "google\/protobuf\/duration.proto"/);
+    assert.doesNotMatch(toString(got), /message Duration/);
+  });
+
+  it('throws when protoUseKnownType is not well-known', () => {
+    assert.throws(
+      () =>
+        translate([
+          proc('bad', {
+            input: z
+              .object({ x: z.string() })
+              .meta({ protoUseKnownType: 'not.a.wkt' }),
+          }),
+        ]),
+      /protoUseKnownType must be a google\.protobuf well-known type/,
     );
   });
 
@@ -644,7 +683,8 @@ describe('translate', () => {
         role: Role,
       })
       .describe('A registered user')
-      .meta({ id: 'User' });
+      .meta({ protoMessageName: 'User' });
+
     const got = translate([
       proc('user.getById', {
         input: z.object({ id: z.string().describe('lookup key') }),

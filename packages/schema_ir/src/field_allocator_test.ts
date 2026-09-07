@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createFieldAllocator } from './field_allocator.js';
 
-
 type Op = 'auto' | number;
 
 function assignTags(ops: Op[], seed: Record<string, number> = {}): number[] {

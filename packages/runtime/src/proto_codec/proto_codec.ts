@@ -33,13 +33,35 @@ function definePath(root: protobuf.Root, pkg: string) {
 
 function addWellKnown(root: protobuf.Root) {
   const google = root.define('google').define('protobuf');
-  if (!google.get('Empty')) google.add(new protobuf.Type('Empty'));
-  if (!google.get('Timestamp')) {
-    google.add(
-      new protobuf.Type('Timestamp')
-        .add(new protobuf.Field('seconds', 1, 'int64'))
-        .add(new protobuf.Field('nanos', 2, 'int32')),
-    );
+  function add(name: string, fields: protobuf.Field[]) {
+    if (google.get(name)) return;
+    const type = new protobuf.Type(name);
+    for (const field of fields) type.add(field);
+    google.add(type);
+  }
+  add('Empty', []);
+  add('Timestamp', [
+    new protobuf.Field('seconds', 1, 'int64'),
+    new protobuf.Field('nanos', 2, 'int32'),
+  ]);
+  add('Duration', [
+    new protobuf.Field('seconds', 1, 'int64'),
+    new protobuf.Field('nanos', 2, 'int32'),
+  ]);
+  add('FieldMask', [new protobuf.Field('paths', 1, 'string', 'repeated')]);
+  const wrappers: Array<[string, string]> = [
+    ['DoubleValue', 'double'],
+    ['FloatValue', 'float'],
+    ['Int32Value', 'int32'],
+    ['Int64Value', 'int64'],
+    ['UInt32Value', 'uint32'],
+    ['UInt64Value', 'uint64'],
+    ['BoolValue', 'bool'],
+    ['StringValue', 'string'],
+    ['BytesValue', 'bytes'],
+  ];
+  for (const [name, type] of wrappers) {
+    add(name, [new protobuf.Field('value', 1, type)]);
   }
 }
 

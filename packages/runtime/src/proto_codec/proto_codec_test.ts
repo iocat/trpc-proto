@@ -115,6 +115,19 @@ describe('createProtoCodec', () => {
     assert.deepEqual(codec.decode('google.protobuf.Empty', encoded), {});
   });
 
+  it('encodes google.protobuf.Duration', () => {
+    const encoded = codec.encode('google.protobuf.Duration', {
+      seconds: 3,
+      nanos: 0,
+    });
+    const decoded = codec.decode('google.protobuf.Duration', encoded) as {
+      seconds: unknown;
+      nanos: unknown;
+    };
+    assert.equal(Number(decoded.seconds), 3);
+    assert.equal(Number(decoded.nanos), 0);
+  });
+
   it('roundtrips enum, repeated, timestamp, int64, map, camelCase', () => {
     const createdAt = new Date('1815-12-10T00:00:00.000Z');
     const user = {

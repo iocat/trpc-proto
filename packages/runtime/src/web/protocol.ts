@@ -82,7 +82,6 @@ export function encodeGrpcWebTrailers(
   );
 }
 
-
 export function decodeGrpcWeb(body: Uint8Array): GrpcWebDecode {
   const messages: Uint8Array[] = [];
   const trailers: Record<string, string> = {};
@@ -223,7 +222,6 @@ export function grpcWebErrorFrame(
 ) {
   return concat([encodeGrpcWebTrailers(status, message, extra)]);
 }
-
 
 export function grpcWebOkFrame(message: Uint8Array) {
   return concat([encodeGrpcWebMessage(message), encodeGrpcWebTrailers(0)]);

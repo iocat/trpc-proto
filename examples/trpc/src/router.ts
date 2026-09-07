@@ -19,7 +19,7 @@ const Note = z
     id: z.string(),
     body: z.string(),
   })
-  .meta({ id: 'Note' });
+  .meta({ protoMessageName: 'Note' });
 
 const notes = new Map<string, z.infer<typeof Note>>();
 const noteListeners = new Set<(note: z.infer<typeof Note>) => void>();

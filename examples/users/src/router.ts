@@ -23,7 +23,7 @@ const Address = z
     city: z.string().describe('The city of the address'),
     country: z.string().optional().describe('The country of this address'),
   })
-  .meta({ id: 'Address' });
+  .meta({ protoMessageName: 'Address' });
 
 const Role = z.enum(['admin', 'member', 'guest']).meta({ id: 'UserRole' });
 
@@ -41,7 +41,7 @@ const User = z
     score: z.number(),
     balance: z.bigint(),
   })
-  .meta({ id: 'User' });
+  .meta({ protoMessageName: 'User' });
 
 const UserCreateInput = z.object({
   name: z.string().min(1),
@@ -68,7 +68,7 @@ const WorkspaceStats = z
     users: z.int(),
     labels: z.record(z.string(), z.int()),
   })
-  .meta({ id: 'WorkspaceStats' });
+  .meta({ protoMessageName: 'WorkspaceStats' });
 
 const HealthOutput = z.object({ ok: z.boolean(), version: z.string() });
 const HelloInput = z.object({
@@ -96,7 +96,7 @@ const Issue = z
     createdAt: z.date(),
     teamId: z.string().optional(),
   })
-  .meta({ id: 'Issue' });
+  .meta({ protoMessageName: 'Issue' });
 
 const IssueListInput = z.object({
   q: z.string().optional(),
@@ -148,7 +148,7 @@ const Team = z
     memberIds: z.array(z.string()),
     createdAt: z.date(),
   })
-  .meta({ id: 'Team' });
+  .meta({ protoMessageName: 'Team' });
 
 const TeamListOutput = z.object({
   items: z.array(Team),
@@ -174,8 +174,6 @@ const TeamMemberInput = z.object({
   teamId: z.string(),
   userId: z.string(),
 });
-
-
 
 /** Schema-only. Resolvers are noops; a proto backend implements the RPCs. */
 export const appRouter = t.router({
@@ -212,7 +210,6 @@ export const appRouter = t.router({
       .output(User)
       .mutation(noopForNonTsBackend),
   }),
-
 
   org: t.router({
     workspace: t.router({
