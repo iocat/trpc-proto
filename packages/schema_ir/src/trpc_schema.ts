@@ -160,8 +160,9 @@ function assumeExhaustive(value: never): never {
   throw new Error(`unexpected value: ${String(value)}`);
 }
 
-/** `default:` is exhaustive except for `Allowed` cases left unhandled. */
+/** Remaining discriminating cases, intentionally unhandled. Extra leftovers fail assignability to `Allowed`. */
 function assumeExhaustiveAllowing<Allowed>(_value: Allowed): void {}
+
 
 type ZodRuntime = ZodType & {
   type: string;
@@ -187,7 +188,8 @@ type ZodRuntime = ZodType & {
   element?: ZodType;
   isInt?: boolean;
   format?: string | null;
-  meta?: () => { id?: string; description?: string } | undefined;
+  meta?: () => (ProtoObjectMeta & { description?: string }) | undefined;
+
   description?: string;
 };
 
@@ -256,23 +258,24 @@ function omitShapeKey(zod: ZodRuntime, key: string): ZodRuntime {
 }
 
 function isProtoObjectMeta(value: unknown): value is ProtoObjectMeta {
-  return (
-    (!!value && (value as ProtoObjectMeta).protoMessageName) ||
-    (value as ProtoObjectMeta).protoUseKnownType
+  if (!value || typeof value !== 'object') return false;
+  const meta = value as ProtoObjectMeta;
+  return !!(
+    meta.protoMessageName ||
+    meta.protoEnumName ||
+    meta.protoUseKnownType
   );
 }
 
 function extractProtoObjectMeta(zod: ZodRuntime): ProtoObjectMeta {
   const meta = zod.meta?.();
-  const objectMeta =
-    meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : {};
-  return isProtoObjectMeta(objectMeta) ? objectMeta : {};
+  return isProtoObjectMeta(meta) ? meta : {};
 }
 
 function protoUseKnownTypeOf(zod: ZodRuntime): string | undefined {
   const value = extractProtoObjectMeta(zod).protoUseKnownType;
   if (value == null) return undefined;
-  if (typeof value !== 'string' || !isWellKnownType(value)) {
+  if (!isWellKnownType(value)) {
     throw new Error(
       `protoUseKnownType must be a google.protobuf well-known type, got ${String(value)}`,
     );
@@ -280,12 +283,8 @@ function protoUseKnownTypeOf(zod: ZodRuntime): string | undefined {
   return value;
 }
 
-/** Objects use `protoMessageName`. Enums and other named types still use `id`. */
 function protoMessageNameOf(zod: ZodRuntime): string | undefined {
-  const meta = extractProtoObjectMeta(zod);
-  if (typeof meta.protoMessageName === 'string') return meta.protoMessageName;
-  if (zod.type === 'object') return undefined;
-  return typeof meta.id === 'string' ? meta.id : undefined;
+  return extractProtoObjectMeta(zod).protoMessageName;
 }
 
 function unwrap(zod: ZodType): { inner: ZodRuntime; optional: boolean } {
@@ -681,8 +680,8 @@ class Translator {
             repeated: false,
           };
         }
-        const named = protoMessageNameOf(inner);
 
+        const named = protoMessageNameOf(inner);
         if (named) {
           const name = this.messageName(inner, named);
           this.convertObject(inner, name, true);
@@ -696,6 +695,7 @@ class Translator {
           `${parentMessage}.${nestedName}`,
         );
         nested.push(message);
+
         return {
           type: { kind: 'message', name: nestedName },
           repeated: false,

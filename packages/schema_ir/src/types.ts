@@ -131,12 +131,14 @@ export interface ProtoMeta {
 }
 
 /**
- * Zod object metadata fragment.
+ * Zod `.meta()` keys this translator reads.
  */
 export interface ProtoObjectMeta {
   protoMessageName?: string;
+  protoEnumName?: string;
   protoUseKnownType?: string;
 }
+
 
 export interface ProtoSchema {
   syntax: ProtoSyntax;
