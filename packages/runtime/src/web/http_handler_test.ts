@@ -164,6 +164,7 @@ describe('createGrpcWebHttpHandler', () => {
             res.headers.get('access-control-allow-headers') ?? '',
             /\bx-trace\b/,
           );
+          assert.equal(res.headers.get('access-control-max-age'), '600');
           assert.equal(res.headers.get('content-type'), null);
         }
         if (row.name === 'denied origin') {

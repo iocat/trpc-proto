@@ -393,6 +393,11 @@ x-user-agent
 Configured `additionalAllowedHeaders` are normalized to lower case and added
 to this set.
 
+Successful preflights include `Access-Control-Max-Age: 600` by default. Set
+`cors.maxAgeSeconds` to change that browser-managed preflight cache lifetime;
+set it to `0` to disable caching. The browser keeps this cache separately from
+its normal HTTP response cache.
+
 A valid preflight request must include:
 
 - `Origin` exactly matching one configured origin.

@@ -11,6 +11,7 @@ import {
 import { z } from 'zod';
 import { serveGrpc } from '../grpc/server.js';
 import { createGrpcWebFetchCall } from './fetch_call.js';
+import { GrpcWebError } from './codec/protocol_codec.js';
 import { grpcWebLink } from './link.js';
 import { serveGrpcWeb } from './server.js';
 
@@ -135,6 +136,43 @@ describe('serveGrpcWeb', () => {
     } finally {
       await server.close();
       await backend.close();
+    }
+  });
+
+  it('returns UNIMPLEMENTED for an unknown direct gRPC path', async () => {
+    const appRouter = t.router({
+      ping: t.procedure
+        .output(z.object({ ok: z.boolean() }))
+        .query(() => ({ ok: true })),
+    });
+    const server = await serveGrpcWeb({
+      mode: 'direct',
+      router: appRouter,
+      schema: schemaFromRouter(appRouter),
+      address: '127.0.0.1:0',
+    });
+
+    try {
+      const call = createGrpcWebFetchCall({
+        baseUrl: `http://${server.address}`,
+        encoding: 'raw',
+      });
+      await assert.rejects(
+        call({
+          path: 'missing',
+          type: 'query',
+          input: undefined,
+          bytes: new Uint8Array(),
+          grpcPath: '/direct.v1.AppService/Missing',
+        }),
+        (error: unknown) =>
+          error instanceof GrpcWebError &&
+          error.code === 12 &&
+          error.message ===
+            'no gRPC mapping for /direct.v1.AppService/Missing',
+      );
+    } finally {
+      await server.close();
     }
   });
 

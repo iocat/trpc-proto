@@ -1,26 +1,25 @@
-import { TRPCError, type AnyRouter } from '@trpc/server';
+import type { AnyRouter } from '@trpc/server';
 import { assumeExhaustive } from '@trpc-proto/utility';
 import * as grpc from '@grpc/grpc-js';
 import { once } from 'node:events';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Codec } from './codec/codec.js';
 import type { ProtoSchema } from '@trpc-proto/schema_ir';
-import { grpcStatus } from '../grpc/status.js';
-import { ProtoCodec } from '../proto_codec/proto_codec.js';
-import { createRouterInvoker, toAsyncIterable } from '../router_invoker.js';
-import {
-  GrpcWebProtocolCodec,
-  type GrpcWebProtocolCodecOptions,
-  type GrpcWebProtocolValue,
-} from './codec/protocol_codec.js';
+import { GrpcWebProtocolCodec } from './codec/protocol_codec.js';
 import {
   grpcWebContentType,
   grpcWebEncoding,
   negotiateGrpcWebResponseEncoding,
   type GrpcWebEncoding,
 } from './content_type.js';
+import { createDirectDispatcher } from './dispatchers/direct.js';
+import { createForwardingDispatcher } from './dispatchers/forward.js';
+import type {
+  GrpcWebDispatcher,
+  GrpcWebDispatchStatus,
+} from './dispatchers/types.js';
 
 const DEFAULT_ADDRESS = '127.0.0.1:50051';
+const DEFAULT_CORS_MAX_AGE_SECONDS = 600;
 const DEFAULT_CORS_REQUEST_HEADERS = [
   'accept',
   'authorization',
@@ -41,6 +40,8 @@ export interface GrpcWebCorsOptions {
   readonly allowedOrigins: readonly string[];
   /** Request headers allowed in addition to the gRPC-Web defaults. */
   readonly additionalAllowedHeaders?: readonly string[];
+  /** Browser preflight cache lifetime in seconds. Defaults to 600. */
+  readonly maxAgeSeconds?: number;
 }
 
 /** Configuration for the browser-to-gRPC HTTP handler. */
@@ -56,6 +57,7 @@ export interface GrpcWebHttpHandlerOptions {
 interface CorsPolicy {
   allowedOrigins: ReadonlySet<string>;
   allowedHeaders: ReadonlySet<string>;
+  maxAgeSeconds: number;
 }
 
 /** Do not set these request headers as gRPC metadata. */
@@ -99,27 +101,18 @@ async function readBody(req: IncomingMessage): Promise<Uint8Array> {
   return Buffer.concat(chunks);
 }
 
-function metadataFromRequest(req: IncomingMessage): grpc.Metadata {
-  const metadata = new grpc.Metadata();
-  for (const [key, value] of Object.entries(req.headers)) {
+function metadataFromRequest(
+  request: IncomingMessage,
+): ReadonlyMap<string, string> {
+  const metadata = new Map<string, string>();
+  for (const [key, value] of Object.entries(request.headers)) {
     if (value == null) continue;
     const name = key.toLowerCase();
     if (SKIP_METADATA_HEADERS[name] || name.startsWith(':')) continue;
     const text = Array.isArray(value) ? value.join(',') : value;
-
     if (text) metadata.set(name, text);
   }
   return metadata;
-}
-
-function trailerRecord(md?: grpc.Metadata): Record<string, string> {
-  if (!md) return {};
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(md.getMap())) {
-    if (value == null || Buffer.isBuffer(value)) continue;
-    out[key] = String(value);
-  }
-  return out;
 }
 
 function corsHeaders(origin: string): Record<string, string> {
@@ -142,6 +135,11 @@ function grpcWebHeaders(
 }
 
 function createCorsPolicy(cors: GrpcWebCorsOptions): CorsPolicy {
+  const maxAgeSeconds =
+    cors.maxAgeSeconds ?? DEFAULT_CORS_MAX_AGE_SECONDS;
+  if (!Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 0) {
+    throw new RangeError('cors.maxAgeSeconds must be a non-negative integer');
+  }
   return {
     allowedOrigins: new Set(cors.allowedOrigins),
     allowedHeaders: new Set(
@@ -150,6 +148,7 @@ function createCorsPolicy(cors: GrpcWebCorsOptions): CorsPolicy {
         ...(cors.additionalAllowedHeaders ?? []),
       ].map((name) => name.toLowerCase()),
     ),
+    maxAgeSeconds,
   };
 }
 
@@ -205,55 +204,52 @@ function handleCorsPreflight(
     vary,
     'access-control-allow-methods': 'POST',
     'access-control-allow-headers': [...cors.allowedHeaders].join(', '),
+    'access-control-max-age': String(cors.maxAgeSeconds),
     'content-length': '0',
   });
   res.end();
   return true;
 }
 
-type HandleGrpcWebCall = (
-  grpcPath: string,
-  message: Uint8Array,
-  metadata: grpc.Metadata,
-  req: IncomingMessage,
-  res: ServerResponse,
-  encoding: GrpcWebEncoding,
-  origin?: string,
-) => Promise<void>;
+async function writeGrpcWebBody(
+  response: ServerResponse,
+  body: Uint8Array,
+  signal: AbortSignal,
+): Promise<void> {
+  if (!response.write(body)) await once(response, 'drain', { signal });
+}
 
 function createGrpcWebRequestHandler(
-  codec: Codec<GrpcWebProtocolValue, Uint8Array, GrpcWebProtocolCodecOptions>,
   corsPolicy: CorsPolicy | undefined,
-  handleGrpcCall: HandleGrpcWebCall,
+  dispatch: GrpcWebDispatcher,
 ) {
+  const codec = new GrpcWebProtocolCodec();
   return async function handleGrpcWebHttpRequest(
-    req: IncomingMessage,
-    res: ServerResponse,
+    request: IncomingMessage,
+    response: ServerResponse,
   ): Promise<boolean> {
-    if (handleCorsPreflight(req, res, corsPolicy)) return true;
-    const encoding = requestEncoding(req);
-    if (req.method !== 'POST' || !encoding) return false;
-    const origin = requestHeader(req, 'origin');
+    if (handleCorsPreflight(request, response, corsPolicy)) return true;
+    const requestBodyEncoding = requestEncoding(request);
+    if (request.method !== 'POST' || !requestBodyEncoding) return false;
+    const origin = requestHeader(request, 'origin');
     if (origin && corsPolicy && !corsPolicy.allowedOrigins.has(origin)) {
-      res.writeHead(403, { vary: 'Origin', 'content-length': '0' });
-      res.end();
+      response.writeHead(403, { vary: 'Origin', 'content-length': '0' });
+      response.end();
       return true;
     }
     const responseOrigin =
       origin && corsPolicy?.allowedOrigins.has(origin) ? origin : undefined;
-    const responseEncoding = negotiateGrpcWebResponseEncoding(
-      requestHeader(req, 'accept'),
-      encoding,
+    const responseBodyEncoding = negotiateGrpcWebResponseEncoding(
+      requestHeader(request, 'accept'),
+      requestBodyEncoding,
     );
-    const url = new URL(req.url ?? '/', 'http://grpc-web.invalid');
-    const metadata = metadataFromRequest(req);
-    const encodedBody = await readBody(req);
 
     try {
       const messages: Uint8Array[] = [];
+      const encodedBody = await readBody(request);
       for await (const value of codec.decode(encodedBody, {
-        encoding,
-        compression: requestHeader(req, 'grpc-encoding'),
+        encoding: requestBodyEncoding,
+        compression: requestHeader(request, 'grpc-encoding'),
       })) {
         switch (value.kind) {
           case 'message':
@@ -267,39 +263,97 @@ function createGrpcWebRequestHandler(
       }
       const message = messages.length === 1 ? messages[0] : undefined;
       if (!message) throw new Error('unary gRPC-Web expects one data frame');
-      await handleGrpcCall(
-        url.pathname,
-        message,
-        metadata,
-        req,
-        res,
-        responseEncoding,
-        responseOrigin,
+
+      const abortController = new AbortController();
+      let callEnded = false;
+      const cancelCall = () => {
+        if (!callEnded) abortController.abort();
+      };
+      const detachBrowserConnectionListeners = () => {
+        request.off('aborted', cancelCall);
+        response.off('close', cancelCall);
+      };
+      request.once('aborted', cancelCall);
+      response.once('close', cancelCall);
+      response.writeHead(
+        200,
+        grpcWebHeaders(responseBodyEncoding, responseOrigin),
       );
-    } catch (err) {
-      const text = err instanceof Error ? err.message : String(err);
-      const body = await codec.encode(
-        {
-          kind: 'trailers',
-          status: grpc.status.INTERNAL,
-          message: text,
-        },
-        { encoding: responseEncoding },
-      );
-      res.writeHead(200, {
-        ...grpcWebHeaders(responseEncoding, responseOrigin),
-        'content-length': String(body.byteLength),
-      });
-      res.end(body);
+
+      let status: GrpcWebDispatchStatus;
+      try {
+        const url = new URL(request.url ?? '/', 'http://grpc-web.invalid');
+        status = await dispatch(
+          {
+            grpcPath: url.pathname,
+            message,
+            metadata: metadataFromRequest(request),
+            signal: abortController.signal,
+          },
+          async (payload) => {
+            if (
+              abortController.signal.aborted ||
+              response.writableEnded ||
+              response.destroyed
+            ) {
+              return;
+            }
+            const body = await codec.encode(
+              { kind: 'message', payload },
+              { encoding: responseBodyEncoding },
+            );
+            await writeGrpcWebBody(response, body, abortController.signal);
+          },
+        );
+      } finally {
+        callEnded = true;
+        detachBrowserConnectionListeners();
+      }
+
+      if (
+        !abortController.signal.aborted &&
+        !response.writableEnded &&
+        !response.destroyed
+      ) {
+        const trailer = await codec.encode(
+          {
+            kind: 'trailers',
+            status: status.code,
+            message: status.message,
+            metadata: status.metadata,
+          },
+          { encoding: responseBodyEncoding },
+        );
+        response.end(trailer);
+      }
+    } catch (error) {
+      if (!response.writableEnded && !response.destroyed) {
+        const message = error instanceof Error ? error.message : String(error);
+        const trailer = await codec.encode(
+          {
+            kind: 'trailers',
+            status: grpc.status.INTERNAL,
+            message,
+          },
+          { encoding: responseBodyEncoding },
+        );
+        if (!response.headersSent) {
+          response.writeHead(200, {
+            ...grpcWebHeaders(responseBodyEncoding, responseOrigin),
+            'content-length': String(trailer.byteLength),
+          });
+        }
+        response.end(trailer);
+      }
     }
     return true;
   };
 }
 
 /**
- * Creates one Node HTTP request handler for gRPC-Web unary and server streams.
- * The default backend channel is insecure and CORS is disabled unless configured.
- * The handler returns true when it writes a response.
+ * Creates one Node HTTP request handler that forwards gRPC-Web calls to a
+ * native gRPC backend. The default channel is insecure and CORS is disabled
+ * unless configured.
  */
 export function createGrpcWebHttpHandler(
   options: GrpcWebHttpHandlerOptions = {},
@@ -309,88 +363,11 @@ export function createGrpcWebHttpHandler(
     credentials = grpc.credentials.createInsecure(),
     cors,
   } = options;
-  const codec: Codec<
-    GrpcWebProtocolValue,
-    Uint8Array,
-    GrpcWebProtocolCodecOptions
-  > = new GrpcWebProtocolCodec();
-  const corsPolicy = cors ? createCorsPolicy(cors) : undefined;
   const client = new grpc.Client(address, credentials);
-
-  function forwardGrpcCall(
-    grpcPath: string,
-    message: Uint8Array,
-    metadata: grpc.Metadata,
-    req: IncomingMessage,
-    res: ServerResponse,
-    encoding: GrpcWebEncoding,
-    origin?: string,
-  ): Promise<void> {
-    const { promise, resolve } = Promise.withResolvers<void>();
-    const call = client.makeServerStreamRequest(
-      grpcPath,
-      (value: Buffer) => value,
-      (value: Buffer) => value,
-      Buffer.from(message),
-      metadata,
-    );
-    let backendCallEnded = false;
-    const cancelBackendCall = () => {
-      if (!backendCallEnded) call.cancel();
-    };
-    const detachBrowserConnectionListeners = () => {
-      req.off('aborted', cancelBackendCall);
-      res.off('close', cancelBackendCall);
-    };
-    req.once('aborted', cancelBackendCall);
-    res.once('close', cancelBackendCall);
-    let writes = Promise.resolve();
-    res.writeHead(200, grpcWebHeaders(encoding, origin));
-    call.on('data', (msg: Buffer) => {
-      writes = writes.then(async () => {
-        if (res.writableEnded) return;
-        const body = await codec.encode(
-          { kind: 'message', payload: new Uint8Array(msg) },
-          { encoding },
-        );
-        res.write(body);
-      });
-    });
-    call.on('status', (st: grpc.StatusObject) => {
-      backendCallEnded = true;
-      detachBrowserConnectionListeners();
-      void writes
-        .then(async () => {
-          if (!res.writableEnded && !res.destroyed) {
-            const body = await codec.encode(
-              {
-                kind: 'trailers',
-                status: st.code,
-                message: st.details,
-                metadata: trailerRecord(st.metadata),
-              },
-              { encoding },
-            );
-            res.end(body);
-          }
-          resolve();
-        })
-        .catch((error: unknown) => {
-          if (!res.destroyed) {
-            res.destroy(
-              error instanceof Error ? error : new Error(String(error)),
-            );
-          }
-          resolve();
-        });
-    });
-    call.on('error', () => {
-      // `status` always follows; do not write here (avoids write-after-end).
-    });
-    return promise;
-  }
-
-  return createGrpcWebRequestHandler(codec, corsPolicy, forwardGrpcCall);
+  return createGrpcWebRequestHandler(
+    cors ? createCorsPolicy(cors) : undefined,
+    createForwardingDispatcher(client),
+  );
 }
 
 /** Direct router and protocol options for gRPC-Web handling. */
@@ -400,135 +377,13 @@ export interface GrpcWebRouterHttpHandlerOptions {
   cors?: GrpcWebCorsOptions;
 }
 
-type GrpcWebRoute = {
-  procedurePath: string;
-  requestType: string;
-  responseType: string;
-  responseStream: boolean;
-};
-
-function grpcWebRoutes(schema: ProtoSchema): ReadonlyMap<string, GrpcWebRoute> {
-  const routes = new Map<string, GrpcWebRoute>();
-  for (const service of schema.services) {
-    for (const method of service.methods) {
-      routes.set(`/${schema.package}.${service.name}/${method.name}`, {
-        procedurePath: method.path,
-        requestType: method.requestType,
-        responseType: method.responseType,
-        responseStream: method.isResponseStreaming,
-      });
-    }
-  }
-  return routes;
-}
-
-async function writeGrpcWebBody(
-  response: ServerResponse,
-  body: Uint8Array,
-  signal: AbortSignal,
-): Promise<void> {
-  if (!response.write(body)) await once(response, 'drain', { signal });
-}
-
 /** Creates a gRPC-Web handler that dispatches directly to a tRPC router. */
 export function createGrpcWebRouterHttpHandler(
   router: AnyRouter,
   options: GrpcWebRouterHttpHandlerOptions,
 ) {
-  const protocolCodec = new GrpcWebProtocolCodec();
-  const protoCodec = new ProtoCodec(options.schema);
-  const routes = grpcWebRoutes(options.schema);
-  const invoke = createRouterInvoker(router, {
-    createContext: options.createContext,
-  });
-  const corsPolicy = options.cors ? createCorsPolicy(options.cors) : undefined;
-
-  const dispatchGrpcCall: HandleGrpcWebCall = async (
-    grpcPath,
-    message,
-    _metadata,
-    request,
-    response,
-    encoding,
-    origin,
-  ) => {
-    const abortController = new AbortController();
-    let callEnded = false;
-    const cancelCall = () => {
-      if (!callEnded) abortController.abort();
-    };
-    const detachBrowserConnectionListeners = () => {
-      request.off('aborted', cancelCall);
-      response.off('close', cancelCall);
-    };
-    request.once('aborted', cancelCall);
-    response.once('close', cancelCall);
-    response.writeHead(200, grpcWebHeaders(encoding, origin));
-
-    let status = grpc.status.OK;
-    let statusMessage = '';
-    try {
-      const route = routes.get(grpcPath);
-      if (!route) {
-        status = grpc.status.UNIMPLEMENTED;
-        statusMessage = `no gRPC mapping for ${grpcPath}`;
-      } else {
-        const input = protoCodec.decode(route.requestType, message);
-        const result = await invoke({
-          path: route.procedurePath,
-          input,
-          signal: abortController.signal,
-        });
-        if (route.responseStream) {
-          for await (const item of toAsyncIterable(result)) {
-            if (abortController.signal.aborted) break;
-            const body = await protocolCodec.encode(
-              {
-                kind: 'message',
-                payload: protoCodec.encode(route.responseType, item),
-              },
-              { encoding },
-            );
-            await writeGrpcWebBody(response, body, abortController.signal);
-          }
-        } else {
-          const body = await protocolCodec.encode(
-            {
-              kind: 'message',
-              payload: protoCodec.encode(route.responseType, result),
-            },
-            { encoding },
-          );
-          await writeGrpcWebBody(response, body, abortController.signal);
-        }
-      }
-    } catch (error) {
-      if (!abortController.signal.aborted) {
-        status =
-          error instanceof TRPCError ? grpcStatus(error) : grpc.status.UNKNOWN;
-        statusMessage = error instanceof Error ? error.message : String(error);
-      }
-    } finally {
-      callEnded = true;
-      detachBrowserConnectionListeners();
-    }
-
-    if (!response.writableEnded && !response.destroyed) {
-      const trailer = await protocolCodec.encode(
-        {
-          kind: 'trailers',
-          status,
-          message: statusMessage,
-        },
-        { encoding },
-      );
-      response.end(trailer);
-    }
-  };
-
   return createGrpcWebRequestHandler(
-    protocolCodec,
-    corsPolicy,
-    dispatchGrpcCall,
+    options.cors ? createCorsPolicy(options.cors) : undefined,
+    createDirectDispatcher(router, options),
   );
 }
