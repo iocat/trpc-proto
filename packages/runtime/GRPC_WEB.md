@@ -122,8 +122,8 @@ The handler currently accepts gRPC-Web `POST` requests through Node's
 `node:http` request and response types. HTTP/2 ingress is not implemented or
 tested.
 
-The upstream address defaults to `127.0.0.1:50051`. The upstream channel is
-insecure unless `credentials` is provided.
+The native gRPC backend address defaults to `127.0.0.1:50051`. The backend
+channel is insecure unless `credentials` is provided.
 
 ## Body representations
 
@@ -227,18 +227,18 @@ The HTTP handler:
 6. Requires exactly one data frame.
 7. Gzip-decompresses a flagged request message.
 8. Converts permitted request headers into grpc-js metadata.
-9. Sends one native gRPC request message upstream.
+9. Sends one native gRPC request message to the configured backend.
 
 Client-streaming and bidirectional-streaming request bodies are not supported.
 There is no request-body size limit yet.
 
 ## Response and streaming flow
 
-Every upstream call uses grpc-js's server-stream response API. This is
+Every backend gRPC call uses grpc-js's server-stream response API. This is
 transport-level behavior and does not require a private request header or a
 protobuf method descriptor:
 
-1. Each upstream `data` event becomes one `0x00` gRPC-Web data frame.
+1. Each backend gRPC `data` event becomes one `0x00` gRPC-Web data frame.
 2. The final grpc-js `status` event becomes one `0x80` trailer frame.
 3. Each frame is written raw for binary mode or independently base64-encoded
    for text mode.
@@ -246,9 +246,9 @@ protobuf method descriptor:
 
 grpc-js removes native gRPC message compression before invoking the handler's
 `data` callback. The handler therefore emits uncompressed `0x00` Web response
-frames even when an upstream native gRPC server selected gzip. It does not
-recompress upstream responses. The bundled example backends do not configure
-response compression.
+frames even when the native gRPC backend selected gzip. It does not recompress
+backend responses. The bundled example backends do not configure response
+compression.
 
 The handler chooses the first supported media type in `Accept`; when `Accept`
 does not select one, it uses the request encoding. A unary RPC naturally
@@ -296,11 +296,11 @@ Transport outcomes:
 
 | Condition | HTTP result | gRPC-Web result |
 | --- | --- | --- |
-| Successful upstream call | `200` | Data frames followed by `grpc-status: 0`. |
-| Upstream gRPC error | `200` | Final trailer contains the upstream status, message, and string metadata. |
+| Successful backend gRPC call | `200` | Data frames followed by `grpc-status: 0`. |
+| Backend gRPC error | `200` | Final trailer contains the backend status, message, and string metadata. |
 | Malformed framed request | `200` | Final trailer contains `grpc-status: 13` (`INTERNAL`). |
 | Request not owned by handler | No response written | Handler returns `false`. |
-| Rejected CORS origin or header | `403` | No upstream call. |
+| Rejected CORS origin or header | `403` | No backend gRPC call. |
 | Rejected preflight method | `405` | `POST` reported as the allowed method. |
 
 For buffered unary responses, a missing status trailer currently defaults to
@@ -364,8 +364,8 @@ vary: Origin
 ### Missing `Origin`
 
 A `POST` without `Origin` is treated as a non-CORS request and may reach the
-upstream backend. It receives no CORS response headers. An `OPTIONS` request
-without `Origin` is not treated as a preflight; the handler returns `false`.
+configured gRPC backend. It receives no CORS response headers. An `OPTIONS`
+request without `Origin` is not treated as a preflight; the handler returns `false`.
 
 This preserves non-browser and same-origin callers. It also means the origin
 allowlist is not a universal authorization boundary. Non-browser clients can
@@ -415,17 +415,17 @@ Current limitations:
 
 One `grpc.Client` is created when `createGrpcWebHttpHandler` is called and is
 reused for every request handled by that function. grpc-js owns the persistent
-HTTP/2 upstream channel and multiplexes calls on it.
+HTTP/2 channel to the configured gRPC backend and multiplexes calls on it.
 
-When the downstream HTTP request is aborted or its response closes before the
-upstream call finishes, the handler cancels the active grpc-js call. Listener
-cleanup after upstream status prevents completed calls from being cancelled
-when the successful HTTP response closes.
+When the browser-facing HTTP request is aborted or its response closes before
+the backend gRPC call finishes, the handler cancels that gRPC call. Listener
+cleanup after backend status prevents completed calls from being cancelled
+when their successful browser-facing HTTP response closes.
 
 Current operational limitations:
 
 - The returned function has no explicit channel `close()` lifecycle method.
-- There is no pool for multiple upstream addresses.
+- There is no pool for multiple backend gRPC addresses.
 - There is no local deadline timer, circuit breaker, health check, rate limit,
   metric collection, or access logging.
 
@@ -450,8 +450,8 @@ Current operational limitations:
 | HTTP/2 browser ingress | Not implemented or tested |
 | Strict trailer-last and final-status validation | Not supported |
 | Binary metadata | Not supported |
-| Downstream-to-upstream cancellation | Supported |
-| Multiple-upstream pooling | Not supported |
+| Browser connection cancellation reaches backend gRPC call | Supported |
+| Multiple-backend pooling | Not supported |
 | Production resilience and observability | Not supported |
 
 ## Tests
@@ -463,7 +463,7 @@ Current operational limitations:
 - Allowed and rejected CORS preflights, including compression headers.
 - Actual origin validation and response exposure headers.
 - String request metadata and gRPC status metadata.
-- Fetch abort and downstream response-close cancellation propagation.
+- Fetch abort and browser-response-close cancellation propagation.
 
 `src/web/fetch_call_test.ts` covers compressed raw and base64 responses, mixed
 compressed and uncompressed streams, arbitrary base64 transport chunks,

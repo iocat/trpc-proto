@@ -244,7 +244,7 @@ describe('createGrpcWebHttpHandler', () => {
     }
   });
 
-  it('cancels the upstream stream when the downstream response closes', async () => {
+  it('cancels the backend gRPC stream when the browser response closes', async () => {
     const cancelled = Promise.withResolvers<void>();
     const backend = new grpc.Server();
     backend.addService(
@@ -310,7 +310,7 @@ describe('createGrpcWebHttpHandler', () => {
       await Promise.race([
         cancelled.promise,
         delay(1_000).then(() =>
-          assert.fail('upstream stream was not cancelled'),
+          assert.fail('backend gRPC stream was not cancelled'),
         ),
       ]);
     } finally {

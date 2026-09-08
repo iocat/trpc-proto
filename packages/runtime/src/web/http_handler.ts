@@ -39,9 +39,9 @@ export interface GrpcWebCorsOptions {
 
 /** Configuration for the browser-to-gRPC HTTP handler. */
 export interface GrpcWebHttpHandlerOptions {
-  /** Native gRPC upstream address. Defaults to `127.0.0.1:50051`. */
+  /** Native gRPC backend address. Defaults to `127.0.0.1:50051`. */
   address?: string;
-  /** Channel credentials for the native gRPC upstream. Defaults to insecure. */
+  /** Channel credentials for the native gRPC backend. Defaults to insecure. */
   credentials?: grpc.ChannelCredentials;
   /** Optional cross-origin request policy. CORS is disabled when omitted. */
   cors?: GrpcWebCorsOptions;
@@ -209,7 +209,7 @@ function handleCorsPreflight(
 
 /**
  * Creates one Node HTTP request handler for gRPC-Web unary and server streams.
- * The default upstream channel is insecure and CORS is disabled unless configured.
+ * The default backend channel is insecure and CORS is disabled unless configured.
  * The handler returns true when it writes a response.
  */
 export function createGrpcWebHttpHandler(
@@ -245,16 +245,16 @@ export function createGrpcWebHttpHandler(
       Buffer.from(message),
       metadata,
     );
-    let upstreamEnded = false;
-    const cancelUpstream = () => {
-      if (!upstreamEnded) call.cancel();
+    let backendCallEnded = false;
+    const cancelBackendCall = () => {
+      if (!backendCallEnded) call.cancel();
     };
-    const detachDownstreamListeners = () => {
-      req.off('aborted', cancelUpstream);
-      res.off('close', cancelUpstream);
+    const detachBrowserConnectionListeners = () => {
+      req.off('aborted', cancelBackendCall);
+      res.off('close', cancelBackendCall);
     };
-    req.once('aborted', cancelUpstream);
-    res.once('close', cancelUpstream);
+    req.once('aborted', cancelBackendCall);
+    res.once('close', cancelBackendCall);
     let writes = Promise.resolve();
     res.writeHead(200, grpcWebHeaders(encoding, origin));
     call.on('data', (msg: Buffer) => {
@@ -268,8 +268,8 @@ export function createGrpcWebHttpHandler(
       });
     });
     call.on('status', (st: grpc.StatusObject) => {
-      upstreamEnded = true;
-      detachDownstreamListeners();
+      backendCallEnded = true;
+      detachBrowserConnectionListeners();
       void writes
         .then(async () => {
           if (!res.writableEnded && !res.destroyed) {
