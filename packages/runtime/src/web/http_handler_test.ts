@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { setTimeout as delay } from 'node:timers/promises';
 import { describe, it } from 'node:test';
 import * as grpc from '@grpc/grpc-js';
 import { createTRPCClient } from '@trpc/client';
@@ -237,6 +238,81 @@ describe('createGrpcWebHttpHandler', () => {
       }
       assert.equal(requestContentType, GRPC_WEB_TEXT_CONTENT_TYPE);
       assert.deepEqual(messages, [[1], [2, 3]]);
+    } finally {
+      server.close();
+      backend.forceShutdown();
+    }
+  });
+
+  it('cancels the upstream stream when the downstream response closes', async () => {
+    const cancelled = Promise.withResolvers<void>();
+    const backend = new grpc.Server();
+    backend.addService(
+      {
+        Watch: {
+          path: '/demo.v1.AppService/Watch',
+          requestStream: false,
+          responseStream: true,
+          requestSerialize: (value: Buffer) => value,
+          requestDeserialize: (value: Buffer) => value,
+          responseSerialize: (value: Buffer) => value,
+          responseDeserialize: (value: Buffer) => value,
+        },
+      },
+      {
+        Watch(call: grpc.ServerWritableStream<Buffer, Buffer>) {
+          call.on('cancelled', cancelled.resolve);
+          call.write(Buffer.from([1]));
+        },
+      },
+    );
+    const bound = Promise.withResolvers<number>();
+    backend.bindAsync(
+      '127.0.0.1:0',
+      grpc.ServerCredentials.createInsecure(),
+      (error, port) => {
+        if (error) bound.reject(error);
+        else bound.resolve(port);
+      },
+    );
+    const backendPort = await bound.promise;
+    const handleGrpcWeb = createGrpcWebHttpHandler({
+      address: `127.0.0.1:${backendPort}`,
+    });
+    const server = http.createServer(async (req, res) => {
+      if (!(await handleGrpcWeb(req, res))) {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    const listening = Promise.withResolvers<void>();
+    server.listen(0, '127.0.0.1', listening.resolve);
+    await listening.promise;
+    const { port: webPort } = server.address() as { port: number };
+
+    try {
+      const controller = new AbortController();
+      const call = createGrpcWebFetchCall({
+        baseUrl: `http://127.0.0.1:${webPort}`,
+        encoding: 'raw',
+      });
+      const response = await call({
+        path: 'watch',
+        type: 'subscription',
+        input: undefined,
+        bytes: new Uint8Array([0]),
+        grpcPath: '/demo.v1.AppService/Watch',
+        signal: controller.signal,
+      });
+      assert.equal(Symbol.asyncIterator in Object(response), true);
+
+      controller.abort();
+      await Promise.race([
+        cancelled.promise,
+        delay(1_000).then(() =>
+          assert.fail('upstream stream was not cancelled'),
+        ),
+      ]);
     } finally {
       server.close();
       backend.forceShutdown();

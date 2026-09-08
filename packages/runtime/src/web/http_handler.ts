@@ -232,6 +232,7 @@ export function createGrpcWebHttpHandler(
     grpcPath: string,
     message: Uint8Array,
     metadata: grpc.Metadata,
+    req: IncomingMessage,
     res: ServerResponse,
     encoding: GrpcWebEncoding,
     origin?: string,
@@ -244,6 +245,16 @@ export function createGrpcWebHttpHandler(
       Buffer.from(message),
       metadata,
     );
+    let upstreamEnded = false;
+    const cancelUpstream = () => {
+      if (!upstreamEnded) call.cancel();
+    };
+    const detachDownstreamListeners = () => {
+      req.off('aborted', cancelUpstream);
+      res.off('close', cancelUpstream);
+    };
+    req.once('aborted', cancelUpstream);
+    res.once('close', cancelUpstream);
     let writes = Promise.resolve();
     res.writeHead(200, grpcWebHeaders(encoding, origin));
     call.on('data', (msg: Buffer) => {
@@ -257,9 +268,11 @@ export function createGrpcWebHttpHandler(
       });
     });
     call.on('status', (st: grpc.StatusObject) => {
+      upstreamEnded = true;
+      detachDownstreamListeners();
       void writes
         .then(async () => {
-          if (!res.writableEnded) {
+          if (!res.writableEnded && !res.destroyed) {
             const body = await codec.encode(
               {
                 kind: 'trailers',
@@ -333,6 +346,7 @@ export function createGrpcWebHttpHandler(
         url.pathname,
         message,
         metadata,
+        req,
         res,
         responseEncoding,
         responseOrigin,

@@ -417,12 +417,15 @@ One `grpc.Client` is created when `createGrpcWebHttpHandler` is called and is
 reused for every request handled by that function. grpc-js owns the persistent
 HTTP/2 upstream channel and multiplexes calls on it.
 
+When the downstream HTTP request is aborted or its response closes before the
+upstream call finishes, the handler cancels the active grpc-js call. Listener
+cleanup after upstream status prevents completed calls from being cancelled
+when the successful HTTP response closes.
+
 Current operational limitations:
 
 - The returned function has no explicit channel `close()` lifecycle method.
 - There is no pool for multiple upstream addresses.
-- Aborting Fetch stops the browser request, but the HTTP handler does not
-  cancel the upstream grpc-js call when the downstream connection closes.
 - There is no local deadline timer, circuit breaker, health check, rate limit,
   metric collection, or access logging.
 
@@ -447,7 +450,7 @@ Current operational limitations:
 | HTTP/2 browser ingress | Not implemented or tested |
 | Strict trailer-last and final-status validation | Not supported |
 | Binary metadata | Not supported |
-| Downstream-to-upstream cancellation | Not supported |
+| Downstream-to-upstream cancellation | Supported |
 | Multiple-upstream pooling | Not supported |
 | Production resilience and observability | Not supported |
 
@@ -460,6 +463,7 @@ Current operational limitations:
 - Allowed and rejected CORS preflights, including compression headers.
 - Actual origin validation and response exposure headers.
 - String request metadata and gRPC status metadata.
+- Fetch abort and downstream response-close cancellation propagation.
 
 `src/web/fetch_call_test.ts` covers compressed raw and base64 responses, mixed
 compressed and uncompressed streams, arbitrary base64 transport chunks,
@@ -472,5 +476,5 @@ mapping.
 `src/web/codec/base64_codec_test.ts` cover gzip round trips, compressed frame
 flags, content negotiation, raw frame boundaries, independently padded base64
 segments, arbitrary base64 transport boundaries, and malformed input.
-HTTP/2 ingress, strict trailer ordering, deadlines, downstream cancellation,
-and operational safeguards remain unimplemented.
+HTTP/2 ingress, strict trailer ordering, deadlines, and operational safeguards
+remain unimplemented.
