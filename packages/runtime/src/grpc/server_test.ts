@@ -2,12 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
-import {
-  bindRouter,
-  createGrpcStubCall,
-  createProtoStub,
-  serveGrpc,
-} from './server.js';
+import { bindRouter, serveGrpc } from './server.js';
+import { createGrpcStubCall } from './client.js';
 import {
   schemaFromRouter,
   zAsyncIterable,
@@ -74,11 +70,15 @@ describe('serveGrpc', () => {
       address: '127.0.0.1:0',
     });
     try {
-      const stub = createProtoStub({
+      const call = createGrpcStubCall({
         schema,
         address: `127.0.0.1:${server.port}`,
       });
-      const out = await stub.AppService.Hello({ name: 'Ada' });
+      const out = await call({
+        path: 'hello',
+        type: 'query',
+        input: { name: 'Ada' },
+      });
       assert.deepEqual(out, { message: 'hello Ada' });
     } finally {
       await server.close();

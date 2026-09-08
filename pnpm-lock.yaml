@@ -24,6 +24,34 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  benchmarks/grpc-web:
+    dependencies:
+      '@trpc-proto/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@trpc-proto/schema_ir':
+        specifier: workspace:*
+        version: link:../../packages/schema_ir
+      '@trpc/client':
+        specifier: ^11.18.0
+        version: 11.18.0(@trpc/server@11.18.0(typescript@5.9.3))(typescript@5.9.3)
+      '@trpc/server':
+        specifier: ^11.18.0
+        version: 11.18.0(typescript@5.9.3)
+      zod:
+        specifier: ^4.1.5
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
+      tsx:
+        specifier: ^4.20.5
+        version: 4.23.13
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   examples/todo:
     dependencies:
       '@trpc-proto/plugin':

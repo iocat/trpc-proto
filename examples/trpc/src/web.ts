@@ -1,12 +1,14 @@
-import { createGrpcWebHttpHandler } from '@trpc-proto/runtime';
+import { serveGrpcWeb } from '@trpc-proto/runtime';
 import * as esbuild from 'esbuild';
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { GRPC_ADDRESS } from './address.js';
+import { protoSchema } from '../generated/schema.js';
+import { appRouter } from './router.js';
 
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.WEB_PORT ?? 3002);
+const GRPC_WEB_PORT = Number(process.env.GRPC_WEB_PORT ?? 3102);
 const spaDir = path.join(import.meta.dirname, 'spa');
 const html = readFileSync(path.join(spaDir, 'index.html'), 'utf8');
 const spaJs = esbuild.buildSync({
@@ -18,7 +20,13 @@ const spaJs = esbuild.buildSync({
   target: 'es2022',
   logLevel: 'silent',
 }).outputFiles![0]!.text;
-const handleGrpcWeb = createGrpcWebHttpHandler({ address: GRPC_ADDRESS });
+const grpcWebServer = await serveGrpcWeb({
+  mode: 'direct',
+  router: appRouter,
+  schema: protoSchema,
+  address: `${HOST}:${GRPC_WEB_PORT}`,
+  cors: { allowedOrigins: [`http://${HOST}:${PORT}`] },
+});
 
 function send(
   res: http.ServerResponse,
@@ -30,9 +38,8 @@ function send(
   res.end(body);
 }
 
-const server = http.createServer(async (req, res) => {
+const server = http.createServer((req, res) => {
   try {
-    if (await handleGrpcWeb(req, res)) return;
     const url = new URL(req.url ?? '/', `http://${HOST}`);
     if (
       req.method === 'GET' &&
@@ -66,6 +73,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+process.stdout.write(
+  `gRPC-Web listening on http://${grpcWebServer.address}\n`,
+);
 server.listen(PORT, HOST, () => {
   process.stdout.write(`web listening on http://${HOST}:${PORT}\n`);
 });

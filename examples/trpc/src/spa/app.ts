@@ -14,7 +14,7 @@ const client = createTRPCClient<AppRouter>({
   links: [
     grpcWebLink<AppRouter>({
       schema: protoSchema,
-      url: '',
+      url: 'http://127.0.0.1:3102',
       encoding: 'raw',
       compress: false,
     }),

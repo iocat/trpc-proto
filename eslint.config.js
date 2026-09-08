@@ -3,7 +3,7 @@ import jsdoc from 'eslint-plugin-jsdoc';
 
 export default [
   {
-    files: ['packages/**/*.ts'],
+    files: ['packages/**/*.ts', 'benchmarks/**/*.ts'],
     ignores: ['packages/**/dist/**'],
     languageOptions: {
       parser: tsParser,

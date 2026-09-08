@@ -1,7 +1,13 @@
+import { TRPCError, type AnyRouter } from '@trpc/server';
 import { assumeExhaustive } from '@trpc-proto/utility';
 import * as grpc from '@grpc/grpc-js';
+import { once } from 'node:events';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Codec } from './codec/codec.js';
+import type { ProtoSchema } from '@trpc-proto/schema_ir';
+import { grpcStatus } from '../grpc/status.js';
+import { ProtoCodec } from '../proto_codec/proto_codec.js';
+import { createRouterInvoker, toAsyncIterable } from '../router_invoker.js';
 import {
   GrpcWebProtocolCodec,
   type GrpcWebProtocolCodecOptions,
@@ -135,7 +141,6 @@ function grpcWebHeaders(
   };
 }
 
-
 function createCorsPolicy(cors: GrpcWebCorsOptions): CorsPolicy {
   return {
     allowedOrigins: new Set(cors.allowedOrigins),
@@ -206,6 +211,90 @@ function handleCorsPreflight(
   return true;
 }
 
+type HandleGrpcWebCall = (
+  grpcPath: string,
+  message: Uint8Array,
+  metadata: grpc.Metadata,
+  req: IncomingMessage,
+  res: ServerResponse,
+  encoding: GrpcWebEncoding,
+  origin?: string,
+) => Promise<void>;
+
+function createGrpcWebRequestHandler(
+  codec: Codec<GrpcWebProtocolValue, Uint8Array, GrpcWebProtocolCodecOptions>,
+  corsPolicy: CorsPolicy | undefined,
+  handleGrpcCall: HandleGrpcWebCall,
+) {
+  return async function handleGrpcWebHttpRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<boolean> {
+    if (handleCorsPreflight(req, res, corsPolicy)) return true;
+    const encoding = requestEncoding(req);
+    if (req.method !== 'POST' || !encoding) return false;
+    const origin = requestHeader(req, 'origin');
+    if (origin && corsPolicy && !corsPolicy.allowedOrigins.has(origin)) {
+      res.writeHead(403, { vary: 'Origin', 'content-length': '0' });
+      res.end();
+      return true;
+    }
+    const responseOrigin =
+      origin && corsPolicy?.allowedOrigins.has(origin) ? origin : undefined;
+    const responseEncoding = negotiateGrpcWebResponseEncoding(
+      requestHeader(req, 'accept'),
+      encoding,
+    );
+    const url = new URL(req.url ?? '/', 'http://grpc-web.invalid');
+    const metadata = metadataFromRequest(req);
+    const encodedBody = await readBody(req);
+
+    try {
+      const messages: Uint8Array[] = [];
+      for await (const value of codec.decode(encodedBody, {
+        encoding,
+        compression: requestHeader(req, 'grpc-encoding'),
+      })) {
+        switch (value.kind) {
+          case 'message':
+            messages.push(value.payload);
+            break;
+          case 'trailers':
+            break;
+          default:
+            assumeExhaustive(value);
+        }
+      }
+      const message = messages.length === 1 ? messages[0] : undefined;
+      if (!message) throw new Error('unary gRPC-Web expects one data frame');
+      await handleGrpcCall(
+        url.pathname,
+        message,
+        metadata,
+        req,
+        res,
+        responseEncoding,
+        responseOrigin,
+      );
+    } catch (err) {
+      const text = err instanceof Error ? err.message : String(err);
+      const body = await codec.encode(
+        {
+          kind: 'trailers',
+          status: grpc.status.INTERNAL,
+          message: text,
+        },
+        { encoding: responseEncoding },
+      );
+      res.writeHead(200, {
+        ...grpcWebHeaders(responseEncoding, responseOrigin),
+        'content-length': String(body.byteLength),
+      });
+      res.end(body);
+    }
+    return true;
+  };
+}
 
 /**
  * Creates one Node HTTP request handler for gRPC-Web unary and server streams.
@@ -301,72 +390,145 @@ export function createGrpcWebHttpHandler(
     return promise;
   }
 
-  return async function handleGrpcWebHttpRequest(
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<boolean> {
-    if (handleCorsPreflight(req, res, corsPolicy)) return true;
-    const encoding = requestEncoding(req);
-    if (req.method !== 'POST' || !encoding) return false;
-    const origin = requestHeader(req, 'origin');
-    if (origin && corsPolicy && !corsPolicy.allowedOrigins.has(origin)) {
-      res.writeHead(403, { vary: 'Origin', 'content-length': '0' });
-      res.end();
-      return true;
-    }
-    const responseOrigin =
-      origin && corsPolicy?.allowedOrigins.has(origin) ? origin : undefined;
-    const responseEncoding = negotiateGrpcWebResponseEncoding(
-      requestHeader(req, 'accept'),
-      encoding,
-    );
-    const url = new URL(req.url ?? '/', 'http://grpc-web.invalid');
-    const metadata = metadataFromRequest(req);
-    const encodedBody = await readBody(req);
+  return createGrpcWebRequestHandler(codec, corsPolicy, forwardGrpcCall);
+}
 
+/** Direct router and protocol options for gRPC-Web handling. */
+export interface GrpcWebRouterHttpHandlerOptions {
+  schema: ProtoSchema;
+  createContext?: () => unknown | Promise<unknown>;
+  cors?: GrpcWebCorsOptions;
+}
+
+type GrpcWebRoute = {
+  procedurePath: string;
+  requestType: string;
+  responseType: string;
+  responseStream: boolean;
+};
+
+function grpcWebRoutes(schema: ProtoSchema): ReadonlyMap<string, GrpcWebRoute> {
+  const routes = new Map<string, GrpcWebRoute>();
+  for (const service of schema.services) {
+    for (const method of service.methods) {
+      routes.set(`/${schema.package}.${service.name}/${method.name}`, {
+        procedurePath: method.path,
+        requestType: method.requestType,
+        responseType: method.responseType,
+        responseStream: method.isResponseStreaming,
+      });
+    }
+  }
+  return routes;
+}
+
+async function writeGrpcWebBody(
+  response: ServerResponse,
+  body: Uint8Array,
+  signal: AbortSignal,
+): Promise<void> {
+  if (!response.write(body)) await once(response, 'drain', { signal });
+}
+
+/** Creates a gRPC-Web handler that dispatches directly to a tRPC router. */
+export function createGrpcWebRouterHttpHandler(
+  router: AnyRouter,
+  options: GrpcWebRouterHttpHandlerOptions,
+) {
+  const protocolCodec = new GrpcWebProtocolCodec();
+  const protoCodec = new ProtoCodec(options.schema);
+  const routes = grpcWebRoutes(options.schema);
+  const invoke = createRouterInvoker(router, {
+    createContext: options.createContext,
+  });
+  const corsPolicy = options.cors ? createCorsPolicy(options.cors) : undefined;
+
+  const dispatchGrpcCall: HandleGrpcWebCall = async (
+    grpcPath,
+    message,
+    _metadata,
+    request,
+    response,
+    encoding,
+    origin,
+  ) => {
+    const abortController = new AbortController();
+    let callEnded = false;
+    const cancelCall = () => {
+      if (!callEnded) abortController.abort();
+    };
+    const detachBrowserConnectionListeners = () => {
+      request.off('aborted', cancelCall);
+      response.off('close', cancelCall);
+    };
+    request.once('aborted', cancelCall);
+    response.once('close', cancelCall);
+    response.writeHead(200, grpcWebHeaders(encoding, origin));
+
+    let status = grpc.status.OK;
+    let statusMessage = '';
     try {
-      const messages: Uint8Array[] = [];
-      for await (const value of codec.decode(encodedBody, {
-        encoding,
-        compression: requestHeader(req, 'grpc-encoding'),
-      })) {
-        switch (value.kind) {
-          case 'message':
-            messages.push(value.payload);
-            break;
-          case 'trailers':
-            break;
-          default:
-            assumeExhaustive(value);
+      const route = routes.get(grpcPath);
+      if (!route) {
+        status = grpc.status.UNIMPLEMENTED;
+        statusMessage = `no gRPC mapping for ${grpcPath}`;
+      } else {
+        const input = protoCodec.decode(route.requestType, message);
+        const result = await invoke({
+          path: route.procedurePath,
+          input,
+          signal: abortController.signal,
+        });
+        if (route.responseStream) {
+          for await (const item of toAsyncIterable(result)) {
+            if (abortController.signal.aborted) break;
+            const body = await protocolCodec.encode(
+              {
+                kind: 'message',
+                payload: protoCodec.encode(route.responseType, item),
+              },
+              { encoding },
+            );
+            await writeGrpcWebBody(response, body, abortController.signal);
+          }
+        } else {
+          const body = await protocolCodec.encode(
+            {
+              kind: 'message',
+              payload: protoCodec.encode(route.responseType, result),
+            },
+            { encoding },
+          );
+          await writeGrpcWebBody(response, body, abortController.signal);
         }
       }
-      const message = messages.length === 1 ? messages[0] : undefined;
-      if (!message) throw new Error('unary gRPC-Web expects one data frame');
-      await forwardGrpcCall(
-        url.pathname,
-        message,
-        metadata,
-        req,
-        res,
-        responseEncoding,
-        responseOrigin,
-      );
-    } catch (err) {
-      const text = err instanceof Error ? err.message : String(err);
-      const body = await codec.encode(
+    } catch (error) {
+      if (!abortController.signal.aborted) {
+        status =
+          error instanceof TRPCError ? grpcStatus(error) : grpc.status.UNKNOWN;
+        statusMessage = error instanceof Error ? error.message : String(error);
+      }
+    } finally {
+      callEnded = true;
+      detachBrowserConnectionListeners();
+    }
+
+    if (!response.writableEnded && !response.destroyed) {
+      const trailer = await protocolCodec.encode(
         {
           kind: 'trailers',
-          status: grpc.status.INTERNAL,
-          message: text,
+          status,
+          message: statusMessage,
         },
-        { encoding: responseEncoding },
+        { encoding },
       );
-      res.writeHead(200, {
-        ...grpcWebHeaders(responseEncoding, responseOrigin),
-        'content-length': String(body.byteLength),
-      });
-      res.end(body);
+      response.end(trailer);
     }
-    return true;
   };
+
+  return createGrpcWebRequestHandler(
+    protocolCodec,
+    corsPolicy,
+    dispatchGrpcCall,
+  );
 }

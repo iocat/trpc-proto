@@ -1,22 +1,18 @@
 import * as grpc from '@grpc/grpc-js';
 import { TRPCError, type AnyRouter } from '@trpc/server';
-import { isAsyncIterable } from '@trpc-proto/utility';
 import {
-  ProtoCodec,
-  type RuntimeProtoMethod,
-} from '../proto_codec/proto_codec.js';
-import type { StubCall } from './link.js';
-import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
+  createRouterInvoker,
+  toAsyncIterable,
+  type RouterInvoker,
+} from '../router_invoker.js';
+import { ProtoCodec } from '../proto_codec/proto_codec.js';
+import type { ProtoSchema } from '@trpc-proto/schema_ir';
+import { grpcStatus } from './status.js';
 
 
 /** Default insecure gRPC dial target for local development. */
 const DEFAULT_ADDRESS = '127.0.0.1:50051';
 
-/** Schema and address used by a native gRPC client stub. */
-export interface GrpcProtoOptions {
-  schema: ProtoSchema;
-  address?: string;
-}
 
 /** `{ UserService: { GetById: (input) => ... } }` — spread onto generated server stubs. */
 export type StubHandlers = Record<
@@ -24,13 +20,8 @@ export type StubHandlers = Record<
   Record<string, (input: unknown) => Promise<unknown>>
 >;
 
-type Invoker = (request: {
-  path: string;
-  input?: unknown;
-  signal?: AbortSignal;
-}) => Promise<unknown>;
 
-function bindStubHandlers(schema: ProtoSchema, invoke: Invoker): StubHandlers {
+function bindStubHandlers(schema: ProtoSchema, invoke: RouterInvoker): StubHandlers {
   const services: StubHandlers = {};
   for (const service of schema.services) {
     const methods: Record<string, (input: unknown) => Promise<unknown>> = {};
@@ -42,45 +33,6 @@ function bindStubHandlers(schema: ProtoSchema, invoke: Invoker): StubHandlers {
   return services;
 }
 
-type Procedure = {
-  _def: {
-    type: 'query' | 'mutation' | 'subscription';
-  };
-  (opts: {
-    path: string;
-    getRawInput: () => Promise<unknown>;
-    ctx: unknown;
-    type: 'query' | 'mutation' | 'subscription';
-    signal?: AbortSignal;
-    batchIndex?: number;
-  }): Promise<unknown>;
-};
-
-function createInvoker(
-  router: AnyRouter,
-  opts?: { createContext?: () => unknown | Promise<unknown> },
-): Invoker {
-  return async (request) => {
-    const procedure = (
-      router._def.procedures as Record<string, Procedure | undefined>
-    )[request.path];
-    if (!procedure) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: `No procedure on path "${request.path}"`,
-      });
-    }
-    const ctx = opts?.createContext ? await opts.createContext() : {};
-    return procedure({
-      path: request.path,
-      getRawInput: async () => request.input,
-      ctx,
-      type: procedure._def.type,
-      signal: request.signal,
-      batchIndex: 0,
-    });
-  };
-}
 
 /** Schema and context used to bind generated service handlers. */
 export interface BindRouterOptions {
@@ -95,162 +47,11 @@ export function bindRouter(
 ): StubHandlers {
   return bindStubHandlers(
     opts.schema,
-    createInvoker(router, { createContext: opts.createContext }),
+    createRouterInvoker(router, { createContext: opts.createContext }),
   );
 }
 
 
-
-function isObservable(value: unknown): value is {
-  subscribe: (obs: {
-    next: (item: unknown) => void;
-    error: (err: unknown) => void;
-    complete: () => void;
-  }) => { unsubscribe?: () => void };
-} {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    'subscribe' in value &&
-    typeof (value as { subscribe?: unknown }).subscribe === 'function'
-  );
-}
-
-async function* toAsyncIterable(result: unknown): AsyncIterable<unknown> {
-  const value = await result;
-  if (isAsyncIterable(value)) {
-    yield* value;
-    return;
-  }
-  if (isObservable(value)) {
-    const pending: unknown[] = [];
-    let done = false;
-    let failure: unknown;
-    let notify: (() => void) | undefined;
-    const sub = value.subscribe({
-      next: (item) => {
-        pending.push(item);
-        notify?.();
-      },
-      error: (err) => {
-        failure = err;
-        done = true;
-        notify?.();
-      },
-      complete: () => {
-        done = true;
-        notify?.();
-      },
-    });
-    try {
-      while (!done || pending.length > 0) {
-        if (pending.length > 0) {
-          yield pending.shift();
-          continue;
-        }
-        await new Promise<void>((resolve) => {
-          notify = resolve;
-        });
-      }
-      if (failure) throw failure;
-    } finally {
-      sub.unsubscribe?.();
-    }
-    return;
-  }
-  yield value;
-}
-
-export function createGrpcStubCall(opts: GrpcProtoOptions): StubCall {
-  const schema = opts.schema;
-  const { address = DEFAULT_ADDRESS } = opts;
-  const codec = new ProtoCodec(schema);
-  const client = new grpc.Client(address, grpc.credentials.createInsecure());
-
-  return (request) => {
-    let serviceName: string | undefined;
-    let method: RuntimeProtoMethod | undefined;
-    if (request.service && request.method) {
-      serviceName = request.service;
-      method = codec.lookupMethod(serviceName, request.method);
-    } else {
-      const rpc = codec.lookupRpc(request.path);
-      serviceName = rpc?.service;
-      method = rpc?.method;
-    }
-    if (!serviceName || !method) {
-      return Promise.reject(new Error('no gRPC mapping for call'));
-    }
-    const rpcPath =
-      request.grpcPath ??
-      `/${schema.package}.${serviceName}/${method.name}`;
-    const payload = request.bytes
-      ? Buffer.from(request.bytes)
-      : Buffer.from(codec.encode(method.requestType, request.input));
-    const metadata = new grpc.Metadata();
-    if (request.metadata) {
-      for (const [key, value] of Object.entries(request.metadata)) {
-        metadata.set(key, value);
-      }
-    }
-    if (method.responseStream) {
-      const stream = client.makeServerStreamRequest(
-        rpcPath,
-        (value: Buffer) => value,
-        (value: Buffer) => value,
-        payload,
-        metadata,
-      );
-      if (request.signal) {
-        request.signal.addEventListener('abort', () => stream.cancel(), {
-          once: true,
-        });
-      }
-      return Promise.resolve(
-        (async function* () {
-          for await (const chunk of stream) {
-            if (!(chunk instanceof Uint8Array)) {
-              throw new Error('expected protobuf bytes');
-            }
-            yield codec.decode(method.responseType, chunk);
-          }
-        })(),
-      );
-    }
-    const { promise, resolve, reject } = Promise.withResolvers<unknown>();
-    client.makeUnaryRequest(
-      rpcPath,
-      (value: Buffer) => value,
-      (value: Buffer) => value,
-      payload,
-      metadata,
-      (err, res) => {
-        if (err) reject(err);
-        else {
-          resolve(
-            codec.decode(
-              method.responseType,
-              new Uint8Array(res ?? Buffer.alloc(0)),
-            ),
-          );
-        }
-      },
-    );
-    return promise;
-  };
-}
-
-/** Client stub for any backend that implements the generated proto. */
-export function createProtoStub(opts: GrpcProtoOptions): StubHandlers {
-  const call = createGrpcStubCall(opts);
-  return bindStubHandlers(opts.schema, (request) =>
-    call({
-      path: request.path,
-      type: 'query',
-      input: request.input,
-    }),
-  );
-}
 
 /** Options for serving a tRPC router over native gRPC. */
 export interface ServeGrpcOptions {
@@ -267,67 +68,6 @@ export interface GrpcServerHandle {
   close(): Promise<void>;
 }
 
-export function grpcStatus(err: TRPCError): grpc.status {
-  switch (err.code) {
-    // Client Errors & Malformed Input
-    case 'PARSE_ERROR':
-    case 'BAD_REQUEST':
-    case 'UNPROCESSABLE_CONTENT':
-      return grpc.status.INVALID_ARGUMENT;
-
-    // Authentication & Authorization
-    case 'UNAUTHORIZED':
-      return grpc.status.UNAUTHENTICATED;
-
-    case 'FORBIDDEN':
-    case 'PAYMENT_REQUIRED':
-      return grpc.status.PERMISSION_DENIED;
-
-    // Resource & Preconditions
-    case 'NOT_FOUND':
-      return grpc.status.NOT_FOUND;
-
-    case 'CONFLICT':
-      return grpc.status.ALREADY_EXISTS;
-
-    case 'PRECONDITION_FAILED':
-    case 'PRECONDITION_REQUIRED':
-      return grpc.status.FAILED_PRECONDITION;
-
-    // Request Constraints & Quotas
-    case 'PAYLOAD_TOO_LARGE':
-      return grpc.status.RESOURCE_EXHAUSTED;
-
-    case 'TOO_MANY_REQUESTS':
-      return grpc.status.RESOURCE_EXHAUSTED;
-
-    // Timing & Cancellation
-    case 'TIMEOUT':
-    case 'GATEWAY_TIMEOUT':
-      return grpc.status.DEADLINE_EXCEEDED;
-
-    case 'CLIENT_CLOSED_REQUEST':
-      return grpc.status.CANCELLED;
-
-    // Server & Transport Errors
-    case 'METHOD_NOT_SUPPORTED':
-    case 'NOT_IMPLEMENTED':
-      return grpc.status.UNIMPLEMENTED;
-
-    case 'SERVICE_UNAVAILABLE':
-    case 'BAD_GATEWAY':
-      return grpc.status.UNAVAILABLE;
-
-    case 'UNSUPPORTED_MEDIA_TYPE':
-      return grpc.status.INVALID_ARGUMENT;
-
-    case 'INTERNAL_SERVER_ERROR':
-      return grpc.status.INTERNAL;
-
-    default:
-      return grpc.status.UNKNOWN;
-  }
-}
 
 function toServiceError(err: unknown): grpc.ServiceError {
   if (err instanceof TRPCError) {
@@ -355,7 +95,9 @@ export async function serveGrpc(
     opts.credentials ?? grpc.ServerCredentials.createInsecure();
   const schema = opts.schema;
   const codec = new ProtoCodec(schema);
-  const invoke = createInvoker(router, { createContext: opts.createContext });
+  const invoke = createRouterInvoker(router, {
+    createContext: opts.createContext,
+  });
   const server = new grpc.Server();
 
   for (const service of schema.services) {

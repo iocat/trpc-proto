@@ -12,6 +12,13 @@ export type {
   GrpcWebCorsOptions,
   GrpcWebHttpHandlerOptions,
 } from './web/http_handler.js';
+export { serveGrpcWeb } from './web/server.js';
+export type {
+  GrpcWebServerHandle,
+  ServeGrpcWebDirectOptions,
+  ServeGrpcWebForwardOptions,
+  ServeGrpcWebOptions,
+} from './web/server.js';
 export { grpcWebLink } from './web/link.js';
 export type { GrpcWebLinkOptions } from './web/link.js';
 export type { GrpcWebEncoding } from './web/content_type.js';

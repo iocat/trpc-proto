@@ -245,13 +245,19 @@ With either approach, nested routers become gRPC service names (`user.getById` â
 
 ### Browser gRPC-Web ingress
 
-Browsers connect through an HTTP server using `createGrpcWebHttpHandler`; the handler forwards to either backend approach over gRPC. Cross-origin access is opt-in and uses exact serialized origins:
+`serveGrpcWeb` supports direct router dispatch and forwarding to a separately
+hosted native gRPC server.
+
+Direct mode decodes protobuf and invokes the tRPC router in-process:
 
 ```ts
-import { createGrpcWebHttpHandler } from '@trpc-proto/runtime';
+import { serveGrpcWeb } from '@trpc-proto/runtime';
 
-const handleGrpcWeb = createGrpcWebHttpHandler({
-  address: '127.0.0.1:50051',
+await serveGrpcWeb({
+  mode: 'direct',
+  router: appRouter,
+  schema: protoSchema,
+  address: '127.0.0.1:50052',
   cors: {
     allowedOrigins: ['https://app.example.com'],
     additionalAllowedHeaders: ['x-trace-id'],
@@ -259,7 +265,22 @@ const handleGrpcWeb = createGrpcWebHttpHandler({
 });
 ```
 
-Call `handleGrpcWeb(req, res)` from your Node HTTP server before other routes. It answers valid preflight requests, rejects disallowed origins, methods, and headers before contacting gRPC, and adds matching CORS headers to gRPC-Web responses. Omit `cors` for same-origin deployments.
+Forward mode owns the same HTTP listener but sends calls to an existing gRPC
+backend:
+
+```ts
+await serveGrpcWeb({
+  mode: 'forward',
+  backend: { address: '127.0.0.1:50051' },
+  address: '127.0.0.1:50052',
+});
+```
+
+Use `createGrpcWebHttpHandler({ address: '127.0.0.1:50051' })` instead when an
+existing Node HTTP server must own routing. Both server APIs answer valid
+preflight requests, reject disallowed origins, methods, and headers, and add
+matching CORS headers to gRPC-Web responses. Omit `cors` for same-origin
+deployments.
 
 See the [gRPC-Web runtime protocol](packages/runtime/GRPC_WEB.md) for the implemented wire behavior, CORS semantics, security boundary, and limitations.
 
@@ -288,15 +309,15 @@ table tracks the remaining transport work.
 pnpm --filter @trpc-proto/example-users generate
 pnpm --filter @trpc-proto/example-users generate:go
 pnpm --filter @trpc-proto/example-users server   # Go gRPC on :50051
-pnpm --filter @trpc-proto/example-users web      # http://127.0.0.1:3000
+pnpm --filter @trpc-proto/example-users web      # UI :3000; forwarded gRPC-Web :3100
 ```
 
-Todo: `pnpm --filter @trpc-proto/example-todo generate` then `server` / `web` (`:3001`).
+Todo: `pnpm --filter @trpc-proto/example-todo generate` then `server` and `web` (UI `:3001`; forwarded gRPC-Web `:3101`).
 
-TypeScript backend (protobuf over gRPC with `serveGrpc`):
+TypeScript router:
 
 ```bash
 pnpm --filter @trpc-proto/example-trpc generate
-pnpm --filter @trpc-proto/example-trpc server   # :50053
-pnpm --filter @trpc-proto/example-trpc web      # :3002
+pnpm --filter @trpc-proto/example-trpc web      # UI :3002; direct gRPC-Web :3102
+pnpm --filter @trpc-proto/example-trpc server   # optional native gRPC :50053
 ```

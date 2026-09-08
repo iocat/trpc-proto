@@ -5,8 +5,10 @@
   "packageManager": "pnpm@10.25.0",
   "scripts": {
     "build": "pnpm -r build",
-    "lint": "eslint packages",
+    "lint": "eslint packages benchmarks",
     "clean": "pnpm -r clean",
+    "bench:grpc-web": "pnpm --filter @trpc-proto/runtime build && pnpm --filter @trpc-proto/benchmark-grpc-web bench",
+    "bench:grpc-web:envoy": "pnpm --filter @trpc-proto/runtime build && pnpm --filter @trpc-proto/benchmark-grpc-web bench -- --envoy",
     "users:generate": "pnpm --filter @trpc-proto/example-users generate",
     "users:server": "pnpm --filter @trpc-proto/example-users run server",
     "todo:generate": "pnpm --filter @trpc-proto/example-todo generate",

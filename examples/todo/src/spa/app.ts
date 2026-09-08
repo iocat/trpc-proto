@@ -14,7 +14,7 @@ function client() {
     links: [
       grpcWebLink<AppRouter>({
         schema: protoSchema,
-        url: '',
+        url: 'http://127.0.0.1:3101',
         encoding: 'base64',
         compress: true,
         auth: { token: () => $('auth-token')?.value },

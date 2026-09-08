@@ -1,6 +1,6 @@
 import type { TRPCLink } from '@trpc/client';
 import type { AnyRouter } from '@trpc/server';
-import { createGrpcStubCall } from './server.js';
+import { createGrpcStubCall } from './client.js';
 import { createProtoLink, type ProtoLinkOptions } from './proto_link.js';
 
 export { authInterceptor, createProtoLink } from './proto_link.js';

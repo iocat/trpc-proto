@@ -52,9 +52,10 @@ or production deployment readiness.
 | Base64 codec | `src/web/codec/base64_codec.ts` | Encodes and incrementally decodes base64 body chunks. |
 | Protocol codec | `src/web/codec/protocol_codec.ts` | Composes frame, compression, and body codecs through `encode` and `decode`. |
 | `createGrpcWebHttpHandler` | `src/web/http_handler.ts` | Validates the Node HTTP boundary and forwards requests to grpc-js. |
+| `serveGrpcWeb` | `src/web/server.ts` | Owns gRPC-Web HTTP ingress in direct-router or forwarding mode. |
 
-The browser link and Node HTTP handler do not inspect protobuf payloads. The
-shared runtime codec translates tRPC values before and after transport.
+The browser link and forwarding handler keep protobuf payloads opaque. Direct
+mode uses the runtime protobuf codec before invoking the router in-process.
 
 ## Public API
 
@@ -98,7 +99,56 @@ framing and optional base64 encoding. `url` defaults to an empty string, which
 sends requests to the current origin. The procedure's translated service and
 method determine the URL pathname.
 
-### Node HTTP handler
+### Managed gRPC-Web server
+
+Direct mode dispatches to a TypeScript router without starting or dialing a
+native gRPC server:
+
+```ts
+import { serveGrpcWeb } from '@trpc-proto/runtime';
+import { protoSchema } from './generated/schema.js';
+import { appRouter } from './router.js';
+
+const server = await serveGrpcWeb({
+  mode: 'direct',
+  router: appRouter,
+  schema: protoSchema,
+  address: '127.0.0.1:50052',
+  createContext: () => ({}),
+  cors: {
+    allowedOrigins: ['https://app.example.com'],
+  },
+});
+
+await server.close();
+```
+
+Direct mode parses the gRPC-Web request, protobuf-decodes its message, invokes
+the same transport-neutral router dispatcher used by `serveGrpc`, protobuf-
+encodes each result, and writes the final in-body status trailer.
+
+Forward mode sends the decoded gRPC-Web message bytes to a separately hosted
+native gRPC service:
+
+```ts
+const server = await serveGrpcWeb({
+  mode: 'forward',
+  backend: {
+    address: '127.0.0.1:50051',
+  },
+  address: '127.0.0.1:50052',
+});
+```
+
+A grpc-js server interceptor cannot implement direct mode's wire adapter:
+interceptors receive calls only after grpc-js accepts native HTTP/2 gRPC.
+Shared authentication and application policy for direct and native transports
+should therefore use tRPC middleware and `createContext`.
+
+The public listener defaults to `127.0.0.1:50052`. Use the lower-level handler
+below to integrate forwarding mode with an HTTP server that owns other routes.
+
+### Existing Node HTTP server or external backend
 
 ```ts
 import http from 'node:http';
@@ -226,23 +276,25 @@ The HTTP handler:
 5. Base64-decodes a text body.
 6. Requires exactly one data frame.
 7. Gzip-decompresses a flagged request message.
-8. Converts permitted request headers into grpc-js metadata.
-9. Sends one native gRPC request message to the configured backend.
+8. Uses the HTTP pathname as the gRPC path, for example
+   `/example.v1.UserService/GetById`.
+9. In direct mode, resolves that gRPC path through `ProtoSchema` to the
+   `ProtoMethod.path` tRPC key, such as `user.getById`, decodes the request
+   type, and invokes that router procedure.
+10. In forward mode, converts permitted request headers into grpc-js metadata
+    and sends the gRPC path and opaque protobuf message to the configured
+    backend.
 
 Client-streaming and bidirectional-streaming request bodies are not supported.
 There is no request-body size limit yet.
 
 ## Response and streaming flow
 
-Every backend gRPC call uses grpc-js's server-stream response API. This is
-transport-level behavior and does not require a private request header or a
-protobuf method descriptor:
-
-1. Each backend gRPC `data` event becomes one `0x00` gRPC-Web data frame.
-2. The final grpc-js `status` event becomes one `0x80` trailer frame.
-3. Each frame is written raw for binary mode or independently base64-encoded
-   for text mode.
-4. The HTTP response ends after the trailer frame.
+Direct mode protobuf-encodes each router result and emits it as a `0x00`
+gRPC-Web data frame. Forward mode converts each backend grpc-js `data` event
+into the same frame. Both modes emit a final `0x80` in-body status trailer and
+then end the HTTP response. Each frame is written raw for binary mode or
+independently base64-encoded for text mode.
 
 grpc-js removes native gRPC message compression before invoking the handler's
 `data` callback. The handler therefore emits uncompressed `0x00` Web response
@@ -469,6 +521,10 @@ Current operational limitations:
 - Actual origin validation and response exposure headers.
 - String request metadata and gRPC status metadata.
 - Fetch abort and browser-response-close cancellation propagation.
+
+`src/web/server_test.ts` covers direct and forwarding `serveGrpcWeb` modes,
+unary and server-streaming calls in raw and base64 modes, gzip requests,
+browser cancellation, and listener shutdown.
 
 `src/web/fetch_call_test.ts` covers compressed raw and base64 responses, mixed
 compressed and uncompressed streams, arbitrary base64 transport chunks,
