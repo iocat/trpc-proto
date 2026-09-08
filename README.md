@@ -277,7 +277,7 @@ tracks the remaining transport work.
 | P0 | Boundary | Not implemented | Limit request-body size and restrict forwarded gRPC service/method paths. | Oversized bodies and unknown methods are rejected before a backend gRPC call. |
 | P1 | HTTP | Partial | Add and test HTTP/2 browser ingress; HTTP/1.1 is supported. | The same unary and streaming suite passes over both ingress protocols. |
 | P1 | Metadata | Partial | Support binary `*-bin` metadata and configurable request/response header forwarding; string metadata is supported. | Binary metadata round-trips; hop-by-hop and disallowed headers never cross the boundary. |
-| P1 | Status | Not implemented | Percent-decode `grpc-message` and validate final status syntax. | Encoded error messages and malformed status values have interoperability tests. |
+| P1 | Status | Partial | Percent-decode received `grpc-message` values and strictly validate `grpc-status`; outbound message encoding and missing-final-status rejection are implemented. | Encoded error messages and malformed status values have interoperability tests. |
 | P1 | Connections | Partial | Add client lifecycle cleanup and explicit pooling for multiple backend targets; one client is currently reused. | Channels are reused, bounded, observable, and closed deterministically. |
 | P2 | Resilience | Not implemented | Add circuit breaking, active health checks, and rate limiting. | Each policy is configurable and covered by failure/recovery scenarios. |
 | P2 | Observability | Not implemented | Add structured access logs and request, latency, status, stream, and backend metrics. | Operators can attribute failures and saturation to route and backend. |

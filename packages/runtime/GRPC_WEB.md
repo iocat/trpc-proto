@@ -303,10 +303,11 @@ Transport outcomes:
 | Rejected CORS origin or header | `403` | No backend gRPC call. |
 | Rejected preflight method | `405` | `POST` reported as the allowed method. |
 
-For buffered unary responses, a missing status trailer currently defaults to
-status `0` when the HTTP response is successful. For streaming responses, EOF
-without a trailer currently ends the iterator without an error. Strict final
-status enforcement remains backlog work.
+For both unary and streaming responses, EOF without a trailer is rejected as a
+missing final status. A trailer that omits `grpc-status` currently defaults to
+status `0`, and non-canonical values are coerced with `Number(...)` instead of
+being strictly parsed. Duplicate trailers and data after trailers are not
+strictly rejected.
 
 ## CORS behavior
 
