@@ -7,6 +7,7 @@ import {
   type RuntimeProcedure,
   type TranslateOptions,
 } from './trpc_schema.js';
+import { zAsyncIterable } from '../zod/async_iterable.js';
 import type {
   ProcedureType,
   PropertyGenCache,
@@ -537,7 +538,9 @@ const cases: TranslateCase[] = [
     procedures: [
       proc('note.onChange', {
         type: 'subscription',
-        output: z.object({ id: z.string(), body: z.string() }),
+        output: zAsyncIterable({
+          yield: z.object({ id: z.string(), body: z.string() }),
+        }),
       }),
     ],
     expected: `

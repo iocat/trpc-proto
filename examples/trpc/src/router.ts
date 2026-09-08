@@ -1,10 +1,6 @@
 import { EventEmitter, on } from 'node:events';
-import {
-  initTRPC,
-  TRPCError,
-  type TRPCSubscriptionProcedure,
-} from '@trpc/server';
-import type { ProtoMeta } from '@trpc-proto/runtime';
+import { initTRPC, TRPCError } from '@trpc/server';
+import { zAsyncIterable, type ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
 
 const t = initTRPC.meta<ProtoMeta>().create({
@@ -41,21 +37,6 @@ async function* subscribeToNotes({
   for await (const [note] of events) yield note;
 }
 
-type NoteSubscription = TRPCSubscriptionProcedure<{
-  input: Record<string, never>;
-  output: AsyncIterable<NoteRecord, void, unknown>;
-  meta: ProtoMeta;
-}>;
-
-const noteSubscription = t.procedure
-  .input(z.object({}))
-  .output(Note)
-  .subscription(
-    subscribeToNotes as unknown as (options: {
-      signal?: AbortSignal;
-    }) => NoteRecord,
-  ) as unknown as NoteSubscription;
-
 export const appRouter = t.router({
   health: t.procedure
     .output(z.object({ ok: z.boolean() }))
@@ -90,7 +71,10 @@ export const appRouter = t.router({
         return note;
       }),
 
-    onChange: noteSubscription,
+    onChange: t.procedure
+      .input(z.object({}))
+      .output(zAsyncIterable({ yield: Note }))
+      .subscription(subscribeToNotes),
   }),
 });
 

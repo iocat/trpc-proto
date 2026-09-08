@@ -1,5 +1,3 @@
-import type { TRPCSubscriptionProcedure } from '@trpc/server';
-
 /**
  * Empty procedure body. tRPC requires a resolver; `.input()` / `.output()`
  * are the contract. A non-TS service that implements the generated proto
@@ -12,23 +10,11 @@ export function noopForNonTsBackend<T>(_opts?: unknown): T {
   return undefined as T;
 }
 
-interface NoopSubscriptionBuilder<TOutput> {
-  subscription(resolver: (_options?: unknown) => TOutput): unknown;
-}
-
 /**
- * Creates a typed, empty-input subscription for a non-TypeScript backend.
+ * Empty subscription body for a non-TypeScript backend.
  */
-export function noopSubscriptionForNonTsBackend<
-  TOutput,
-  TInput = Record<string, never>,
->(
-  builder: NoopSubscriptionBuilder<TOutput>,
-): TRPCSubscriptionProcedure<{
-  input: TInput;
-  output: AsyncIterable<TOutput, void, unknown>;
-  meta: unknown;
-}> {
-  return builder.subscription(noopForNonTsBackend<TOutput>) as never;
+export function noopSubscriptionForNonTsBackend<T>(
+  _opts?: unknown,
+): AsyncIterable<T> {
+  return undefined as unknown as AsyncIterable<T>;
 }
-

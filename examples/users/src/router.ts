@@ -3,7 +3,7 @@ import {
   noopForNonTsBackend,
   noopSubscriptionForNonTsBackend,
 } from '@trpc-proto/runtime/noop';
-import type { ProtoMeta } from '@trpc-proto/runtime';
+import { zAsyncIterable, type ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
 
 const t = initTRPC.meta<ProtoMeta>().create({
@@ -30,7 +30,6 @@ const Address = z
 const Role = z
   .enum(['admin', 'member', 'guest'])
   .meta({ protoEnumName: 'UserRole' });
-
 
 const User = z
   .object({
@@ -88,7 +87,6 @@ const IssueStatus = z
 const IssuePriority = z
   .enum(['none', 'low', 'medium', 'high', 'urgent'])
   .meta({ protoEnumName: 'IssuePriority' });
-
 
 const Issue = z
   .object({
@@ -181,7 +179,6 @@ const TeamMemberInput = z.object({
   userId: z.string(),
 });
 
-
 /** Schema-only. Resolvers are noops; a proto backend implements the RPCs. */
 export const appRouter = t.router({
   health: t.procedure.output(HealthOutput).query(noopForNonTsBackend),
@@ -245,9 +242,10 @@ export const appRouter = t.router({
       .output(Issue)
       .mutation(noopForNonTsBackend),
 
-    onChange: noopSubscriptionForNonTsBackend<z.infer<typeof Issue>>(
-      t.procedure.input(z.object({})).output(Issue),
-    ),
+    onChange: t.procedure
+      .input(z.object({}))
+      .output(zAsyncIterable({ yield: Issue }))
+      .subscription(noopSubscriptionForNonTsBackend),
   }),
 
   team: t.router({

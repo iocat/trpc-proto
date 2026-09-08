@@ -15,6 +15,7 @@ import {
   wellKnownKind,
 } from '../ir/wellknown.js';
 import { asRuntime, type ZodRuntime } from './zod_node.js';
+import { asyncIterableYieldSchema } from '../zod/async_iterable.js';
 
 
 
@@ -559,8 +560,12 @@ class TrpcSchemaTranslator {
         procedure.input,
         `${service}${method}Request`,
       );
+      const output =
+        procedure.type === 'subscription'
+          ? (asyncIterableYieldSchema(procedure.output) ?? procedure.output)
+          : procedure.output;
       const responseType = this.#rpcMessageType(
-        procedure.output,
+        output,
         `${service}${method}Response`,
       );
       const methods = services.get(service) ?? [];

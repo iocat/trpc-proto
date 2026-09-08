@@ -45,17 +45,6 @@ function bindStubHandlers(schema: ProtoSchema, invoke: Invoker): StubHandlers {
 type Procedure = {
   _def: {
     type: 'query' | 'mutation' | 'subscription';
-    resolver?: (opts: {
-      ctx: unknown;
-      input: unknown;
-      path: string;
-      type: 'subscription';
-      signal?: AbortSignal;
-    }) => unknown;
-    inputs?: Array<{
-      parseAsync?: (value: unknown) => Promise<unknown>;
-      parse?: (value: unknown) => unknown;
-    }>;
   };
   (opts: {
     path: string;
@@ -82,24 +71,6 @@ function createInvoker(
       });
     }
     const ctx = opts?.createContext ? await opts.createContext() : {};
-    if (
-      procedure._def.type === 'subscription' &&
-      typeof procedure._def.resolver === 'function'
-    ) {
-      let input = request.input;
-      for (const parser of procedure._def.inputs ?? []) {
-        input = parser.parseAsync
-          ? await parser.parseAsync(input)
-          : parser.parse?.(input);
-      }
-      return procedure._def.resolver({
-        ctx,
-        input,
-        path: request.path,
-        type: 'subscription',
-        signal: request.signal,
-      });
-    }
     return procedure({
       path: request.path,
       getRawInput: async () => request.input,

@@ -18,4 +18,5 @@ export type {
 export { grpcWebLink } from './web/link.js';
 export type { GrpcWebLinkOptions } from './web/link.js';
 export type { GrpcWebEncoding } from './web/content_type.js';
+export { zAsyncIterable } from '@trpc-proto/schema_ir';
 export type { ProtoMeta, ProtoSchema } from '@trpc-proto/schema_ir';

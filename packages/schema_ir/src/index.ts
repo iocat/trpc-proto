@@ -49,3 +49,4 @@ export {
   schemaFromRouter,
   translate,
 } from './translate/trpc_schema.js';
+export { zAsyncIterable } from './zod/async_iterable.js';

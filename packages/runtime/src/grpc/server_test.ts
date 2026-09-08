@@ -8,7 +8,11 @@ import {
   createProtoStub,
   serveGrpc,
 } from './server.js';
-import { schemaFromRouter, type ProtoMeta } from '@trpc-proto/schema_ir';
+import {
+  schemaFromRouter,
+  zAsyncIterable,
+  type ProtoMeta,
+} from '@trpc-proto/schema_ir';
 
 describe('bindRouter', () => {
   it('calls tRPC procedures by proto service method', async () => {
@@ -24,6 +28,32 @@ describe('bindRouter', () => {
     const stubs = bindRouter(router, { schema: schemaFromRouter(router) });
     const out = await stubs.AppService.Hello({ name: 'Ada' });
     assert.deepEqual(out, { message: 'hello Ada' });
+  });
+
+  it('validates subscription yields through tRPC middleware', async () => {
+    const t = initTRPC.meta<ProtoMeta>().create({
+      defaultMeta: { proto: { package: 'demo.v1' } },
+    });
+    const router = t.router({
+      ticks: t.procedure
+        .output(zAsyncIterable({ yield: z.object({ n: z.int() }) }))
+        .subscription(async function* () {
+          yield { n: 1.5 };
+        }),
+    });
+    const stubs = bindRouter(router, { schema: schemaFromRouter(router) });
+    const result = await stubs.AppService.Ticks({});
+    if (
+      result === null ||
+      typeof result !== 'object' ||
+      !(Symbol.asyncIterator in result)
+    ) {
+      throw new Error('expected async iterable');
+    }
+    const iterator = (
+      result as AsyncIterable<unknown>
+    )[Symbol.asyncIterator]();
+    await assert.rejects(iterator.next());
   });
 });
 
@@ -61,7 +91,7 @@ describe('serveGrpc', () => {
     });
     const router = t.router({
       ticks: t.procedure
-        .output(z.object({ n: z.int() }))
+        .output(zAsyncIterable({ yield: z.object({ n: z.int() }) }))
         .subscription(async function* () {
           yield { n: 1 };
           yield { n: 2 };

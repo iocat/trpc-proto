@@ -59,6 +59,7 @@ Prevalidate collects every issue, then aborts on errors (no stack). Generate pri
 | `z.record` of any/unknown | `google.protobuf.Struct` |
 | void / undefined / never / null input or output | `google.protobuf.Empty` |
 | `z.optional` / `z.nullable` | `optional` field |
+| `zAsyncIterable({ yield: schema })` | server stream; protobuf response uses `schema` |
 
 Rejected (translate throws): open unions, mixed-type literals, mixed int/float literals, non-PascalCase `protoMessageName` / `protoEnumName`, non-scalar map keys, anything else `Unsupported Zod type`.
 
@@ -84,7 +85,12 @@ pnpm build
 
 ```ts
 import { initTRPC } from '@trpc/server';
-import { noopForNonTsBackend, type ProtoMeta } from '@trpc-proto/runtime';
+import {
+  noopForNonTsBackend,
+  noopSubscriptionForNonTsBackend,
+  zAsyncIterable,
+  type ProtoMeta,
+} from '@trpc-proto/runtime';
 import { z } from 'zod';
 
 const t = initTRPC.meta<ProtoMeta>().create({
@@ -116,13 +122,17 @@ export const appRouter = t.router({
       .input(z.object({ id: z.string() }))
       .output(User)
       .query(noopForNonTsBackend),
+
+    onChange: t.procedure
+      .output(zAsyncIterable({ yield: User }))
+      .subscription(noopSubscriptionForNonTsBackend),
   }),
 });
 
 export type AppRouter = typeof appRouter;
 ```
 
-`noopForNonTsBackend` is a schema-only resolver. Use it when another service implements the generated proto. For a TypeScript backend, implement real resolvers and use `serveGrpc` or `bindRouter` below.
+`noopForNonTsBackend` and `noopSubscriptionForNonTsBackend` are schema-only resolvers. Use them when another service implements the generated proto. For a TypeScript subscription, pass an async-generator resolver as documented by tRPC; `zAsyncIterable` validates each yield and exposes its item schema to protobuf generation.
 
 The plugin evaluates `export const appRouter` (the runtime value, not the type) so it can read the Zod parsers.
 
