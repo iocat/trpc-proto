@@ -167,8 +167,8 @@ export function createProtoLink<TRouter extends AnyRouter>(
         }
 
         const execute = compose(interceptors, invoke);
-        void execute(ctx).then(
-          async (data) => {
+        void execute(ctx)
+          .then(async (data) => {
             if (isAsyncIterable(data)) {
               for await (const item of data) {
                 if (ac.signal.aborted) break;
@@ -182,11 +182,12 @@ export function createProtoLink<TRouter extends AnyRouter>(
             }
             observer.next({ result: { type: 'data', data } });
             observer.complete();
-          },
-          (cause) => {
-            observer.error(TRPCClientError.from(cause));
-          },
-        );
+          })
+          .catch((cause) => {
+            if (!ac.signal.aborted) {
+              observer.error(TRPCClientError.from(cause));
+            }
+          });
 
         return () => ac.abort();
       });

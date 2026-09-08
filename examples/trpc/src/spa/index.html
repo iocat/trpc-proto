@@ -3,34 +3,73 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CH-03 · trpc</title>
+    <meta name="theme-color" content="#090a12" />
+    <title>Protocol Studio · trpc.v1</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="frame">
-      <header>
-        <div>
-          <p class="kicker">ch-03 · protobuf plotter</p>
-          <h1>trpc.v1</h1>
-          <p>browser → gRPC-Web → TypeScript tRPC</p>
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#/echo" aria-label="Protocol Studio home">
+          <span class="brand-mark">t/</span>
+          <span>
+            <strong>Protocol Studio</strong>
+            <small>trpc.v1 workspace</small>
+          </span>
+        </a>
+
+        <p class="nav-label">Playground</p>
+        <nav aria-label="Procedures">
+          <a href="#/echo">
+            <span class="nav-glyph">↗</span>
+            <span>Echo console</span>
+            <small>01</small>
+          </a>
+          <a href="#/notes">
+            <span class="nav-glyph">N</span>
+            <span>Notes</span>
+            <small>02</small>
+          </a>
+          <a href="#/stream">
+            <span class="nav-glyph">≈</span>
+            <span>Live stream</span>
+            <small>03</small>
+          </a>
+        </nav>
+
+        <div class="sidebar-space"></div>
+        <div class="connection-card">
+          <div class="connection-heading">
+            <span class="signal-dot" aria-hidden="true"></span>
+            <span>All systems operational</span>
+          </div>
+          <p>Browser → gRPC-Web<br />→ TypeScript tRPC</p>
         </div>
-        <div class="auth">
-          <div class="lamp" aria-hidden="true"></div>
-          <div id="status">connecting…</div>
-        </div>
-      </header>
-      <nav>
-        <a href="#/echo">01 echo</a>
-        <a href="#/notes">02 notes</a>
-        <a href="#/stream">03 stream</a>
-      </nav>
-      <main id="app"></main>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div class="breadcrumb">
+            <span>trpc.v1</span>
+            <i>/</i>
+            <strong id="route-label">echo</strong>
+          </div>
+          <div class="connection-pill">
+            <span class="signal-dot" aria-hidden="true"></span>
+            <span id="status">connecting…</span>
+            <i>HTTP/2</i>
+          </div>
+        </header>
+        <main id="app"></main>
+      </section>
     </div>
     <script src="/app.js"></script>
   </body>
