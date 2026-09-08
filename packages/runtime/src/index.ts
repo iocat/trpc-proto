@@ -1,7 +1,4 @@
-export {
-  noopForNonTsBackend,
-  noopSubscriptionForNonTsBackend,
-} from './noop.js';
+export { noopForNonTsBackend } from './noop.js';
 export { grpcLink } from './grpc/link.js';
 export type { AuthConfig, GrpcLinkOptions } from './grpc/link.js';
 export { bindRouter, serveGrpc } from './grpc/server.js';

@@ -87,7 +87,6 @@ pnpm build
 import { initTRPC } from '@trpc/server';
 import {
   noopForNonTsBackend,
-  noopSubscriptionForNonTsBackend,
   zAsyncIterable,
   type ProtoMeta,
 } from '@trpc-proto/runtime';
@@ -125,14 +124,14 @@ export const appRouter = t.router({
 
     onChange: t.procedure
       .output(zAsyncIterable({ yield: User }))
-      .subscription(noopSubscriptionForNonTsBackend),
+      .subscription(noopForNonTsBackend),
   }),
 });
 
 export type AppRouter = typeof appRouter;
 ```
 
-`noopForNonTsBackend` and `noopSubscriptionForNonTsBackend` are schema-only resolvers. Use them when another service implements the generated proto. For a TypeScript subscription, pass an async-generator resolver as documented by tRPC; `zAsyncIterable` validates each yield and exposes its item schema to protobuf generation.
+`noopForNonTsBackend` is a schema-only resolver for queries, mutations, and subscriptions. Use it when another service implements the generated proto. For a TypeScript subscription, pass an async-generator resolver as documented by tRPC; `zAsyncIterable` validates each yield and exposes its item schema to protobuf generation.
 
 The plugin evaluates `export const appRouter` (the runtime value, not the type) so it can read the Zod parsers.
 

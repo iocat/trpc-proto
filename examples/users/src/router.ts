@@ -1,8 +1,5 @@
 import { initTRPC } from '@trpc/server';
-import {
-  noopForNonTsBackend,
-  noopSubscriptionForNonTsBackend,
-} from '@trpc-proto/runtime/noop';
+import { noopForNonTsBackend } from '@trpc-proto/runtime/noop';
 import { zAsyncIterable, type ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
 
@@ -245,7 +242,7 @@ export const appRouter = t.router({
     onChange: t.procedure
       .input(z.object({}))
       .output(zAsyncIterable({ yield: Issue }))
-      .subscription(noopSubscriptionForNonTsBackend),
+      .subscription(noopForNonTsBackend),
   }),
 
   team: t.router({

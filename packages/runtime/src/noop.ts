@@ -9,12 +9,3 @@
 export function noopForNonTsBackend<T>(_opts?: unknown): T {
   return undefined as T;
 }
-
-/**
- * Empty subscription body for a non-TypeScript backend.
- */
-export function noopSubscriptionForNonTsBackend<T>(
-  _opts?: unknown,
-): AsyncIterable<T> {
-  return undefined as unknown as AsyncIterable<T>;
-}
