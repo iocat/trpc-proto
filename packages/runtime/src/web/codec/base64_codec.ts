@@ -2,7 +2,7 @@ import {
   codecChunks,
   type Codec,
   type CodecInput,
-  type IncrementalCodec,
+  type IncrementalDecoder,
 } from './codec.js';
 
 const BINARY_STRING_CHUNK_SIZE = 0x4000;
@@ -18,7 +18,7 @@ function decodeBase64Segment(encoded: string): Uint8Array {
   return out;
 }
 
-class TextDecoder implements IncrementalCodec<string, Uint8Array> {
+class TextDecoder implements IncrementalDecoder<string, Uint8Array> {
   #pending = '';
 
   push(chunk: string): readonly Uint8Array[] {

@@ -30,7 +30,7 @@ export interface Codec<Value, Encoded, Options = undefined> {
  *
  * @internal
  */
-export interface IncrementalCodec<Chunk, Value> {
+export interface IncrementalDecoder<Chunk, Value> {
   /** Consume one chunk and return zero or more newly completed values. */
   push(chunk: Chunk): readonly Value[];
 

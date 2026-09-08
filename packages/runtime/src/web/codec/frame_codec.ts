@@ -3,7 +3,7 @@ import {
   codecChunks,
   type Codec,
   type CodecInput,
-  type IncrementalCodec,
+  type IncrementalDecoder,
 } from './codec.js';
 
 const TRAILER_FLAG = 0x80;
@@ -85,7 +85,7 @@ function encodeGrpcMessage(value: string) {
 
 
 class FrameDecoder
-  implements IncrementalCodec<Uint8Array, GrpcWebFrame>
+  implements IncrementalDecoder<Uint8Array, GrpcWebFrame>
 {
   #buffer = new Uint8Array();
 
