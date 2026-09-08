@@ -27,8 +27,8 @@ type NoteRecord = RouterOutputs['note']['get'];
 const edits: Array<NoteRecord & { at: string }> = [];
 let sub: { unsubscribe(): void } | undefined;
 
-function paintStream() {
-  const out = $('stream-out');
+function paintStream(): void {
+  const out = document.getElementById('stream-out');
   if (!out) return;
   out.textContent = edits.length
     ? JSON.stringify(edits, null, 2)
