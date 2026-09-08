@@ -266,20 +266,21 @@ See the [gRPC-Web runtime protocol](packages/runtime/GRPC_WEB.md) for the implem
 ## gRPC-Web backlog
 
 The current HTTP handler supports raw and base64 unary calls, server streaming,
-and opt-in gzip request-message compression through one reused grpc-js client.
-This table tracks the remaining transport work.
+opt-in gzip request-message compression, one reused grpc-js client, and
+browser-connection cancellation propagated to the backend gRPC call. This table
+tracks the remaining transport work.
 
-| Priority | Area | Backlog item | Acceptance |
-| --- | --- | --- | --- |
-| P0 | Framing | Validate unknown frame flags and reject data after trailers. | Malformed framing has table-driven negative tests; trailers are always final. |
-| P0 | Cancellation | Parse `grpc-timeout`, apply an upstream deadline, and cancel the grpc-js call when the browser disconnects or aborts. | Deadline and disconnect tests observe cancellation at the backend. |
-| P0 | Boundary | Limit request-body size and restrict forwarded gRPC service/method paths. | Oversized bodies and unknown methods are rejected before an upstream call. |
-| P1 | HTTP | Support and test HTTP/1.1 and HTTP/2 browser ingress. | The same unary and streaming suite passes over both ingress protocols. |
-| P1 | Metadata | Support binary `*-bin` metadata and configurable request/response header forwarding. | Binary metadata round-trips; hop-by-hop and disallowed headers never cross the boundary. |
-| P1 | Status | Percent-decode `grpc-message` and validate final status syntax. | Encoded error messages and malformed status values have interoperability tests. |
-| P1 | Connections | Add client lifecycle cleanup and explicit pooling for multiple upstream targets. | Channels are reused, bounded, observable, and closed deterministically. |
-| P2 | Resilience | Add circuit breaking, active health checks, and rate limiting. | Each policy is configurable and covered by failure/recovery scenarios. |
-| P2 | Observability | Add structured access logs and request, latency, status, stream, and upstream metrics. | Operators can attribute failures and saturation to route and upstream. |
+| Priority | Area | State | Remaining work | Acceptance |
+| --- | --- | --- | --- | --- |
+| P0 | Framing | Not implemented | Validate unknown frame flags and reject data after trailers. | Malformed framing has table-driven negative tests; trailers are always final. |
+| P0 | Deadlines | Not implemented | Parse `grpc-timeout` and apply a deadline to the backend gRPC call. | Deadline tests observe cancellation at the backend. |
+| P0 | Boundary | Not implemented | Limit request-body size and restrict forwarded gRPC service/method paths. | Oversized bodies and unknown methods are rejected before a backend gRPC call. |
+| P1 | HTTP | Partial | Add and test HTTP/2 browser ingress; HTTP/1.1 is supported. | The same unary and streaming suite passes over both ingress protocols. |
+| P1 | Metadata | Partial | Support binary `*-bin` metadata and configurable request/response header forwarding; string metadata is supported. | Binary metadata round-trips; hop-by-hop and disallowed headers never cross the boundary. |
+| P1 | Status | Not implemented | Percent-decode `grpc-message` and validate final status syntax. | Encoded error messages and malformed status values have interoperability tests. |
+| P1 | Connections | Partial | Add client lifecycle cleanup and explicit pooling for multiple backend targets; one client is currently reused. | Channels are reused, bounded, observable, and closed deterministically. |
+| P2 | Resilience | Not implemented | Add circuit breaking, active health checks, and rate limiting. | Each policy is configurable and covered by failure/recovery scenarios. |
+| P2 | Observability | Not implemented | Add structured access logs and request, latency, status, stream, and backend metrics. | Operators can attribute failures and saturation to route and backend. |
 
 ## Examples
 
