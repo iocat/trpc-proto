@@ -1,5 +1,10 @@
 import { assumeExhaustive, concat } from '@trpc-proto/utility';
-import { codecChunks, type Codec, type CodecInput } from './codec.js';
+import {
+  codecChunks,
+  type Codec,
+  type CodecInput,
+  type IncrementalCodec,
+} from './codec.js';
 
 const TRAILER_FLAG = 0x80;
 const COMPRESSED_FLAG = 0x01;
@@ -79,7 +84,9 @@ function encodeGrpcMessage(value: string) {
 }
 
 
-class FrameDecoder {
+class FrameDecoder
+  implements IncrementalCodec<Uint8Array, GrpcWebFrame>
+{
   #buffer = new Uint8Array();
 
   push(chunk: Uint8Array): readonly GrpcWebFrame[] {
