@@ -14,6 +14,7 @@ type IssueUpdate = RouterInputs['issue']['update'];
 type IssueStatus = IssueRecord['status'];
 type IssuePriority = IssueRecord['priority'];
 type UserRole = UserRecord['role'];
+type IssueViewMode = 'list' | 'board';
 
 function $(id: string): HTMLInputElement {
   const element = document.getElementById(id);
@@ -60,6 +61,11 @@ let teams: TeamRecord[] = [];
 let stats: WorkspaceStatsRecord | null = null;
 let flashId: string | null = null;
 let sub: { unsubscribe(): void } | undefined;
+let issueQuery = '';
+let issuePriorityFilter: IssuePriority | '' = '';
+let issueAssigneeFilter = '';
+let issueViewMode: IssueViewMode =
+  localStorage.getItem('issue-view') === 'board' ? 'board' : 'list';
 
 function enumTail(value: unknown, prefix: string): string {
   if (value == null) return '';
@@ -203,15 +209,99 @@ function filtered(
   }
   if (status) list = list.filter((issue) => issueStatus(issue) === status);
   if (teamId) list = list.filter((issue) => issue.teamId === teamId);
+  if (issuePriorityFilter) {
+    list = list.filter(
+      (issue) => issuePriority(issue) === issuePriorityFilter,
+    );
+  }
+  if (issueAssigneeFilter) {
+    list = list.filter(
+      (issue) => issue.assigneeId === issueAssigneeFilter,
+    );
+  }
+  const query = issueQuery.trim().toLowerCase();
+  if (query) {
+    list = list.filter((issue) => {
+      const assignee = userById(issue.assigneeId)?.name || '';
+      const team = teamById(issue.teamId);
+      return [
+        issue.id,
+        issue.title,
+        issue.description,
+        assignee,
+        team?.key,
+        team?.name,
+      ].some((value) => String(value || '').toLowerCase().includes(query));
+    });
+  }
   return list;
 }
 
 function bindRows(root: HTMLElement): void {
-  root.querySelectorAll<HTMLElement>('.issue-row').forEach((row) => {
-    row.onclick = () => {
-      location.hash = `#/issues/${row.dataset.id}`;
-    };
-  });
+  root
+    .querySelectorAll<HTMLElement>('.issue-row, .issue-card')
+    .forEach((row) => {
+      row.onclick = () => {
+        location.hash = `#/issues/${row.dataset.id}`;
+      };
+    });
+}
+
+function issueCard(issue: IssueRecord, index: number): string {
+  const person = userById(issue.assigneeId);
+  const team = teamById(issue.teamId);
+  const priority = issuePriority(issue);
+  return `<article class="issue-card${flashId === issue.id ? ' flash' : ''}" data-id="${issue.id}" draggable="true" style="animation-delay:${Math.min(index, 8) * 24}ms">
+    <div class="card-meta">
+      <span>${team ? escapeHtml(team.key) : 'NO TEAM'} · ${escapeHtml(issue.id)}</span>
+      ${prioBars(priority)}
+    </div>
+    <strong>${escapeHtml(issue.title)}</strong>
+    <p>${escapeHtml(issue.description || 'No description')}</p>
+    <div class="card-foot">
+      <span class="priority-label ${priority}">${PRIORITY_LABEL[priority]}</span>
+      ${
+        person
+          ? `<span class="avatar" style="background:${colorFor(person.id)}">${initials(person.name)}</span>`
+          : '<span class="unassigned">Unassigned</span>'
+      }
+    </div>
+  </article>`;
+}
+
+function issueBoard(list: IssueRecord[]): string {
+  return `<div class="issue-board">${STATUS.map((status) => {
+    const rows = list.filter((issue) => issueStatus(issue) === status);
+    return `<section class="board-column" data-status="${status}">
+      <header><span class="status-dot ${status}"></span><strong>${STATUS_LABEL[status]}</strong><em>${rows.length}</em></header>
+      <div class="board-drop">${rows.map(issueCard).join('') || '<span class="column-empty">Drop an issue here</span>'}</div>
+    </section>`;
+  }).join('')}</div>`;
+}
+
+function issueMetrics(list: IssueRecord[]): string {
+  const completed = list.filter((issue) => issueStatus(issue) === 'done').length;
+  const completion = list.length
+    ? Math.round((completed / list.length) * 100)
+    : 0;
+  const values = [
+    ['Open', list.length - completed],
+    [
+      'In progress',
+      list.filter((issue) => issueStatus(issue) === 'in_progress').length,
+    ],
+    [
+      'Urgent',
+      list.filter((issue) => issuePriority(issue) === 'urgent').length,
+    ],
+    ['Completion', `${completion}%`],
+  ];
+  return `<div class="issue-metrics">${values
+    .map(
+      ([label, value], index) =>
+        `<div><span>${label}</span><strong class="metric-${index}">${value}</strong></div>`,
+    )
+    .join('')}</div>`;
 }
 
 function listView(view: string, teamId?: string): string {
@@ -226,19 +316,135 @@ function listView(view: string, teamId?: string): string {
       return `<a class="chip${on}" href="${href}">${label}</a>`;
     })
     .join('');
-  if (view === 'issues') {
-    const groups = STATUS.map((key) => {
-      const rows = list.filter((issue) => issueStatus(issue) === key);
-      if (!rows.length) return '';
-      return `<div class="group">${STATUS_LABEL[key]} · ${rows.length}</div>${rows.map(issueRow).join('')}`;
-    }).join('');
-    return `<div class="toolbar">${chips}</div>${groups || '<div class="empty">No issues yet</div>'}`;
+  const groups = STATUS.map((key) => {
+    const rows = list.filter((issue) => issueStatus(issue) === key);
+    if (!rows.length) return '';
+    return `<div class="group">${STATUS_LABEL[key]} · ${rows.length}</div>${rows.map(issueRow).join('')}`;
+  }).join('');
+  const priorityOptions = `<option value="">Any priority</option>${optionList(
+    PRIORITY,
+    PRIORITY_LABEL,
+    issuePriorityFilter,
+  )}`;
+  const assigneeOptions = `<option value="">Any assignee</option>${users
+    .map(
+      (user) =>
+        `<option value="${user.id}"${user.id === issueAssigneeFilter ? ' selected' : ''}>${escapeHtml(user.name)}</option>`,
+    )
+    .join('')}`;
+
+  return `<section class="issues-screen">
+    ${
+      view === 'issues' && !teamId
+        ? `<div class="issue-hero"><div><span>Workspace overview</span><h1>Issues that move work forward.</h1><p>Filter, plan, and update delivery without leaving the workspace.</p></div></div>${issueMetrics(filtered(view))}`
+        : ''
+    }
+    <div class="issue-controls">
+      <div class="toolbar">${chips}</div>
+      <div class="filter-tools">
+        <label class="issue-search"><span>⌕</span><input id="issue-search" value="${escapeHtml(issueQuery)}" placeholder="Search title, ID, team, assignee…" /></label>
+        <select id="filter-priority" aria-label="Filter by priority">${priorityOptions}</select>
+        <select id="filter-assignee" aria-label="Filter by assignee">${assigneeOptions}</select>
+        <button class="clear-filters" id="clear-filters" type="button">Clear</button>
+        <div class="view-switch" aria-label="Issue view">
+          <button type="button" data-mode="list" class="${issueViewMode === 'list' ? 'on' : ''}">List</button>
+          <button type="button" data-mode="board" class="${issueViewMode === 'board' ? 'on' : ''}">Board</button>
+        </div>
+      </div>
+      <div class="result-count">${list.length} result${list.length === 1 ? '' : 's'} · live</div>
+    </div>
+    ${
+      issueViewMode === 'board'
+        ? issueBoard(list)
+        : groups || '<div class="empty">No issues match these filters</div>'
+    }
+  </section>`;
+}
+
+function bindIssueTools(root: HTMLElement): void {
+  const search = root.querySelector<HTMLInputElement>('#issue-search');
+  const priority =
+    root.querySelector<HTMLSelectElement>('#filter-priority');
+  const assignee =
+    root.querySelector<HTMLSelectElement>('#filter-assignee');
+  const clear = root.querySelector<HTMLButtonElement>('#clear-filters');
+
+  if (search) {
+    search.oninput = () => {
+      issueQuery = search.value;
+      const cursor = search.selectionStart ?? search.value.length;
+      void render(false).then(() => {
+        const next = document.querySelector<HTMLInputElement>('#issue-search');
+        next?.focus();
+        next?.setSelectionRange(cursor, cursor);
+      });
+    };
   }
-  return `<div class="toolbar">${chips}</div>${
-    list.length
-      ? list.map(issueRow).join('')
-      : '<div class="empty">Inbox zero</div>'
-  }`;
+  if (priority) {
+    priority.onchange = () => {
+      issuePriorityFilter = priority.value as IssuePriority | '';
+      void render(false);
+    };
+  }
+  if (assignee) {
+    assignee.onchange = () => {
+      issueAssigneeFilter = assignee.value;
+      void render(false);
+    };
+  }
+  if (clear) {
+    clear.onclick = () => {
+      issueQuery = '';
+      issuePriorityFilter = '';
+      issueAssigneeFilter = '';
+      void render(false);
+    };
+  }
+  root.querySelectorAll<HTMLButtonElement>('.view-switch button').forEach(
+    (button) => {
+      button.onclick = () => {
+        issueViewMode = button.dataset.mode === 'board' ? 'board' : 'list';
+        localStorage.setItem('issue-view', issueViewMode);
+        void render(false);
+      };
+    },
+  );
+  root.querySelectorAll<HTMLElement>('.issue-card').forEach((card) => {
+    card.ondragstart = (event) => {
+      if (!card.dataset.id) return;
+      event.dataTransfer?.setData('text/plain', card.dataset.id);
+      event.dataTransfer?.setDragImage(card, 16, 16);
+      card.classList.add('dragging');
+    };
+    card.ondragend = () => card.classList.remove('dragging');
+  });
+  root.querySelectorAll<HTMLElement>('.board-column').forEach((column) => {
+    column.ondragover = (event) => {
+      event.preventDefault();
+      column.classList.add('drop-ready');
+    };
+    column.ondragleave = () => column.classList.remove('drop-ready');
+    column.ondrop = async (event) => {
+      event.preventDefault();
+      column.classList.remove('drop-ready');
+      const id = event.dataTransfer?.getData('text/plain');
+      const status = column.dataset.status;
+      const issue = issues.find((item) => item.id === id);
+      if (!id || !status || !issue || issueStatus(issue) === status) return;
+      try {
+        const updated = await api().issue.update.mutate({
+          id,
+          status: protoStatus(status),
+        });
+        const index = issues.findIndex((item) => item.id === updated.id);
+        if (index >= 0) issues[index] = updated;
+        await render(false);
+        ok(`moved to ${STATUS_LABEL[protoStatus(status)]}`);
+      } catch (err) {
+        fail(err);
+      }
+    };
+  });
 }
 
 function optionList<T extends string>(
@@ -277,13 +483,24 @@ function detailView(issue: IssueRecord | undefined): string {
   if (!issue) return `<div class="empty">Issue not found</div>`;
   const status = issueStatus(issue);
   const priority = issuePriority(issue);
+  const created = new Date(issue.createdAt).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
   return `<div class="detail">
-    <div>
-      <div class="id">${issue.id}</div>
-      <h1>${escapeHtml(issue.title)}</h1>
-      <textarea id="issue-desc">${escapeHtml(issue.description || '')}</textarea>
+    <div class="detail-main">
+      <div class="detail-kicker"><span class="id">${issue.id}</span><span>Created ${created}</span></div>
+      <input class="detail-title" id="issue-title" value="${escapeHtml(issue.title)}" aria-label="Issue title" />
+      <label class="field-label" for="issue-desc">Description</label>
+      <textarea id="issue-desc" placeholder="Add context, decisions, and acceptance criteria…">${escapeHtml(issue.description || '')}</textarea>
+      <div class="detail-actions">
+        <button class="primary" id="save-issue" type="button">Save changes</button>
+        <span>Properties save instantly</span>
+      </div>
     </div>
     <aside class="props">
+      <div class="props-heading"><span>Properties</span><i></i></div>
       <label>Status</label>
       <select id="issue-status">${optionList(STATUS, STATUS_LABEL, status)}</select>
       <label>Priority</label>
@@ -401,13 +618,15 @@ function teamPage(team: TeamRecord | null | undefined): string {
       </label>`
     : '';
 
-  return `<div class="hero">
+  return `<div class="hero team-hero">
       <div>
         <span class="key">${escapeHtml(team.key)}</span>
         <h1>${escapeHtml(team.name)}</h1>
         <p>${escapeHtml(team.description || '')}</p>
       </div>
+      <button class="tiny" id="edit-team" type="button">Edit team</button>
     </div>
+    <div class="team-summary"><span><b>${members.length}</b> members</span><span><b>${issues.filter((issue) => issue.teamId === team.id).length}</b> issues</span></div>
     <div class="members">${chips}${add}</div>
     ${listView('issues', team.id)}`;
 }
@@ -548,6 +767,38 @@ function openTeamComposer(): void {
       closeVeil();
       location.hash = `#/teams/${created.id}`;
       await render(true);
+    } catch (err) {
+      fail(err);
+    }
+  };
+}
+
+function openTeamEditor(team: TeamRecord): void {
+  const veil = $('veil');
+  veil.hidden = false;
+  veil.innerHTML = `<form class="sheet" id="edit-team-form">
+    <div class="sheet-heading"><div><span>Team settings</span><h2>Edit ${escapeHtml(team.name)}</h2></div><button class="sheet-close" type="button" aria-label="Close">×</button></div>
+    <label for="et-key">Team key</label>
+    <input id="et-key" value="${escapeHtml(team.key)}" required />
+    <label for="et-name">Name</label>
+    <input id="et-name" value="${escapeHtml(team.name)}" required />
+    <label for="et-desc">Description</label>
+    <textarea id="et-desc" placeholder="What this team owns">${escapeHtml(team.description || '')}</textarea>
+    <button class="primary" type="submit">Save team</button>
+  </form>`;
+  veil.querySelector<HTMLButtonElement>('.sheet-close')!.onclick = closeVeil;
+  $('edit-team-form').onsubmit = async (event) => {
+    event.preventDefault();
+    try {
+      await api().team.update.mutate({
+        id: team.id,
+        key: $('et-key').value,
+        name: $('et-name').value,
+        description: $('et-desc').value,
+      });
+      closeVeil();
+      await render(true);
+      ok('team updated');
     } catch (err) {
       fail(err);
     }
@@ -752,6 +1003,8 @@ async function render(reload = true): Promise<void> {
       view.innerHTML = teamPage(team);
       if (!team) return;
       bindRows(view);
+      bindIssueTools(view);
+      $('edit-team').onclick = () => openTeamEditor(team);
       const add = view.querySelector<HTMLSelectElement>('#add-member');
       if (add) {
         add.onchange = async () => {
@@ -827,6 +1080,13 @@ async function render(reload = true): Promise<void> {
       const assignee = $('issue-assignee');
       const team = $('issue-team');
       const description = $('issue-desc');
+      const title = $('issue-title');
+      $('save-issue').onclick = () =>
+        void save({
+          id,
+          title: title.value,
+          description: description.value,
+        });
       status.onchange = () =>
         void save({ id, status: protoStatus(status.value) });
       priority.onchange = () =>
@@ -834,13 +1094,21 @@ async function render(reload = true): Promise<void> {
       assignee.onchange = () =>
         void save({ id, assigneeId: assignee.value || '' });
       team.onchange = () => void save({ id, teamId: team.value || '' });
-      description.onchange = () =>
-        void save({ id, description: description.value });
+      title.onkeydown = (event) => {
+        if (
+          event.key === 'Enter' &&
+          (event.metaKey || event.ctrlKey)
+        ) {
+          event.preventDefault();
+          $('save-issue').click();
+        }
+      };
       return;
     }
     setCrumb(name === 'issues' ? 'All issues' : 'Inbox');
     view.innerHTML = listView(name === 'issues' ? 'issues' : 'inbox');
     bindRows(view);
+    bindIssueTools(view);
   } catch (err) {
     fail(err);
   }

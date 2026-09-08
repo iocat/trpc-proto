@@ -52,12 +52,24 @@
       <section class="stage">
         <header class="top">
           <div id="crumb">Inbox</div>
-          <button type="button" class="search-btn" id="search-btn">
-            Search issues, people, commands
+          <button
+            type="button"
+            class="search-btn"
+            id="search-btn"
+            aria-label="Search issues, people, and commands"
+          >
+            <span class="search-glyph" aria-hidden="true">⌕</span>
+            <span class="search-copy">Search issues, people, commands</span>
             <kbd>⌘K</kbd>
           </button>
           <div id="status">connecting</div>
         </header>
+        <nav class="mobile-nav" aria-label="Primary navigation">
+          <a href="#/inbox" data-nav="inbox">Inbox</a>
+          <a href="#/issues" data-nav="issues">Issues</a>
+          <a href="#/people" data-nav="people">People</a>
+          <a href="#/workspace" data-nav="workspace">Workspace</a>
+        </nav>
         <div id="view"></div>
       </section>
     </div>
