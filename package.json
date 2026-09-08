@@ -14,7 +14,8 @@
     "todo:generate": "pnpm --filter @trpc-proto/example-todo generate",
     "todo:server": "pnpm --filter @trpc-proto/example-todo run server",
     "trpc:generate": "pnpm --filter @trpc-proto/example-trpc generate",
-    "trpc:server": "pnpm --filter @trpc-proto/example-trpc run server"
+    "streaming:generate": "pnpm --filter @trpc-proto/example-streaming generate",
+    "streaming:server": "pnpm --filter @trpc-proto/example-streaming run server"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

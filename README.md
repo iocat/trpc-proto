@@ -265,6 +265,9 @@ await serveGrpcWeb({
 });
 ```
 
+Successful CORS preflights are browser-cached for 600 seconds by default.
+Configure `cors.maxAgeSeconds` to change the cache lifetime.
+
 Forward mode owns the same HTTP listener but sends calls to an existing gRPC
 backend:
 
@@ -319,5 +322,12 @@ TypeScript router:
 ```bash
 pnpm --filter @trpc-proto/example-trpc generate
 pnpm --filter @trpc-proto/example-trpc web      # UI :3002; direct gRPC-Web :3102
-pnpm --filter @trpc-proto/example-trpc server   # optional native gRPC :50053
+```
+
+Streaming AI chat with a Rust backend:
+
+```bash
+pnpm --filter @trpc-proto/example-streaming generate
+pnpm --filter @trpc-proto/example-streaming server  # Rust gRPC :50054
+pnpm --filter @trpc-proto/example-streaming web     # React UI :3003; forwarded gRPC-Web :3103
 ```
