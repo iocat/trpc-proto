@@ -281,8 +281,9 @@ The frame containing this block has flag `0x80`. Additional string grpc-js
 status metadata is copied into the block. Binary status metadata is currently
 omitted.
 
-`grpc-message` and additional values are percent-encoded when the handler
-writes trailers. The Fetch client does not yet percent-decode them.
+The handler percent-encodes `grpc-message` and additional values when it writes
+trailers. The Fetch client percent-decodes `grpc-message`; additional metadata
+values remain encoded.
 
 A final `grpc-status` is required for unary and streaming responses. When an
 intermediary returns a response without it, the Fetch transport applies the
@@ -304,9 +305,11 @@ Transport outcomes:
 | Rejected preflight method | `405` | `POST` reported as the allowed method. |
 
 For both unary and streaming responses, EOF without a trailer is rejected as a
-missing final status. A trailer that omits `grpc-status` currently defaults to
-status `0`, and non-canonical values are coerced with `Number(...)` instead of
-being strictly parsed. Duplicate trailers and data after trailers are not
+missing final status. `grpc-status` is required inside the trailer and must be
+an ASCII decimal status code from `0` through `16`; missing, malformed, and
+out-of-range values produce a `GrpcWebError` with status `UNKNOWN`.
+`grpc-message` is strictly percent-decoded, and malformed percent escapes also
+produce `UNKNOWN`. Duplicate trailers and data after trailers are not yet
 strictly rejected.
 
 ## CORS behavior
@@ -449,7 +452,8 @@ Current operational limitations:
 | Client streaming | Not supported |
 | Bidirectional streaming | Not supported |
 | HTTP/2 browser ingress | Not implemented or tested |
-| Strict trailer-last and final-status validation | Not supported |
+| Final-status presence and syntax validation | Supported |
+| Trailer-last and no-data-after-trailers validation | Not supported |
 | Binary metadata | Not supported |
 | Browser connection cancellation reaches backend gRPC call | Supported |
 | Multiple-backend pooling | Not supported |
@@ -468,14 +472,15 @@ Current operational limitations:
 
 `src/web/fetch_call_test.ts` covers compressed raw and base64 responses, mixed
 compressed and uncompressed streams, arbitrary base64 transport chunks,
-request compression headers, required final status, and the HTTP fallback
-mapping.
+request compression headers, received `grpc-message` percent-decoding, strict
+status validation, required final status, and the HTTP fallback mapping.
 
 `src/web/codec/compression_test.ts`, `src/web/content_type_test.ts`,
 `src/web/codec/frame_codec_test.ts`,
 `src/web/codec/protocol_codec_test.ts`, and
 `src/web/codec/base64_codec_test.ts` cover gzip round trips, compressed frame
 flags, content negotiation, raw frame boundaries, independently padded base64
-segments, arbitrary base64 transport boundaries, and malformed input.
+segments, received message decoding, strict status parsing, arbitrary base64
+transport boundaries, and malformed input.
 HTTP/2 ingress, strict trailer ordering, deadlines, and operational safeguards
 remain unimplemented.

@@ -21,6 +21,19 @@ async function decode(
   return values;
 }
 
+function rawTrailers(trailers: Record<string, string>): Uint8Array {
+  const payload = new TextEncoder().encode(
+    `${Object.entries(trailers)
+      .map(([name, value]) => `${name}: ${value}`)
+      .join('\r\n')}\r\n`,
+  );
+  const frame = new Uint8Array(5 + payload.byteLength);
+  frame[0] = 0x80;
+  new DataView(frame.buffer).setUint32(1, payload.byteLength);
+  frame.set(payload, 5);
+  return frame;
+}
+
 describe('gRPC-Web protocol codec', () => {
   it('round-trips raw messages and protected trailers', async () => {
     const message = await protocolCodec.encode(
@@ -54,6 +67,61 @@ describe('gRPC-Web protocol codec', () => {
           metadata: { 'x-trace': 'abc' },
         },
       ],
+    );
+  });
+
+  it('percent-decodes received grpc-message values', async () => {
+    const message = 'permission denied: snow ☃%';
+    const encoded = await protocolCodec.encode(
+      { kind: 'trailers', status: 7, message },
+      { encoding: 'raw' },
+    );
+
+    assert.deepEqual(await decode(encoded, { encoding: 'raw' }), [
+      { kind: 'trailers', status: 7, message, metadata: {} },
+    ]);
+  });
+
+  it('rejects missing, malformed, and out-of-range grpc-status values', async () => {
+    for (const encodedStatus of [
+      undefined,
+      '',
+      '+0',
+      '-1',
+      '0x0',
+      '1.5',
+      '17',
+      '9007199254740992',
+    ]) {
+      const trailers: Record<string, string> = { 'grpc-message': '' };
+      if (encodedStatus !== undefined) {
+        trailers['grpc-status'] = encodedStatus;
+      }
+      await assert.rejects(
+        async () => decode(rawTrailers(trailers), { encoding: 'raw' }),
+        (error: unknown) =>
+          error instanceof GrpcWebError &&
+          error.code === 2 &&
+          /grpc-status trailer/.test(error.message),
+        JSON.stringify(encodedStatus),
+      );
+    }
+  });
+
+  it('rejects malformed grpc-message percent encoding', async () => {
+    await assert.rejects(
+      async () =>
+        decode(
+          rawTrailers({
+            'grpc-status': '7',
+            'grpc-message': 'bad%GGencoding',
+          }),
+          { encoding: 'raw' },
+        ),
+      (error: unknown) =>
+        error instanceof GrpcWebError &&
+        error.code === 2 &&
+        /invalid grpc-message trailer/.test(error.message),
     );
   });
 

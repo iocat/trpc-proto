@@ -34,7 +34,7 @@ function encodeMessageFrame(
 ): Uint8Array {
   return frameCodec.encode({ kind: 'message', compressed, payload });
 }
-function encodeTrailers(status: number, message = ''): Uint8Array {
+function encodeTrailers(status: number | string, message = ''): Uint8Array {
   return frameCodec.encode({
     kind: 'trailers',
     trailers: {
@@ -250,7 +250,7 @@ describe('createGrpcWebFetchCall compression', () => {
 
   it('rejects unary and streaming grpc-status failures', async () => {
     const unaryBody = encodeResponse('raw', [
-      encodeTrailers(7, 'denied'),
+      encodeTrailers(7, 'permission denied: snow ☃%'),
     ]);
     await withFetch(
       async () =>
@@ -270,7 +270,7 @@ describe('createGrpcWebFetchCall compression', () => {
           (error: unknown) =>
             error instanceof GrpcWebError &&
             error.code === 7 &&
-            error.message === 'denied',
+            error.message === 'permission denied: snow ☃%',
         );
       },
     );
@@ -309,6 +309,35 @@ describe('createGrpcWebFetchCall compression', () => {
         );
       },
     );
+  });
+
+  it('rejects malformed grpc-status values from Fetch responses', async () => {
+    for (const status of ['', '+0', '-1', '0x0', '1.5', '17']) {
+      const body = encodeResponse('raw', [encodeTrailers(status)]);
+      await withFetch(
+        async () =>
+          new Response(body, {
+            headers: { 'content-type': GRPC_WEB_CONTENT_TYPE },
+          }),
+        async () => {
+          const call = createGrpcWebFetchCall();
+          await assert.rejects(
+            call({
+              path: 'query',
+              type: 'query',
+              input: undefined,
+              bytes: new Uint8Array(),
+              grpcPath: '/demo.v1.AppService/Query',
+            }),
+            (error: unknown) =>
+              error instanceof GrpcWebError &&
+              error.code === 2 &&
+              /invalid grpc-status trailer/.test(error.message),
+            status,
+          );
+        },
+      );
+    }
   });
 
   it('streams raw response frames', async () => {

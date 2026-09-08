@@ -1,3 +1,4 @@
+import { Status as grpcStatus } from '@grpc/grpc-js/build/src/constants.js';
 import { assumeExhaustive } from '@trpc-proto/utility';
 import type { GrpcWebEncoding } from '../content_type.js';
 import { codecChunks, type Codec, type CodecInput } from './codec.js';
@@ -46,6 +47,41 @@ export class GrpcWebError extends Error {
     super(message);
     this.name = 'GrpcWebError';
     this.code = code;
+  }
+}
+
+function parseGrpcStatus(encoded: string | undefined): grpcStatus {
+  if (encoded === undefined) {
+    throw new GrpcWebError(grpcStatus.UNKNOWN, 'missing grpc-status trailer');
+  }
+  if (!/^[0-9]+$/u.test(encoded)) {
+    throw new GrpcWebError(
+      grpcStatus.UNKNOWN,
+      `invalid grpc-status trailer: ${JSON.stringify(encoded)}`,
+    );
+  }
+  const status = Number(encoded);
+  if (
+    !Number.isSafeInteger(status) ||
+    status < grpcStatus.OK ||
+    status > grpcStatus.UNAUTHENTICATED
+  ) {
+    throw new GrpcWebError(
+      grpcStatus.UNKNOWN,
+      `invalid grpc-status trailer: ${JSON.stringify(encoded)}`,
+    );
+  }
+  return status;
+}
+
+function decodeGrpcMessage(encoded: string): string {
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    throw new GrpcWebError(
+      grpcStatus.UNKNOWN,
+      `invalid grpc-message trailer: ${JSON.stringify(encoded)}`,
+    );
   }
 }
 
@@ -183,8 +219,8 @@ export class GrpcWebProtocolCodec implements Codec<
           } = frame.trailers;
           yield {
             kind: 'trailers',
-            status: encodedStatus === undefined ? 0 : Number(encodedStatus),
-            message,
+            status: parseGrpcStatus(encodedStatus),
+            message: decodeGrpcMessage(message),
             metadata,
           };
           break;
