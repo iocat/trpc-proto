@@ -11,6 +11,7 @@ import {
   type RuntimeProcedure,
   type SchemaGenerateCache,
 } from '@trpc-proto/schema_ir';
+import { createJiti } from 'jiti';
 import { loadAppRouter, type LoadOptions } from './load.js';
 
 export { translate } from '@trpc-proto/schema_ir';
@@ -20,7 +21,6 @@ export interface GenerateOptions extends LoadOptions, ProtoMeta {
   outDir?: string;
   /** CLI override for `defaultMeta.package`. */
   packageName?: string;
-  rootService?: string;
   generateCache?: SchemaGenerateCache;
 }
 
@@ -47,16 +47,17 @@ export async function generate(
     fromOpts.package ??
     fromRouter?.package ??
     DEFAULT_PACKAGE;
-  const cachePath = path.resolve(
-    fromOpts.cache ?? fromRouter?.cache ?? path.join(outDir, 'schema.json'),
+  const schemaPath = path.resolve(
+    fromOpts.cache ?? fromRouter?.cache ?? path.join(outDir, 'schema.ts'),
   );
   const schema = translate(procedures, {
     ...options,
-    generateCache: options.generateCache ?? loadGenerateCache(cachePath),
+    generateCache:
+      options.generateCache ?? (await loadGenerateCache(schemaPath)),
     proto: {
       syntax: fromOpts.syntax ?? fromRouter?.syntax ?? 'proto3',
       package: packageName,
-      cache: cachePath,
+      cache: schemaPath,
       options: fromOpts.options ?? fromRouter?.options,
     },
   });
@@ -65,35 +66,49 @@ export async function generate(
     procedures,
     schema,
     proto,
-    files: writeOutputs(schema, proto, outDir, cachePath),
+    files: writeOutputs(schema, proto, outDir, schemaPath),
   };
 }
 
-function loadGenerateCache(cachePath: string): SchemaGenerateCache | undefined {
-  if (!fs.existsSync(cachePath)) return undefined;
-  const raw = JSON.parse(fs.readFileSync(cachePath, 'utf8')) as {
-    generateCache?: SchemaGenerateCache;
-    propertyGenCache?: SchemaGenerateCache['propertyGenCache'];
-  };
-  if (raw.generateCache) return raw.generateCache;
-  if (raw.propertyGenCache) return { propertyGenCache: raw.propertyGenCache };
-  return undefined;
+async function loadGenerateCache(
+  schemaPath: string,
+): Promise<SchemaGenerateCache | undefined> {
+  if (!fs.existsSync(schemaPath)) return undefined;
+  const generated = (await createJiti(schemaPath, {
+    interopDefault: true,
+    moduleCache: false,
+  }).import(schemaPath)) as { protoSchema?: ProtoSchema };
+  return generated.protoSchema?.generateCache;
+}
+
+function runtimeSchemaModule(schema: ProtoSchema): string {
+  return [
+    "import type { ProtoSchema } from '@trpc-proto/runtime';",
+    '',
+    `export const protoSchema = ${JSON.stringify(schema, null, 2)} satisfies ProtoSchema;`,
+    '',
+  ].join('\n');
+}
+
+function writeAtomic(filePath: string, content: string): void {
+  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporaryPath, content);
+  fs.renameSync(temporaryPath, filePath);
 }
 
 function writeOutputs(
   schema: ProtoSchema,
   proto: string,
   outDir = 'generated',
-  cachePath?: string,
+  schemaPath = path.join(outDir, 'schema.ts'),
 ) {
   fs.mkdirSync(outDir, { recursive: true });
   const protoPath = path.join(
     outDir,
     `${schema.package.replaceAll('.', '_')}.proto`,
   );
-  const schemaPath = cachePath ?? path.join(outDir, 'schema.json');
   fs.mkdirSync(path.dirname(schemaPath), { recursive: true });
   fs.writeFileSync(protoPath, proto);
-  fs.writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`);
+  writeAtomic(schemaPath, runtimeSchemaModule(schema));
   return [protoPath, schemaPath];
 }

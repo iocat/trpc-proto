@@ -2,10 +2,10 @@
 
 Generate protobuf from a tRPC 11 + Zod 4 router. The TypeScript client keeps talking tRPC; the wire is gRPC.
 
-This is **opinionated**. Only a subset of `appRouter` is a proto contract. That subset is **enforced** at generate and at runtime (`grpcLink` / `schemaFromRouter`). Anything outside it is rejected, not approximated.
+This is **opinionated**. Only a subset of `appRouter` is a proto contract. That subset is **enforced during generation**. Anything outside it is rejected, not approximated.
 
 ```
-packages/plugin      @trpc-proto/plugin          evaluate appRouter → .proto + schema.json
+packages/plugin      @trpc-proto/plugin          evaluate appRouter → .proto + schema.ts
 packages/runtime     @trpc-proto/runtime         grpcLink, serveGrpc, gRPC-Web
 
 packages/schema_ir   @trpc-proto/schema_ir       ProtoSchema IR, prevalidate, proto text
@@ -14,7 +14,7 @@ examples/todo        @trpc-proto/example-todo    todo API + Go gRPC backend
 examples/trpc        @trpc-proto/example-trpc    TypeScript tRPC backend + protobuf gRPC
 ```
 
-Requires **tRPC 11** and **Zod 4**. Runtime does not host a gRPC server.
+Requires **tRPC 11** and **Zod 4**. The runtime can serve a TypeScript router over gRPC or connect clients and a gRPC-Web gateway to an external gRPC backend.
 
 ## Enforced subset
 
@@ -91,7 +91,7 @@ const t = initTRPC.meta<ProtoMeta>().create({
   defaultMeta: {
     proto: {
       package: 'example.v1',
-      cache: 'generated/schema.json',
+      cache: 'generated/schema.ts',
       options: { go_package: 'users/backend/gen/examplev1' },
     },
   },
@@ -122,7 +122,7 @@ export const appRouter = t.router({
 export type AppRouter = typeof appRouter;
 ```
 
-`noopForNonTsBackend` is a schema-only resolver. A non-TS service that implements the generated proto is the real backend. For a TypeScript backend, implement real resolvers and call `bindRouter` (below).
+`noopForNonTsBackend` is a schema-only resolver. Use it when another service implements the generated proto. For a TypeScript backend, implement real resolvers and use `serveGrpc` or `bindRouter` below.
 
 The plugin evaluates `export const appRouter` (the runtime value, not the type) so it can read the Zod parsers.
 
@@ -135,12 +135,14 @@ trpc-proto generate \
   --out generated
 ```
 
-`--package` / `--cache` override `defaultMeta.proto`. Prevalidate failures print the report and exit 1.
+This command writes the `.proto` and an importable `schema.ts` under `--out`.
+`schema.ts` is both the runtime protobuf schema and the persisted field-number
+cache. Override its path with `--cache` or `defaultMeta.proto.cache`.
 
-Writes:
+With the options above, it writes:
 
 - `generated/example_v1.proto` — feed this to **your** stub codegen (`protoc`, connect-es, …)
-- `generated/schema.json` — IR + `generateCache` (field-number assignments)
+- `generated/schema.ts` — complete runtime IR + `generateCache` for stable field numbers
 
 Deleted fields stay in the cache. Their numbers are emitted as `reserved` so they are not reused:
 
@@ -163,17 +165,27 @@ await generate({
 
 ## 3. Client
 
-`grpcLink` walks the live Zod parsers on `appRouter` (same subset). It dials gRPC itself (default `127.0.0.1:50051`). No `schema.json` on the client.
+Ideally, `grpcLink` and `grpcWebLink` could accept `appRouter` and derive both the
+tRPC types and protobuf schema from one value. Client code should import
+`AppRouter` with `import type`, however, and TypeScript erases that import before
+runtime. Importing the `appRouter` value instead would make the client bundler
+traverse resolver modules and could pull database clients, Node built-ins, and
+other backend-only dependencies into the client.
+
+The generated `protoSchema` is the data-only runtime boundary: it retains the
+cache-assigned protobuf field numbers without importing server code.
+`grpcLink` uses it to dial gRPC directly (default `127.0.0.1:50051`).
 
 ```ts
 import { createTRPCClient } from '@trpc/client';
 import { grpcLink } from '@trpc-proto/runtime';
-import { appRouter, type AppRouter } from './router.js';
+import { protoSchema } from './generated/schema.js';
+import type { AppRouter } from './router.js';
 
 const client = createTRPCClient<AppRouter>({
   links: [
-    grpcLink({
-      router: appRouter,
+    grpcLink<AppRouter>({
+      schema: protoSchema,
       address: '127.0.0.1:50051',
       auth: { token: process.env.AUTH_TOKEN },
     }),
@@ -183,27 +195,48 @@ const client = createTRPCClient<AppRouter>({
 await client.user.getById.query({ id: '1' });
 ```
 
-## 4. Backend
+## 4. Server
 
-TypeScript tRPC — `serveGrpc` is the server-side counterpart of `grpcLink`:
+Choose one backend approach. Both expose the same generated protobuf contract, so clients do not change when the implementation language changes.
+
+### Approach A: TypeScript tRPC backend
+
+Implement the router procedures with real resolvers, then expose that router as a gRPC server with `serveGrpc`:
 
 ```ts
 import { serveGrpc } from '@trpc-proto/runtime';
+import { protoSchema } from './generated/schema.js';
 import { appRouter } from './router.js';
 
 await serveGrpc(appRouter, {
+  schema: protoSchema,
   address: '127.0.0.1:50051',
   createContext: () => ({}),
 });
 ```
 
-If you already have generated stubs (connect, grpc-js `protoc`, Go, …), use `bindRouter(appRouter)` and plug `stubs.UserService.GetById` into that server instead.
+`serveGrpc` owns the grpc-js server lifecycle and is the direct server-side counterpart of `grpcLink`. If an existing TypeScript server already owns generated grpc-js service registration, use `bindRouter(appRouter, { schema: protoSchema })` instead; it returns proto-shaped handlers that delegate to the router.
 
-Nested routers become service names (`user.getById` → `UserService.GetById`).
+### Approach B: External gRPC backend
 
-Or implement the generated proto in another language. The Go examples do that.
+Keep schema-only router procedures on the TypeScript side with `noopForNonTsBackend`, generate the `.proto`, then implement that contract in Go or another gRPC-supported language:
 
-Cross-origin browser access is opt-in and uses exact serialized origins:
+```bash
+trpc-proto generate \
+  --router src/router.ts \
+  --export appRouter \
+  --out generated
+
+# Run your language's protobuf/stub generator, then start that gRPC server.
+```
+
+The external server listens on the address configured in `grpcLink` or `createGrpcWebHttpHandler`. It does not execute the tRPC router and does not need `schema.ts` at runtime; clients still import it for protobuf encoding. The [`users`](examples/users) and [`todo`](examples/todo) examples use Go backends.
+
+With either approach, nested routers become gRPC service names (`user.getById` → `UserService.GetById`).
+
+### Browser gRPC-Web ingress
+
+Browsers connect through an HTTP server using `createGrpcWebHttpHandler`; the handler forwards to either backend approach over gRPC. Cross-origin access is opt-in and uses exact serialized origins:
 
 ```ts
 import { createGrpcWebHttpHandler } from '@trpc-proto/runtime';
@@ -217,12 +250,9 @@ const handleGrpcWeb = createGrpcWebHttpHandler({
 });
 ```
 
-The handler answers valid preflight requests, rejects disallowed origins, methods,
-and headers before contacting gRPC, and adds the matching CORS headers to
-gRPC-Web responses. Omit `cors` for same-origin deployments.
+Call `handleGrpcWeb(req, res)` from your Node HTTP server before other routes. It answers valid preflight requests, rejects disallowed origins, methods, and headers before contacting gRPC, and adds matching CORS headers to gRPC-Web responses. Omit `cors` for same-origin deployments.
 
-See the [gRPC-Web runtime protocol](packages/runtime/GRPC_WEB.md) for the
-implemented wire behavior, CORS semantics, security boundary, and limitations.
+See the [gRPC-Web runtime protocol](packages/runtime/GRPC_WEB.md) for the implemented wire behavior, CORS semantics, security boundary, and limitations.
 
 ## gRPC-Web backlog
 
@@ -237,7 +267,7 @@ This table tracks the remaining transport work.
 | P0 | Boundary | Limit request-body size and restrict forwarded gRPC service/method paths. | Oversized bodies and unknown methods are rejected before an upstream call. |
 | P1 | HTTP | Support and test HTTP/1.1 and HTTP/2 browser ingress. | The same unary and streaming suite passes over both ingress protocols. |
 | P1 | Metadata | Support binary `*-bin` metadata and configurable request/response header forwarding. | Binary metadata round-trips; hop-by-hop and disallowed headers never cross the boundary. |
-| P1 | Status | Percent-decode `grpc-message` and reject successful HTTP responses missing a valid final status. | Encoded error messages and malformed status responses have interoperability tests. |
+| P1 | Status | Percent-decode `grpc-message` and validate final status syntax. | Encoded error messages and malformed status values have interoperability tests. |
 | P1 | Connections | Add client lifecycle cleanup and explicit pooling for multiple upstream targets. | Channels are reused, bounded, observable, and closed deterministically. |
 | P2 | Resilience | Add circuit breaking, active health checks, and rate limiting. | Each policy is configurable and covered by failure/recovery scenarios. |
 | P2 | Observability | Add structured access logs and request, latency, status, stream, and upstream metrics. | Operators can attribute failures and saturation to route and upstream. |
@@ -253,7 +283,7 @@ pnpm --filter @trpc-proto/example-users web      # http://127.0.0.1:3000
 
 Todo: `pnpm --filter @trpc-proto/example-todo generate` then `server` / `web` (`:3001`).
 
-TypeScript backend (protobuf over gRPC, `bindRouter`):
+TypeScript backend (protobuf over gRPC with `serveGrpc`):
 
 ```bash
 pnpm --filter @trpc-proto/example-trpc generate

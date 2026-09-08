@@ -4,7 +4,7 @@ import { createTRPCClient } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
 import { grpcLink, type CallContext } from './link.js';
-import type { ProtoMeta } from '@trpc-proto/schema_ir';
+import { schemaFromRouter, type ProtoMeta } from '@trpc-proto/schema_ir';
 
 const t = initTRPC.meta<ProtoMeta>().create({
   defaultMeta: {
@@ -22,6 +22,7 @@ const appRouter = t.router({
     .query(({ input }) => ({ message: `hello ${input.name}` })),
 });
 type AppRouter = typeof appRouter;
+const schema = schemaFromRouter(appRouter);
 
 /** Fixture token for interceptor metadata assertions. */
 const TEST_TOKEN = 'secret';
@@ -37,8 +38,8 @@ describe('grpcLink', () => {
     const seen: CallContext[] = [];
     const client = createTRPCClient<AppRouter>({
       links: [
-        grpcLink({
-          router: appRouter,
+        grpcLink<AppRouter>({
+          schema,
           auth: { token: TEST_TOKEN },
           interceptors: [
             async (ctx) => {

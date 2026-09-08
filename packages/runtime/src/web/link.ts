@@ -5,9 +5,7 @@ import { createProtoLink, type ProtoLinkOptions } from '../grpc/proto_link.js';
 import type { GrpcWebEncoding } from './content_type.js';
 
 /** Options for a tRPC link that sends protobuf over gRPC-Web. */
-export interface GrpcWebLinkOptions<
-  TRouter extends AnyRouter = AnyRouter,
-> extends ProtoLinkOptions<TRouter> {
+export interface GrpcWebLinkOptions extends ProtoLinkOptions {
   /** Origin for gRPC-Web POSTs. Default `''` (same origin). */
   url?: string;
   /** HTTP body representation. Defaults to base64 gRPC-Web. */
@@ -18,9 +16,9 @@ export interface GrpcWebLinkOptions<
 
 /** tRPC link for unary and server-streaming protobuf calls over gRPC-Web. */
 export function grpcWebLink<TRouter extends AnyRouter>(
-  opts: GrpcWebLinkOptions<TRouter>,
+  opts: GrpcWebLinkOptions,
 ): TRPCLink<TRouter> {
-  return createProtoLink(
+  return createProtoLink<TRouter>(
     opts,
     createGrpcWebFetchCall({
       baseUrl: opts.url ?? '',

@@ -1,13 +1,19 @@
 import { createTRPCClient } from '@trpc/client';
+import type { inferRouterOutputs } from '@trpc/server';
 import { grpcWebLink } from '@trpc-proto/runtime/web';
-import { appRouter } from '../router.ts';
+import { protoSchema } from '../../generated/schema.js';
+import type { AppRouter } from '../router.js';
 
-const $ = (id) => document.getElementById(id);
+function $(id: string): HTMLInputElement {
+  const element = document.getElementById(id);
+  if (!element) throw new Error(`missing #${id}`);
+  return element as HTMLInputElement;
+}
 
-const client = createTRPCClient({
+const client = createTRPCClient<AppRouter>({
   links: [
-    grpcWebLink({
-      router: appRouter,
+    grpcWebLink<AppRouter>({
+      schema: protoSchema,
       url: '',
       encoding: 'raw',
       compress: false,
@@ -15,8 +21,11 @@ const client = createTRPCClient({
   ],
 });
 
-const edits = [];
-let sub;
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type NoteRecord = RouterOutputs['note']['get'];
+
+const edits: Array<NoteRecord & { at: string }> = [];
+let sub: { unsubscribe(): void } | undefined;
 
 function paintStream() {
   const out = $('stream-out');
@@ -28,7 +37,7 @@ function paintStream() {
 
 function listen() {
   if (sub) return;
-  sub = client.note.onChange.subscribe(undefined, {
+  sub = client.note.onChange.subscribe({}, {
     onData(note) {
       edits.push({
         at: new Date().toISOString(),
@@ -57,9 +66,9 @@ function markNav() {
   }
 }
 
-function fail(err) {
+function fail(err: unknown) {
   $('status').className = 'bad';
-  $('status').textContent = String(err.message || err);
+  $('status').textContent = err instanceof Error ? err.message : String(err);
 }
 
 async function render() {

@@ -1,5 +1,9 @@
-export function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+export function isAsyncIterable<Value>(
+  value: Value | AsyncIterable<Value>,
+): value is AsyncIterable<Value> {
   return (
-    value != null && typeof value === 'object' && Symbol.asyncIterator in value
+    value !== null &&
+    value !== undefined &&
+    typeof (value as AsyncIterable<Value>)[Symbol.asyncIterator] === 'function'
   );
 }

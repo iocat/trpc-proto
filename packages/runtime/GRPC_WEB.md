@@ -62,12 +62,14 @@ shared runtime codec translates tRPC values before and after transport.
 
 ```ts
 import { createTRPCClient } from '@trpc/client';
-import { grpcWebLink } from '@trpc-proto/runtime';
+import { grpcWebLink } from '@trpc-proto/runtime/web';
+import { protoSchema } from './generated/schema.js';
+import type { AppRouter } from './router.js';
 
 const client = createTRPCClient<AppRouter>({
   links: [
-    grpcWebLink({
-      router: appRouter,
+    grpcWebLink<AppRouter>({
+      schema: protoSchema,
       url: 'https://api.example.com',
       encoding: 'base64',
       compress: true,
@@ -75,6 +77,18 @@ const client = createTRPCClient<AppRouter>({
   ],
 });
 ```
+
+Ideally, `grpcWebLink` could accept `appRouter` directly and derive its runtime
+protobuf schema from the same value that supplies the tRPC types. In client
+code, however, `AppRouter` should be imported with `import type`, and TypeScript
+erases that import before runtime. Importing the router value would preserve
+schema access but make the browser bundler traverse resolver modules, which can
+pull database clients, Node built-ins, and other backend-only dependencies into
+the client.
+
+`protoSchema` is therefore generated from the persisted cache alongside the
+`.proto`. It provides the cache-assigned protobuf field numbers as data while
+the browser imports the router only as an erased type.
 
 `encoding` accepts `raw` or `base64` and defaults to `base64`. `raw` sends
 binary gRPC-Web frames directly. `base64` sends the same frames using the
@@ -270,6 +284,14 @@ omitted.
 `grpc-message` and additional values are percent-encoded when the handler
 writes trailers. The Fetch client does not yet percent-decode them.
 
+A final `grpc-status` is required for unary and streaming responses. When an
+intermediary returns a response without it, the Fetch transport applies the
+standard client-only HTTP-to-gRPC mapping: `400` to `INTERNAL`; `401` to
+`UNAUTHENTICATED`; `403` to `PERMISSION_DENIED`; `404` to `UNIMPLEMENTED`;
+`429`, `502`, `503`, and `504` to `UNAVAILABLE`; and every other status,
+including `200`, to `UNKNOWN`.
+
+
 Transport outcomes:
 
 | Condition | HTTP result | gRPC-Web result |
@@ -441,7 +463,8 @@ Current operational limitations:
 
 `src/web/fetch_call_test.ts` covers compressed raw and base64 responses, mixed
 compressed and uncompressed streams, arbitrary base64 transport chunks,
-request compression headers, and missing response encodings.
+request compression headers, required final status, and the HTTP fallback
+mapping.
 
 `src/web/codec/compression_test.ts`, `src/web/content_type_test.ts`,
 `src/web/codec/frame_codec_test.ts`,
@@ -449,5 +472,5 @@ request compression headers, and missing response encodings.
 `src/web/codec/base64_codec_test.ts` cover gzip round trips, compressed frame
 flags, content negotiation, raw frame boundaries, independently padded base64
 segments, arbitrary base64 transport boundaries, and malformed input.
-HTTP/2 ingress, strict final trailers, deadlines, downstream cancellation, and
-operational safeguards remain unimplemented.
+HTTP/2 ingress, strict trailer ordering, deadlines, downstream cancellation,
+and operational safeguards remain unimplemented.

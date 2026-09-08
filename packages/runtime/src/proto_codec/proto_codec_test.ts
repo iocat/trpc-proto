@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createProtoCodec } from './proto_codec.js';
+import { ProtoCodec } from './proto_codec.js';
 import { translate, type ProtoSchema } from '@trpc-proto/schema_ir';
 import { z } from 'zod';
 
@@ -96,8 +96,8 @@ const schema: ProtoSchema = {
   services: [],
 };
 
-describe('createProtoCodec', () => {
-  const codec = createProtoCodec(schema);
+describe('ProtoCodec', () => {
+  const codec = new ProtoCodec(schema);
 
   it('roundtrips an object message', () => {
     const encoded = codec.encode('HelloRequest', { name: 'Ada' });
@@ -183,8 +183,9 @@ describe('createProtoCodec', () => {
           ],
         },
       ],
+      services: [],
     };
-    const codecNested = createProtoCodec(nested);
+    const codecNested = new ProtoCodec(nested);
     const payload = { address: { city: 'London' } };
     assert.deepEqual(
       codecNested.decode(
@@ -207,7 +208,7 @@ describe('createProtoCodec', () => {
         output: z.object({ ok: z.boolean() }),
       },
     ]);
-    const codec = createProtoCodec(schema);
+    const codec = new ProtoCodec(schema);
     const click = { kind: 'click', x: 1.5 };
     const encoded = codec.encode('AppTrackRequest', click);
     assert.deepEqual(codec.decode('AppTrackRequest', encoded), click);
@@ -216,5 +217,36 @@ describe('createProtoCodec', () => {
       codec.decode('AppTrackRequest', codec.encode('AppTrackRequest', key)),
       key,
     );
+  });
+
+  it('resolves derived RPC names through the protobuf root', () => {
+    const rpcSchema = translate([
+      {
+        path: 'health',
+        type: 'query',
+        input: z.string(),
+        output: z.string(),
+      },
+      {
+        path: 'user.getById',
+        type: 'query',
+        input: z.string(),
+        output: z.string(),
+      },
+    ]);
+    const rpcCodec = new ProtoCodec(rpcSchema);
+
+    const rootRpc = rpcCodec.lookupRpc('health');
+    assert.equal(rootRpc?.service, 'AppService');
+    assert.equal(rootRpc?.method.name, 'Health');
+
+    const nestedRpc = rpcCodec.lookupRpc('user.getById');
+    assert.equal(nestedRpc?.service, 'UserService');
+    assert.equal(nestedRpc?.method.name, 'GetById');
+    assert.equal(
+      nestedRpc?.method,
+      rpcCodec.lookupMethod('UserService', 'GetById'),
+    );
+    assert.equal(rpcCodec.lookupRpc('user.missing'), undefined);
   });
 });

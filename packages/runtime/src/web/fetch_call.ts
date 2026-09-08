@@ -1,9 +1,8 @@
+import { Status as grpcStatus } from '@grpc/grpc-js/build/src/constants.js';
+import { assumeExhaustive } from '@trpc-proto/utility';
 import type { StubCall } from '../grpc/proto_link.js';
 import { GRPC_GZIP_ENCODING } from './codec/compression.js';
-import {
-  GrpcWebError,
-  GrpcWebProtocolCodec,
-} from './codec/protocol_codec.js';
+import { GrpcWebError, GrpcWebProtocolCodec } from './codec/protocol_codec.js';
 import {
   grpcWebContentType,
   grpcWebEncoding,
@@ -17,6 +16,24 @@ export interface GrpcWebFetchCallOptions {
   encoding?: GrpcWebEncoding;
   /** Compresses the request message with gzip. Defaults to false. */
   compress?: boolean;
+}
+const HTTP_STATUS_TO_GRPC_STATUS: Record<number, grpcStatus> = {
+  400: grpcStatus.INTERNAL,
+  401: grpcStatus.UNAUTHENTICATED,
+  403: grpcStatus.PERMISSION_DENIED,
+  404: grpcStatus.UNIMPLEMENTED,
+  429: grpcStatus.UNAVAILABLE,
+  502: grpcStatus.UNAVAILABLE,
+  503: grpcStatus.UNAVAILABLE,
+  504: grpcStatus.UNAVAILABLE,
+};
+
+/** Given the assumption is 200 with grpc-status trailers in the response, anything else is considered an error. */
+function missingGrpcStatus(res: Response): GrpcWebError {
+  return new GrpcWebError(
+    HTTP_STATUS_TO_GRPC_STATUS[res.status] ?? grpcStatus.UNKNOWN,
+    `missing grpc-status (HTTP ${res.status}) from gRPC-Web response: ${res.statusText}`,
+  );
 }
 
 function responseEncoding(
@@ -45,24 +62,29 @@ async function* readGrpcWebStream(
     encoding,
     compression: res.headers.get('grpc-encoding'),
   })) {
-    if (value.kind === 'message') {
-      yield value.payload;
-      continue;
+    switch (value.kind) {
+      case 'message':
+        yield value.payload;
+        break;
+      case 'trailers':
+        if (value.status !== grpcStatus.OK) {
+          throw new GrpcWebError(
+            value.status,
+            value.message || `grpc-status ${value.status}`,
+          );
+        }
+        return;
+      default:
+        return assumeExhaustive(value);
     }
-    if (value.status !== 0) {
-      throw new GrpcWebError(
-        value.status,
-        value.message || `grpc-status ${value.status}`,
-      );
-    }
-    return;
   }
+  throw missingGrpcStatus(res);
 }
 
 /** Creates a Fetch transport for binary or base64 gRPC-Web calls. */
 export function createGrpcWebFetchCall(
   options: GrpcWebFetchCallOptions = {},
-): StubCall {
+): StubCall<Uint8Array | AsyncIterable<Uint8Array>> {
   const { baseUrl = '', encoding = 'base64', compress = false } = options;
   const codec = new GrpcWebProtocolCodec();
   return async (request) => {
@@ -91,27 +113,45 @@ export function createGrpcWebFetchCall(
       body,
       signal: request.signal,
     });
+    if (res.status !== 200) throw missingGrpcStatus(res);
     const encodingFromResponse = responseEncoding(res, encoding);
-    if (request.type === 'subscription') {
-      return readGrpcWebStream(res, encodingFromResponse, codec);
+    switch (request.type) {
+      case 'subscription':
+        return readGrpcWebStream(res, encodingFromResponse, codec);
+      case 'query':
+      case 'mutation':
+        break;
+      default:
+        return assumeExhaustive(request.type);
     }
 
+    // Unary gRPC-Web response → single message or error.
     let message: Uint8Array | undefined;
-    let status = res.ok ? 0 : 2;
-    let statusMessage = `grpc-status ${status}`;
+    let status: number | undefined;
+    let statusMessage = '';
     for await (const value of codec.decode(readResponseBody(res), {
       encoding: encodingFromResponse,
       compression: res.headers.get('grpc-encoding'),
     })) {
-      if (value.kind === 'message') {
-        message ??= value.payload;
-      } else {
-        status = value.status;
-        statusMessage = value.message || `grpc-status ${status}`;
+      switch (value.kind) {
+        case 'message':
+          message ??= value.payload;
+          break;
+        case 'trailers':
+          status = value.status;
+          statusMessage = value.message || `grpc-status ${status}`;
+          break;
+        default:
+          assumeExhaustive(value);
       }
     }
-    if (status !== 0) throw new GrpcWebError(status, statusMessage);
-    if (!message) throw new GrpcWebError(13, 'empty gRPC-Web response');
+    if (status === undefined) throw missingGrpcStatus(res);
+    if (status !== grpcStatus.OK) {
+      throw new GrpcWebError(status, statusMessage);
+    }
+    if (message === undefined) {
+      throw new GrpcWebError(grpcStatus.INTERNAL, 'empty gRPC-Web response');
+    }
     return message;
   };
 }

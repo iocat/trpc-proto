@@ -2,8 +2,8 @@ import { TRPCClientError, type TRPCLink } from '@trpc/client';
 import type { AnyRouter } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
 import { isAsyncIterable, isBytes } from '@trpc-proto/utility';
-import { createProtoCodec } from '../proto_codec/proto_codec.js';
-import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
+import { ProtoCodec } from '../proto_codec/proto_codec.js';
+import type { ProtoSchema } from '@trpc-proto/schema_ir';
 import type { MaybePromise } from '../types.js';
 export type { MaybePromise } from '../types.js';
 
@@ -13,14 +13,6 @@ const AUTH_METADATA_KEY = 'authorization';
 /** Default authorization scheme. Empty `AuthConfig.scheme` sends a raw token. */
 const AUTH_SCHEME_BEARER = 'Bearer';
 
-function lookupRpc(schema: ProtoSchema, path: string) {
-  for (const service of schema.services) {
-    for (const method of service.methods) {
-      if (method.path === path) return { service, method };
-    }
-  }
-  return undefined;
-}
 
 /** Transport-neutral request passed from a protobuf link to its stub call. */
 export interface StubRequest {
@@ -38,7 +30,9 @@ export interface StubRequest {
 }
 
 /** Transport. Return decoded JS or raw response bytes (link will decode). */
-export type StubCall = (request: StubRequest) => Promise<unknown>;
+export interface StubCall<TResult = unknown> {
+  (request: StubRequest): Promise<TResult>;
+}
 
 /** Mutable request context passed through protobuf link interceptors. */
 export interface CallContext {
@@ -71,9 +65,9 @@ export interface AuthConfig {
   scheme?: string;
 }
 
-/** Shared router, interceptor, and authorization options for protobuf links. */
-export interface ProtoLinkOptions<TRouter extends AnyRouter = AnyRouter> {
-  router: TRouter;
+/** Shared schema, interceptor, and authorization options for protobuf links. */
+export interface ProtoLinkOptions {
+  schema: ProtoSchema;
   interceptors?: CallInterceptor[];
   auth?: AuthConfig;
 }
@@ -114,13 +108,13 @@ export function authInterceptor(auth: AuthConfig): CallInterceptor {
   };
 }
 
-/** Router walk + codec. `call` is native gRPC or gRPC-Web. */
+/** Schema-driven protobuf link. `call` is native gRPC or gRPC-Web. */
 export function createProtoLink<TRouter extends AnyRouter>(
-  opts: ProtoLinkOptions<TRouter>,
+  opts: ProtoLinkOptions,
   call: StubCall,
 ): TRPCLink<TRouter> {
-  const schema = schemaFromRouter(opts.router);
-  const codec = createProtoCodec(schema);
+  const schema = opts.schema;
+  const codec = new ProtoCodec(schema);
   const interceptors = [
     ...(opts.auth ? [authInterceptor(opts.auth)] : []),
     ...(opts.interceptors ?? []),
@@ -129,7 +123,7 @@ export function createProtoLink<TRouter extends AnyRouter>(
   return () =>
     ({ op }) =>
       observable((observer) => {
-        const rpc = lookupRpc(schema, op.path);
+        const rpc = codec.lookupRpc(op.path);
         if (!rpc) {
           observer.error(
             TRPCClientError.from(new Error(`no gRPC mapping for ${op.path}`)),
@@ -144,9 +138,9 @@ export function createProtoLink<TRouter extends AnyRouter>(
         const ctx: CallContext = {
           path: op.path,
           type: op.type,
-          service: service.name,
+          service,
           method: method.name,
-          grpcPath: `/${schema.package}.${service.name}/${method.name}`,
+          grpcPath: `/${schema.package}.${service}/${method.name}`,
           input: op.input,
           metadata: new Map(),
           signal: ac.signal,

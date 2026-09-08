@@ -80,7 +80,7 @@ async function withFetch<T>(
 }
 
 describe('createGrpcWebFetchCall compression', () => {
-  it('gzip-compresses a text request before framing', async () => {
+  it('gzip-compresses a base64 request before framing', async () => {
     const expectedRequest = new TextEncoder().encode('protobuf '.repeat(64));
     let requestHeaders = new Headers();
     let requestFrames: GrpcWebFrame[] | undefined;
@@ -124,7 +124,7 @@ describe('createGrpcWebFetchCall compression', () => {
     );
   });
 
-  it('decodes compressed unary responses in binary and text modes', async () => {
+  it('decodes compressed unary responses in raw and base64 modes', async () => {
     const expected = new TextEncoder().encode('response '.repeat(64));
     const compressed = await gzipCodec.encode(expected);
 
@@ -160,7 +160,7 @@ describe('createGrpcWebFetchCall compression', () => {
     }
   });
 
-  it('decodes compressed text response streams across transport chunks', async () => {
+  it('decodes compressed base64 streams across transport chunks', async () => {
     const expected = [
       new TextEncoder().encode('first '.repeat(32)),
       new TextEncoder().encode('second '.repeat(32)),
@@ -311,7 +311,7 @@ describe('createGrpcWebFetchCall compression', () => {
     );
   });
 
-  it('streams binary response frames', async () => {
+  it('streams raw response frames', async () => {
     const body = encodeResponse('raw', [
       encodeMessageFrame(new Uint8Array([1])),
       encodeMessageFrame(new Uint8Array([2, 3])),
@@ -413,25 +413,107 @@ describe('createGrpcWebFetchCall compression', () => {
     );
   });
 
-  it('uses HTTP failure as status when trailers omit grpc-status', async () => {
+  it('maps HTTP status when final grpc-status is missing', async () => {
+    for (const [httpStatus, grpcStatus] of [
+      [200, 2],
+      [201, 2],
+      [400, 13],
+      [401, 16],
+      [403, 7],
+      [404, 12],
+      [429, 14],
+      [502, 14],
+      [503, 14],
+      [504, 14],
+      [418, 2],
+    ] as const) {
+      await withFetch(
+        async () =>
+          new Response(encodeMessageFrame(new Uint8Array([1])), {
+            status: httpStatus,
+            statusText: 'Test status',
+            headers: { 'content-type': GRPC_WEB_CONTENT_TYPE },
+          }),
+        async () => {
+          const call = createGrpcWebFetchCall();
+          await assert.rejects(
+            call({
+              path: 'query',
+              type: 'query',
+              input: undefined,
+              bytes: new Uint8Array(),
+              grpcPath: '/demo.v1.AppService/Query',
+            }),
+            (error: unknown) =>
+              error instanceof GrpcWebError &&
+              error.code === grpcStatus &&
+              error.message ===
+                `missing grpc-status (HTTP ${httpStatus}) from gRPC-Web response: Test status`,
+          );
+        },
+      );
+    }
+  });
+
+  it('maps non-200 before decoding grpc-status', async () => {
+    const body = encodeResponse('raw', [encodeTrailers(7, 'denied')]);
     await withFetch(
       async () =>
-        new Response(encodeMessageFrame(new Uint8Array([1])), {
+        new Response(body, {
           status: 503,
+          statusText: 'Service Unavailable',
           headers: { 'content-type': GRPC_WEB_CONTENT_TYPE },
         }),
       async () => {
-        const call = createGrpcWebFetchCall();
+        const call = createGrpcWebFetchCall({ encoding: 'raw' });
+        for (const type of ['query', 'subscription'] as const) {
+          await assert.rejects(
+            call({
+              path: type,
+              type,
+              input: undefined,
+              bytes: new Uint8Array(),
+              grpcPath: '/demo.v1.AppService/Call',
+            }),
+            (error: unknown) =>
+              error instanceof GrpcWebError &&
+              error.code === 14 &&
+              error.message ===
+                'missing grpc-status (HTTP 503) from gRPC-Web response: Service Unavailable',
+          );
+        }
+      },
+    );
+  });
+
+  it('rejects a stream that ends without grpc-status', async () => {
+    await withFetch(
+      async () =>
+        new Response(encodeMessageFrame(new Uint8Array([1])), {
+          statusText: 'OK',
+          headers: { 'content-type': GRPC_WEB_CONTENT_TYPE },
+        }),
+      async () => {
+        const call = createGrpcWebFetchCall({ encoding: 'raw' });
+        const stream = (await call({
+          path: 'watch',
+          type: 'subscription',
+          input: undefined,
+          bytes: new Uint8Array(),
+          grpcPath: '/demo.v1.AppService/Watch',
+        })) as AsyncIterable<Uint8Array>;
+        const iterator = stream[Symbol.asyncIterator]();
+        assert.deepEqual(await iterator.next(), {
+          done: false,
+          value: new Uint8Array([1]),
+        });
         await assert.rejects(
-          call({
-            path: 'query',
-            type: 'query',
-            input: undefined,
-            bytes: new Uint8Array(),
-            grpcPath: '/demo.v1.AppService/Query',
-          }),
+          iterator.next(),
           (error: unknown) =>
-            error instanceof GrpcWebError && error.code === 2,
+            error instanceof GrpcWebError &&
+            error.code === 2 &&
+            error.message ===
+              'missing grpc-status (HTTP 200) from gRPC-Web response: OK',
         );
       },
     );

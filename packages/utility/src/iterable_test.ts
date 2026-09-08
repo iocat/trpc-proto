@@ -27,6 +27,11 @@ const cases: GuardCase[] = [
   },
   { name: 'array', value: [1], expected: false },
   { name: 'plain object', value: {}, expected: false },
+  {
+    name: 'non-callable async iterator',
+    value: { [Symbol.asyncIterator]: true },
+    expected: false,
+  },
   { name: 'null', value: null, expected: false },
   { name: 'undefined', value: undefined, expected: false },
   { name: 'string', value: 'ab', expected: false },

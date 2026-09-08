@@ -1,8 +1,15 @@
-export { noopForNonTsBackend } from './noop.js';
+export {
+  noopForNonTsBackend,
+  noopSubscriptionForNonTsBackend,
+} from './noop.js';
 export { grpcLink } from './grpc/link.js';
 export type { AuthConfig, GrpcLinkOptions } from './grpc/link.js';
 export { bindRouter, serveGrpc } from './grpc/server.js';
-export type { ServeGrpcOptions, StubHandlers } from './grpc/server.js';
+export type {
+  BindRouterOptions,
+  ServeGrpcOptions,
+  StubHandlers,
+} from './grpc/server.js';
 export { createGrpcWebHttpHandler } from './web/http_handler.js';
 export type {
   GrpcWebCorsOptions,
@@ -11,4 +18,4 @@ export type {
 export { grpcWebLink } from './web/link.js';
 export type { GrpcWebLinkOptions } from './web/link.js';
 export type { GrpcWebEncoding } from './web/content_type.js';
-export type { ProtoMeta } from '@trpc-proto/schema_ir';
+export type { ProtoMeta, ProtoSchema } from '@trpc-proto/schema_ir';

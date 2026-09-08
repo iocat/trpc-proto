@@ -8,7 +8,7 @@ import {
   createProtoStub,
   serveGrpc,
 } from './server.js';
-import type { ProtoMeta } from '@trpc-proto/schema_ir';
+import { schemaFromRouter, type ProtoMeta } from '@trpc-proto/schema_ir';
 
 describe('bindRouter', () => {
   it('calls tRPC procedures by proto service method', async () => {
@@ -21,7 +21,7 @@ describe('bindRouter', () => {
         .output(z.object({ message: z.string() }))
         .query(({ input }) => ({ message: `hello ${input.name}` })),
     });
-    const stubs = bindRouter(router);
+    const stubs = bindRouter(router, { schema: schemaFromRouter(router) });
     const out = await stubs.AppService.Hello({ name: 'Ada' });
     assert.deepEqual(out, { message: 'hello Ada' });
   });
@@ -38,10 +38,14 @@ describe('serveGrpc', () => {
         .output(z.object({ message: z.string() }))
         .query(({ input }) => ({ message: `hello ${input.name}` })),
     });
-    const server = await serveGrpc(router, { address: '127.0.0.1:0' });
+    const schema = schemaFromRouter(router);
+    const server = await serveGrpc(router, {
+      schema,
+      address: '127.0.0.1:0',
+    });
     try {
       const stub = createProtoStub({
-        router,
+        schema,
         address: `127.0.0.1:${server.port}`,
       });
       const out = await stub.AppService.Hello({ name: 'Ada' });
@@ -63,9 +67,13 @@ describe('serveGrpc', () => {
           yield { n: 2 };
         }),
     });
-    const server = await serveGrpc(router, { address: '127.0.0.1:0' });
+    const schema = schemaFromRouter(router);
+    const server = await serveGrpc(router, {
+      schema,
+      address: '127.0.0.1:0',
+    });
     const call = createGrpcStubCall({
-      router,
+      schema,
       address: `127.0.0.1:${server.port}`,
     });
     const seen: number[] = [];

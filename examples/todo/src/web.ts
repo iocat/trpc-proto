@@ -15,7 +15,7 @@ const html = readFileSync(path.join(spaDir, 'index.html'), 'utf8').replaceAll(
   AUTH_TOKEN,
 );
 const spaJs = esbuild.buildSync({
-  entryPoints: [path.join(spaDir, 'app.js')],
+  entryPoints: [path.join(spaDir, 'app.ts')],
   bundle: true,
   write: false,
   format: 'iife',

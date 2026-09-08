@@ -1,14 +1,19 @@
 import { createTRPCClient } from '@trpc/client';
 import { grpcWebLink } from '@trpc-proto/runtime/web';
-import { appRouter } from '../router.ts';
+import { protoSchema } from '../../generated/schema.js';
+import type { AppRouter } from '../router.js';
 
-const $ = (id) => document.getElementById(id);
+function $(id: string): HTMLInputElement {
+  const element = document.getElementById(id);
+  if (!element) throw new Error(`missing #${id}`);
+  return element as HTMLInputElement;
+}
 
 function client() {
-  return createTRPCClient({
+  return createTRPCClient<AppRouter>({
     links: [
-      grpcWebLink({
-        router: appRouter,
+      grpcWebLink<AppRouter>({
+        schema: protoSchema,
         url: '',
         encoding: 'base64',
         compress: true,
@@ -86,27 +91,28 @@ async function refresh() {
     .join('');
 }
 
-function fail(err) {
+function fail(err: unknown) {
   $('status').className = 'bad';
-  $('status').textContent = String(err.message || err);
+  $('status').textContent = err instanceof Error ? err.message : String(err);
 }
-
 function bindList() {
   $('list-btn').onclick = () => refresh().catch(fail);
   $('filter').onchange = () => refresh().catch(fail);
   $('todo-rows').onclick = async (event) => {
-    const row = event.target.closest('tr');
-    if (!row) return;
-    const id = row.dataset.id;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const row = target.closest('tr');
+    const id = row?.dataset.id;
+    if (!id) return;
     try {
-      if (event.target.classList.contains('toggle')) {
-        await client().todo.setDone.mutate({
-          id,
-          done: event.target.checked,
-        });
+      if (
+        target instanceof HTMLInputElement &&
+        target.classList.contains('toggle')
+      ) {
+        await client().todo.setDone.mutate({ id, done: target.checked });
         await refresh();
       }
-      if (event.target.classList.contains('del')) {
+      if (target.classList.contains('del')) {
         await client().todo.remove.mutate({ id });
         await refresh();
       }

@@ -1,15 +1,16 @@
+import { assumeExhaustive } from '@trpc-proto/utility';
 import type { GrpcWebEncoding } from '../content_type.js';
-import {
-  codecChunks,
-  type Codec,
-  type CodecInput,
-} from './codec.js';
-import {
-  GRPC_GZIP_ENCODING,
-  grpcWebCompressionCodec,
-} from './compression.js';
+import { codecChunks, type Codec, type CodecInput } from './codec.js';
+import { GRPC_GZIP_ENCODING, grpcWebCompressionCodec } from './compression.js';
 import { GrpcWebFrameCodec, type GrpcWebFrame } from './frame_codec.js';
-import { GrpcWebBase64Codec } from './base64_codec.js'
+import { GrpcWebBase64Codec } from './base64_codec.js';
+
+/**
+ * gRPC-Web HTTP headers used to communicate the final status of a call.
+ */
+export const GRPC_STATUS_HEADER = 'grpc-status';
+/** gRPC-Web HTTP headers used to communicate the final status message of a call. */
+export const GRPC_MESSAGE_HEADER = 'grpc-message';
 
 /** One protobuf message independent of its gRPC-Web wire representation. */
 export interface GrpcWebProtocolMessage {
@@ -50,12 +51,12 @@ export class GrpcWebError extends Error {
 
 function trailerFrame(value: GrpcWebProtocolTrailers): GrpcWebFrame {
   const trailers: Record<string, string> = {
-    'grpc-status': String(value.status),
-    'grpc-message': value.message,
+    [GRPC_STATUS_HEADER]: String(value.status),
+    [GRPC_MESSAGE_HEADER]: value.message,
   };
   for (const [key, metadataValue] of Object.entries(value.metadata ?? {})) {
     const name = key.toLowerCase();
-    if (name === 'grpc-status' || name === 'grpc-message') continue;
+    if (name === GRPC_STATUS_HEADER || name === GRPC_MESSAGE_HEADER) continue;
     trailers[name] = metadataValue;
   }
   return { kind: 'trailers', trailers };
@@ -85,7 +86,8 @@ async function decodeCompressedMessage(
   }
   let decoded: Uint8Array | undefined;
   for await (const value of compression.decode(payload)) {
-    if (decoded) throw new Error('compression codec returned multiple messages');
+    if (decoded)
+      throw new Error('compression codec returned multiple messages');
     decoded = value;
   }
   if (!decoded) throw new Error('compression codec returned no message');
@@ -93,14 +95,11 @@ async function decodeCompressedMessage(
 }
 
 /** Composes frames, compression, and body encoding through Codec only. */
-export class GrpcWebProtocolCodec
-  implements
-    Codec<
-      GrpcWebProtocolValue,
-      Uint8Array,
-      GrpcWebProtocolCodecOptions
-    >
-{
+export class GrpcWebProtocolCodec implements Codec<
+  GrpcWebProtocolValue,
+  Uint8Array,
+  GrpcWebProtocolCodecOptions
+> {
   readonly #frameCodec = new GrpcWebFrameCodec();
   readonly #base64Codec = new GrpcWebBase64Codec();
 
@@ -109,21 +108,35 @@ export class GrpcWebProtocolCodec
     options: GrpcWebProtocolCodecOptions = { encoding: 'base64' },
   ): Promise<Uint8Array> {
     let frame: GrpcWebFrame;
-    if (value.kind === 'trailers') {
-      frame = trailerFrame(value);
-    } else if (options.compress) {
-      const encoding = options.compression ?? GRPC_GZIP_ENCODING;
-      const compression = grpcWebCompressionCodec(encoding);
-      if (!compression) {
-        throw new GrpcWebError(12, `unsupported grpc-encoding: ${encoding}`);
-      }
-      frame = {
-        kind: 'message',
-        compressed: true,
-        payload: await compression.encode(value.payload),
-      };
-    } else {
-      frame = { kind: 'message', compressed: false, payload: value.payload };
+    switch (value.kind) {
+      case 'message':
+        if (options.compress) {
+          const encoding = options.compression ?? GRPC_GZIP_ENCODING;
+          const compression = grpcWebCompressionCodec(encoding);
+          if (!compression) {
+            throw new GrpcWebError(
+              12,
+              `unsupported grpc-encoding: ${encoding}`,
+            );
+          }
+          frame = {
+            kind: 'message',
+            compressed: true,
+            payload: await compression.encode(value.payload),
+          };
+        } else {
+          frame = {
+            kind: 'message',
+            compressed: false,
+            payload: value.payload,
+          };
+        }
+        break;
+      case 'trailers':
+        frame = trailerFrame(value);
+        break;
+      default:
+        return assumeExhaustive(value);
     }
 
     const encodedFrame = await this.#frameCodec.encode(frame);
@@ -142,36 +155,42 @@ export class GrpcWebProtocolCodec
         : codecChunks(encoded);
 
     for await (const frame of this.#frameCodec.decode(body)) {
-      if (frame.kind === 'trailers') {
-        const {
-          'grpc-status': encodedStatus,
-          'grpc-message': message = '',
-          ...metadata
-        } = frame.trailers;
-        yield {
-          kind: 'trailers',
-          status: encodedStatus === undefined ? 0 : Number(encodedStatus),
-          message,
-          metadata,
-        };
-        continue;
-      }
-
-      if (!frame.compressed) {
-        yield { kind: 'message', payload: frame.payload };
-        continue;
-      }
-      try {
-        yield {
-          kind: 'message',
-          payload: await decodeCompressedMessage(
-            frame.payload,
-            options.compression,
-          ),
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new GrpcWebError(13, message);
+      switch (frame.kind) {
+        case 'message':
+          if (!frame.compressed) {
+            yield { kind: 'message', payload: frame.payload };
+            break;
+          }
+          try {
+            yield {
+              kind: 'message',
+              payload: await decodeCompressedMessage(
+                frame.payload,
+                options.compression,
+              ),
+            };
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            throw new GrpcWebError(13, message);
+          }
+          break;
+        case 'trailers': {
+          const {
+            [GRPC_STATUS_HEADER]: encodedStatus,
+            [GRPC_MESSAGE_HEADER]: message = '',
+            ...metadata
+          } = frame.trailers;
+          yield {
+            kind: 'trailers',
+            status: encodedStatus === undefined ? 0 : Number(encodedStatus),
+            message,
+            metadata,
+          };
+          break;
+        }
+        default:
+          assumeExhaustive(frame);
       }
     }
   }

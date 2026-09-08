@@ -1,19 +1,28 @@
 import protobuf from 'protobufjs';
-import { toCamel } from '@trpc-proto/utility';
+import { toCamel, toPascalCase } from '@trpc-proto/utility';
 
-import type {
-  ProtoMessage,
-  ProtoSchema,
-  ProtoType,
+import {
+  protoServiceName,
+  type ProtoMessage,
+  type ProtoSchema,
+  type ProtoType,
 } from '@trpc-proto/schema_ir';
 
-/** Runtime protobuf encoder and decoder for a translated schema. */
-export interface ProtoCodec {
-  readonly schema: ProtoSchema;
-  encode(messageName: string, value: unknown): Uint8Array;
-  decode(messageName: string, bytes: Uint8Array): unknown;
+const DEFAULT_SERVICE_NAME = 'AppService';
+
+/** Reflected protobuf RPC used by transports. */
+export interface RuntimeProtoRpc {
+  readonly service: string;
+  readonly method: RuntimeProtoMethod;
 }
 
+/** Reflected protobuf method metadata used by transports. */
+export interface RuntimeProtoMethod {
+  readonly name: string;
+  readonly requestType: string;
+  readonly responseType: string;
+  readonly responseStream?: boolean;
+}
 
 function fieldTypeName(type: ProtoType): string {
   if (type.kind === 'scalar') return type.type;
@@ -119,6 +128,21 @@ function buildRoot(schema: ProtoSchema): protobuf.Root {
   for (const message of schema.messages) {
     addMessageType(ns, message);
   }
+  for (const service of schema.services) {
+    const created = new protobuf.Service(service.name);
+    for (const method of service.methods) {
+      const reflected = new protobuf.Method(
+        method.name,
+        'rpc',
+        method.requestType,
+        method.responseType,
+        false,
+        method.isResponseStreaming,
+      );
+      created.add(reflected);
+    }
+    ns.add(created);
+  }
   root.resolveAll();
   return root;
 }
@@ -127,6 +151,35 @@ function lookupType(root: protobuf.Root, schema: ProtoSchema, name: string) {
   if (name.startsWith('google.protobuf.')) return root.lookupType(name);
   return root.lookupType(`${schema.package}.${name}`) ?? root.lookupType(name);
 }
+
+function lookupRootMethod(
+  root: protobuf.Root,
+  schema: ProtoSchema,
+  serviceName: string,
+  methodName: string,
+): protobuf.Method | undefined {
+  const service = root.lookup(
+    `${schema.package}.${serviceName}`,
+    protobuf.Service,
+  ) as protobuf.Service | null;
+  return service?.methods[methodName];
+}
+
+function lookupRootRpc(
+  root: protobuf.Root,
+  schema: ProtoSchema,
+  path: string,
+): RuntimeProtoRpc | undefined {
+  const parts = path.split('.');
+  const methodName = toPascalCase(parts.pop() ?? path);
+  const service =
+    parts.length === 0
+      ? DEFAULT_SERVICE_NAME
+      : protoServiceName(parts.map(toPascalCase).join(''));
+  const method = lookupRootMethod(root, schema, service, methodName);
+  return method ? { service, method } : undefined;
+}
+
 
 function isWrapper(message: ProtoMessage) {
   return message.fields.length === 1 && message.fields[0]?.name === 'value';
@@ -331,24 +384,39 @@ function fromProtoObject(
   return out;
 }
 
-export function createProtoCodec(schema: ProtoSchema): ProtoCodec {
-  const root = buildRoot(schema);
-  return {
-    schema,
-    encode(messageName, value) {
-      const type = lookupType(root, schema, messageName);
-      const prepared = toProtoObject(schema, messageName, value);
-      return type.encode(type.fromObject(prepared ?? {})).finish();
-    },
-    decode(messageName, bytes) {
-      const type = lookupType(root, schema, messageName);
-      const raw = type.toObject(type.decode(bytes), {
-        defaults: false,
-        enums: String,
-        longs: String,
-        bytes: Uint8Array,
-      });
-      return fromProtoObject(schema, messageName, raw);
-    },
-  };
+/** Runtime protobuf encoder, decoder, and RPC registry. */
+export class ProtoCodec {
+  readonly #root: protobuf.Root;
+
+  constructor(readonly schema: ProtoSchema) {
+    this.#root = buildRoot(schema);
+  }
+
+  lookupRpc(path: string): RuntimeProtoRpc | undefined {
+    return lookupRootRpc(this.#root, this.schema, path);
+  }
+
+  lookupMethod(
+    serviceName: string,
+    methodName: string,
+  ): RuntimeProtoMethod | undefined {
+    return lookupRootMethod(this.#root, this.schema, serviceName, methodName);
+  }
+
+  encode(messageName: string, value: unknown): Uint8Array {
+    const type = lookupType(this.#root, this.schema, messageName);
+    const prepared = toProtoObject(this.schema, messageName, value);
+    return type.encode(type.fromObject(prepared ?? {})).finish();
+  }
+
+  decode(messageName: string, bytes: Uint8Array): unknown {
+    const type = lookupType(this.#root, this.schema, messageName);
+    const raw = type.toObject(type.decode(bytes), {
+      defaults: false,
+      enums: String,
+      longs: String,
+      bytes: Uint8Array,
+    });
+    return fromProtoObject(this.schema, messageName, raw);
+  }
 }

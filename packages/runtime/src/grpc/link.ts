@@ -15,19 +15,17 @@ export type {
 } from './proto_link.js';
 
 /** Options for a tRPC link backed by a native gRPC client. */
-export interface GrpcLinkOptions<
-  TRouter extends AnyRouter = AnyRouter,
-> extends ProtoLinkOptions<TRouter> {
+export interface GrpcLinkOptions extends ProtoLinkOptions {
   address?: string;
 }
 
 export function grpcLink<TRouter extends AnyRouter>(
-  opts: GrpcLinkOptions<TRouter>,
+  opts: GrpcLinkOptions,
 ): TRPCLink<TRouter> {
-  return createProtoLink(
+  return createProtoLink<TRouter>(
     opts,
     createGrpcStubCall({
-      router: opts.router,
+      schema: opts.schema,
       address: opts.address,
     }),
   );

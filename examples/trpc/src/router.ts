@@ -1,14 +1,19 @@
-import { initTRPC, TRPCError } from '@trpc/server';
-import { observable } from '@trpc/server/observable';
+import { EventEmitter, on } from 'node:events';
+import {
+  initTRPC,
+  TRPCError,
+  type TRPCSubscriptionProcedure,
+} from '@trpc/server';
 import type { ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
+
 const t = initTRPC.meta<ProtoMeta>().create({
   allowOutsideOfServer: true,
 
   defaultMeta: {
     proto: {
       package: 'trpc.v1',
-      cache: 'generated/schema.json',
+      cache: 'generated/schema.ts',
     },
   },
 });
@@ -20,8 +25,36 @@ const Note = z
   })
   .meta({ protoMessageName: 'Note' });
 
-const notes = new Map<string, z.infer<typeof Note>>();
-const noteListeners = new Set<(note: z.infer<typeof Note>) => void>();
+type NoteRecord = z.infer<typeof Note>;
+
+const notes = new Map<string, NoteRecord>();
+const noteEvents = new EventEmitter<{ change: [NoteRecord] }>();
+
+async function* subscribeToNotes({
+  signal,
+}: {
+  signal?: AbortSignal;
+}): AsyncGenerator<NoteRecord, void, unknown> {
+  const events = on(noteEvents, 'change', {
+    signal,
+  }) as AsyncIterable<[NoteRecord]>;
+  for await (const [note] of events) yield note;
+}
+
+type NoteSubscription = TRPCSubscriptionProcedure<{
+  input: Record<string, never>;
+  output: AsyncIterable<NoteRecord, void, unknown>;
+  meta: ProtoMeta;
+}>;
+
+const noteSubscription = t.procedure
+  .input(z.object({}))
+  .output(Note)
+  .subscription(
+    subscribeToNotes as unknown as (options: {
+      signal?: AbortSignal;
+    }) => NoteRecord,
+  ) as unknown as NoteSubscription;
 
 export const appRouter = t.router({
   health: t.procedure
@@ -39,7 +72,7 @@ export const appRouter = t.router({
       .output(Note)
       .mutation(({ input }) => {
         notes.set(input.id, input);
-        for (const push of noteListeners) push(input);
+        noteEvents.emit('change', input);
         return input;
       }),
 
@@ -57,22 +90,7 @@ export const appRouter = t.router({
         return note;
       }),
 
-    onChange: t.procedure
-      .input(z.object({}))
-      .output(Note)
-      .subscription((({ signal }: { signal?: AbortSignal }) =>
-        observable<z.infer<typeof Note>>((emit) => {
-          const push = (note: z.infer<typeof Note>) => {
-            emit.next(note);
-          };
-          noteListeners.add(push);
-          const onAbort = () => emit.complete();
-          signal?.addEventListener('abort', onAbort);
-          return () => {
-            noteListeners.delete(push);
-            signal?.removeEventListener('abort', onAbort);
-          };
-        })) as never),
+    onChange: noteSubscription,
   }),
 });
 

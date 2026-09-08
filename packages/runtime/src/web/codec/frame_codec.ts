@@ -1,4 +1,4 @@
-import { concat } from '@trpc-proto/utility';
+import { assumeExhaustive, concat } from '@trpc-proto/utility';
 import { codecChunks, type Codec, type CodecInput } from './codec.js';
 
 const TRAILER_FLAG = 0x80;
@@ -122,20 +122,25 @@ export class GrpcWebFrameCodec
   implements Codec<GrpcWebFrame, Uint8Array>
 {
   encode(frame: GrpcWebFrame): Uint8Array {
-    if (frame.kind === 'message') {
-      return encodeRawFrame(
-        frame.payload,
-        frame.compressed ? COMPRESSED_FLAG : 0,
-      );
+    switch (frame.kind) {
+      case 'message':
+        return encodeRawFrame(
+          frame.payload,
+          frame.compressed ? COMPRESSED_FLAG : 0,
+        );
+      case 'trailers': {
+        const lines = Object.entries(frame.trailers).map(
+          ([name, value]) =>
+            `${name.toLowerCase()}: ${encodeGrpcMessage(value)}`,
+        );
+        return encodeRawFrame(
+          new TextEncoder().encode(`${lines.join('\r\n')}\r\n`),
+          TRAILER_FLAG,
+        );
+      }
+      default:
+        return assumeExhaustive(frame);
     }
-    const lines = Object.entries(frame.trailers).map(
-      ([name, value]) =>
-        `${name.toLowerCase()}: ${encodeGrpcMessage(value)}`,
-    );
-    return encodeRawFrame(
-      new TextEncoder().encode(`${lines.join('\r\n')}\r\n`),
-      TRAILER_FLAG,
-    );
   }
 
   async *decode(

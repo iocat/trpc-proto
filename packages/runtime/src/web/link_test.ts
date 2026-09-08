@@ -4,7 +4,7 @@ import { createTRPCClient } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
 import { grpcWebLink } from './link.js';
-import type { ProtoMeta } from '@trpc-proto/schema_ir';
+import { schemaFromRouter, type ProtoMeta } from '@trpc-proto/schema_ir';
 
 describe('grpcWebLink', () => {
   it('uses grpcWebLink on createTRPCClient', async () => {
@@ -18,10 +18,11 @@ describe('grpcWebLink', () => {
         .query(({ input }) => ({ message: `hello ${input.name}` })),
     });
     type AppRouter = typeof appRouter;
+    const schema = schemaFromRouter(appRouter);
     const client = createTRPCClient<AppRouter>({
       links: [
-        grpcWebLink({
-          router: appRouter,
+        grpcWebLink<AppRouter>({
+          schema,
           interceptors: [async () => ({ message: 'hello Ada' })],
         }),
       ],

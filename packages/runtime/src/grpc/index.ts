@@ -5,6 +5,7 @@ export {
   serveGrpc,
 } from './server.js';
 export type {
+  BindRouterOptions,
   GrpcProtoOptions,
   GrpcServerHandle,
   ServeGrpcOptions,

@@ -22,7 +22,7 @@ async function decode(
 }
 
 describe('gRPC-Web protocol codec', () => {
-  it('round-trips binary messages and protected trailers', async () => {
+  it('round-trips raw messages and protected trailers', async () => {
     const message = await protocolCodec.encode(
       { kind: 'message', payload: new Uint8Array([1, 2, 3]) },
       { encoding: 'raw' },
@@ -57,7 +57,7 @@ describe('gRPC-Web protocol codec', () => {
     );
   });
 
-  it('streams text chunks and decompresses gzip messages', async () => {
+  it('streams base64 chunks and decompresses gzip messages', async () => {
     const payload = new TextEncoder().encode('response '.repeat(64));
     const encoded = await protocolCodec.encode(
       { kind: 'message', payload },

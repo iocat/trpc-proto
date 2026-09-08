@@ -1,7 +1,10 @@
 import * as grpc from '@grpc/grpc-js';
 import { TRPCError, type AnyRouter } from '@trpc/server';
 import { isAsyncIterable } from '@trpc-proto/utility';
-import { createProtoCodec } from '../proto_codec/proto_codec.js';
+import {
+  ProtoCodec,
+  type RuntimeProtoMethod,
+} from '../proto_codec/proto_codec.js';
 import type { StubCall } from './link.js';
 import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
 
@@ -9,9 +12,9 @@ import { schemaFromRouter, type ProtoSchema } from '@trpc-proto/schema_ir';
 /** Default insecure gRPC dial target for local development. */
 const DEFAULT_ADDRESS = '127.0.0.1:50051';
 
-/** Router and address used by a native gRPC client stub. */
+/** Schema and address used by a native gRPC client stub. */
 export interface GrpcProtoOptions {
-  router: AnyRouter;
+  schema: ProtoSchema;
   address?: string;
 }
 
@@ -108,25 +111,23 @@ function createInvoker(
   };
 }
 
+/** Schema and context used to bind generated service handlers. */
+export interface BindRouterOptions {
+  schema: ProtoSchema;
+  createContext?: () => unknown | Promise<unknown>;
+}
+
 /** Proto-shaped handlers that call a tRPC router. */
 export function bindRouter(
   router: AnyRouter,
-  opts?: { createContext?: () => unknown | Promise<unknown> },
+  opts: BindRouterOptions,
 ): StubHandlers {
   return bindStubHandlers(
-    schemaFromRouter(router),
-    createInvoker(router, opts),
+    opts.schema,
+    createInvoker(router, { createContext: opts.createContext }),
   );
 }
 
-function lookupRpc(schema: ProtoSchema, path: string) {
-  for (const service of schema.services) {
-    for (const method of service.methods) {
-      if (method.path === path) return { service, method };
-    }
-  }
-  return undefined;
-}
 
 
 function isObservable(value: unknown): value is {
@@ -190,40 +191,38 @@ async function* toAsyncIterable(result: unknown): AsyncIterable<unknown> {
 }
 
 export function createGrpcStubCall(opts: GrpcProtoOptions): StubCall {
-  const schema = schemaFromRouter(opts.router);
+  const schema = opts.schema;
   const { address = DEFAULT_ADDRESS } = opts;
-  const codec = createProtoCodec(schema);
+  const codec = new ProtoCodec(schema);
   const client = new grpc.Client(address, grpc.credentials.createInsecure());
 
   return (request) => {
-    const rpc =
-      request.service && request.method
-        ? (() => {
-            const service = schema.services.find(
-              (item) => item.name === request.service,
-            );
-            const method = service?.methods.find(
-              (item) => item.name === request.method,
-            );
-            return service && method ? { service, method } : undefined;
-          })()
-        : lookupRpc(schema, request.path);
-    if (!rpc) {
+    let serviceName: string | undefined;
+    let method: RuntimeProtoMethod | undefined;
+    if (request.service && request.method) {
+      serviceName = request.service;
+      method = codec.lookupMethod(serviceName, request.method);
+    } else {
+      const rpc = codec.lookupRpc(request.path);
+      serviceName = rpc?.service;
+      method = rpc?.method;
+    }
+    if (!serviceName || !method) {
       return Promise.reject(new Error('no gRPC mapping for call'));
     }
     const rpcPath =
       request.grpcPath ??
-      `/${schema.package}.${rpc.service.name}/${rpc.method.name}`;
+      `/${schema.package}.${serviceName}/${method.name}`;
     const payload = request.bytes
       ? Buffer.from(request.bytes)
-      : Buffer.from(codec.encode(rpc.method.requestType, request.input));
+      : Buffer.from(codec.encode(method.requestType, request.input));
     const metadata = new grpc.Metadata();
     if (request.metadata) {
       for (const [key, value] of Object.entries(request.metadata)) {
         metadata.set(key, value);
       }
     }
-    if (rpc.method.isResponseStreaming) {
+    if (method.responseStream) {
       const stream = client.makeServerStreamRequest(
         rpcPath,
         (value: Buffer) => value,
@@ -242,7 +241,7 @@ export function createGrpcStubCall(opts: GrpcProtoOptions): StubCall {
             if (!(chunk instanceof Uint8Array)) {
               throw new Error('expected protobuf bytes');
             }
-            yield codec.decode(rpc.method.responseType, chunk);
+            yield codec.decode(method.responseType, chunk);
           }
         })(),
       );
@@ -259,7 +258,7 @@ export function createGrpcStubCall(opts: GrpcProtoOptions): StubCall {
         else {
           resolve(
             codec.decode(
-              rpc.method.responseType,
+              method.responseType,
               new Uint8Array(res ?? Buffer.alloc(0)),
             ),
           );
@@ -273,7 +272,7 @@ export function createGrpcStubCall(opts: GrpcProtoOptions): StubCall {
 /** Client stub for any backend that implements the generated proto. */
 export function createProtoStub(opts: GrpcProtoOptions): StubHandlers {
   const call = createGrpcStubCall(opts);
-  return bindStubHandlers(schemaFromRouter(opts.router), (request) =>
+  return bindStubHandlers(opts.schema, (request) =>
     call({
       path: request.path,
       type: 'query',
@@ -284,6 +283,7 @@ export function createProtoStub(opts: GrpcProtoOptions): StubHandlers {
 
 /** Options for serving a tRPC router over native gRPC. */
 export interface ServeGrpcOptions {
+  schema: ProtoSchema;
   address?: string;
   createContext?: () => unknown | Promise<unknown>;
   credentials?: grpc.ServerCredentials;
@@ -377,13 +377,13 @@ function toServiceError(err: unknown): grpc.ServiceError {
 /** Serve a tRPC router over gRPC with protobuf encoding. */
 export async function serveGrpc(
   router: AnyRouter,
-  opts: ServeGrpcOptions = {},
+  opts: ServeGrpcOptions,
 ): Promise<GrpcServerHandle> {
   const address = opts.address ?? DEFAULT_ADDRESS;
   const credentials =
     opts.credentials ?? grpc.ServerCredentials.createInsecure();
-  const schema = schemaFromRouter(router);
-  const codec = createProtoCodec(schema);
+  const schema = opts.schema;
+  const codec = new ProtoCodec(schema);
   const invoke = createInvoker(router, { createContext: opts.createContext });
   const server = new grpc.Server();
 

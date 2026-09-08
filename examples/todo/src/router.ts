@@ -10,7 +10,7 @@ const t = initTRPC.meta<ProtoMeta>().create({
     proto: {
       package: 'todo.v1',
       syntax: 'proto3',
-      cache: 'generated/schema.json',
+      cache: 'generated/schema.ts',
       options: {
         go_package: 'todo/backend/gen/todov1',
       },

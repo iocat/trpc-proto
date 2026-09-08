@@ -1,5 +1,8 @@
 import { initTRPC } from '@trpc/server';
-import { noopForNonTsBackend } from '@trpc-proto/runtime/noop';
+import {
+  noopForNonTsBackend,
+  noopSubscriptionForNonTsBackend,
+} from '@trpc-proto/runtime/noop';
 import type { ProtoMeta } from '@trpc-proto/runtime';
 import { z } from 'zod';
 
@@ -9,7 +12,7 @@ const t = initTRPC.meta<ProtoMeta>().create({
   defaultMeta: {
     proto: {
       package: 'example.v1',
-      cache: 'generated/schema.json',
+      cache: 'generated/schema.ts',
       options: {
         go_package: 'users/backend/gen/examplev1',
       },
@@ -178,6 +181,7 @@ const TeamMemberInput = z.object({
   userId: z.string(),
 });
 
+
 /** Schema-only. Resolvers are noops; a proto backend implements the RPCs. */
 export const appRouter = t.router({
   health: t.procedure.output(HealthOutput).query(noopForNonTsBackend),
@@ -241,10 +245,9 @@ export const appRouter = t.router({
       .output(Issue)
       .mutation(noopForNonTsBackend),
 
-    onChange: t.procedure
-      .input(z.object({}))
-      .output(Issue)
-      .subscription(noopForNonTsBackend as never),
+    onChange: noopSubscriptionForNonTsBackend<z.infer<typeof Issue>>(
+      t.procedure.input(z.object({})).output(Issue),
+    ),
   }),
 
   team: t.router({

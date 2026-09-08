@@ -19,7 +19,7 @@ function spaHtml() {
 
 function spaJs() {
   return esbuild.buildSync({
-    entryPoints: [path.join(spaDir, 'app.js')],
+    entryPoints: [path.join(spaDir, 'app.ts')],
     bundle: true,
     write: false,
     format: 'iife',

@@ -10,7 +10,7 @@ const PORT = Number(process.env.WEB_PORT ?? 3002);
 const spaDir = path.join(import.meta.dirname, 'spa');
 const html = readFileSync(path.join(spaDir, 'index.html'), 'utf8');
 const spaJs = esbuild.buildSync({
-  entryPoints: [path.join(spaDir, 'app.js')],
+  entryPoints: [path.join(spaDir, 'app.ts')],
   bundle: true,
   write: false,
   format: 'iife',

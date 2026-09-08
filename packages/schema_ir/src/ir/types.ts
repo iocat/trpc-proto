@@ -1,6 +1,6 @@
 /**
- * Intermediate representation emitted by `@trpc-proto/plugin` (`schema.json`)
- * and consumed by `@trpc-proto/runtime`.
+ * Intermediate representation emitted by `@trpc-proto/plugin` as the cache
+ * schema and generated runtime schema, then consumed by `@trpc-proto/runtime`.
  */
 
 export type ProtoScalar =
@@ -123,7 +123,7 @@ export interface ProtoFileHeader {
   package?: string;
   /** Defaults to proto3 when omitted. */
   syntax?: ProtoSyntax;
-  /** Path to schema/cache JSON (read on generate, written after). */
+  /** Path to the generated runtime schema and field-assignment cache module. */
   cache?: string;
   options?: ProtoFileOptions;
 }

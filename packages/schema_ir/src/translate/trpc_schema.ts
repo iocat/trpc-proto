@@ -40,7 +40,6 @@ import type {
 export interface TranslateOptions {
   proto?: ProtoMeta['proto'];
   packageName?: string;
-  rootService?: string;
   generateCache?: SchemaGenerateCache;
 }
 
@@ -546,10 +545,7 @@ class TrpcSchemaTranslator {
     return fallbackName;
   }
 
-  run(
-    procedures: RuntimeProcedure[],
-    rootService: string,
-  ): {
+  run(procedures: RuntimeProcedure[]): {
     services: Map<string, ProtoMethod[]>;
     messages: ProtoMessage[];
     enums: ProtoEnum[];
@@ -557,7 +553,7 @@ class TrpcSchemaTranslator {
   } {
     const services = new Map<string, ProtoMethod[]>();
     for (const procedure of procedures) {
-      const service = serviceName(procedure.path, rootService);
+      const service = serviceName(procedure.path);
       const method = methodName(procedure.path);
       const requestType = this.#rpcMessageType(
         procedure.input,
@@ -649,15 +645,12 @@ export function translate(
   procedures: RuntimeProcedure[],
   options: TranslateOptions = {},
 ): ProtoSchema {
-  const rootService = options.rootService ?? 'App';
   const translator = new TrpcSchemaTranslator(
     structuredClone(options.generateCache ?? { propertyGenCache: {} }),
   );
 
-  const { services, messages, enums, generateCache } = translator.run(
-    procedures,
-    rootService,
-  );
+  const { services, messages, enums, generateCache } =
+    translator.run(procedures);
 
   const protoServices: ProtoService[] = [...services.entries()].map(
     ([name, methods]) => ({
@@ -1004,9 +997,9 @@ function mapKeyScalar(zod: ZodType): ProtoScalar {
   return mapped.type;
 }
 
-function serviceName(path: string, rootService: string): string {
+function serviceName(path: string): string {
   const parts = path.split('.');
-  if (parts.length === 1) return rootService;
+  if (parts.length === 1) return 'App';
   return parts
     .slice(0, -1)
     .map((part) => toPascalCase(part))

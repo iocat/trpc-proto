@@ -6,3 +6,4 @@ export {
   isGrpcWebContentType,
 } from './content_type.js';
 export type { GrpcWebEncoding } from './content_type.js';
+export type { ProtoSchema } from '@trpc-proto/schema_ir';

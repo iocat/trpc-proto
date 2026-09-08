@@ -1,80 +1,104 @@
 import { createTRPCClient } from '@trpc/client';
+import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 import { grpcWebLink } from '@trpc-proto/runtime/web';
-import { appRouter } from '../router.ts';
+import { protoSchema } from '../../generated/schema.js';
+import type { AppRouter } from '../router.js';
 
-const $ = (id) => document.getElementById(id);
+type RouterInputs = inferRouterInputs<AppRouter>;
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type IssueRecord = RouterOutputs['issue']['getById'];
+type UserRecord = RouterOutputs['user']['getById'];
+type TeamRecord = RouterOutputs['team']['getById'];
+type WorkspaceStatsRecord = RouterOutputs['org']['workspace']['stats'];
+type IssueUpdate = RouterInputs['issue']['update'];
+type IssueStatus = IssueRecord['status'];
+type IssuePriority = IssueRecord['priority'];
+type UserRole = UserRecord['role'];
+
+function $(id: string): HTMLInputElement {
+  const element = document.getElementById(id);
+  if (!element) throw new Error(`missing #${id}`);
+  return element as HTMLInputElement;
+}
 
 function api() {
-  return createTRPCClient({
+  return createTRPCClient<AppRouter>({
     links: [
-      grpcWebLink({
-        router: appRouter,
+      grpcWebLink<AppRouter>({
+        schema: protoSchema,
         url: '',
         encoding: 'base64',
         compress: false,
-        auth: { token: () => $('auth-token')?.value },
+        auth: { token: () => $('auth-token').value },
       }),
     ],
   });
 }
 
-const STATUS = ['backlog', 'todo', 'in_progress', 'done'];
-const PRIORITY = ['none', 'low', 'medium', 'high', 'urgent'];
-const STATUS_LABEL = {
+const STATUS = ['backlog', 'todo', 'in_progress', 'done'] as const;
+const PRIORITY = ['none', 'low', 'medium', 'high', 'urgent'] as const;
+const ROLE = ['admin', 'member', 'guest'] as const;
+const STATUS_LABEL: Record<IssueStatus, string> = {
   backlog: 'Backlog',
   todo: 'Todo',
   in_progress: 'In progress',
   done: 'Done',
 };
-const ROLE_LABEL = {
+const PRIORITY_LABEL = Object.fromEntries(
+  PRIORITY.map((priority) => [priority, priority]),
+) as Record<IssuePriority, string>;
+const ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Admin',
   member: 'Member',
   guest: 'Guest',
 };
 const AVATAR_COLORS = ['#8b7cff', '#22d3ee', '#f5b942', '#3ee0a0', '#ff5d73'];
 
-let issues = [];
-let users = [];
-let teams = [];
-let stats = null;
-let flashId = null;
-let sub;
+let issues: IssueRecord[] = [];
+let users: UserRecord[] = [];
+let teams: TeamRecord[] = [];
+let stats: WorkspaceStatsRecord | null = null;
+let flashId: string | null = null;
+let sub: { unsubscribe(): void } | undefined;
 
-function enumTail(value, prefix) {
+function enumTail(value: unknown, prefix: string): string {
   if (value == null) return '';
   const raw = String(value);
   if (raw.startsWith(prefix)) return raw.slice(prefix.length).toLowerCase();
   return raw.toLowerCase();
 }
 
-function issueStatus(issue) {
-  const s = enumTail(issue?.status, 'ISSUE_STATUS_');
-  return STATUS.includes(s) ? s : 'todo';
+function issueStatus(issue?: IssueRecord): IssueStatus {
+  const status = enumTail(issue?.status, 'ISSUE_STATUS_') as IssueStatus;
+  return STATUS.includes(status) ? status : 'todo';
 }
 
-function issuePriority(issue) {
-  const p = enumTail(issue?.priority, 'ISSUE_PRIORITY_');
-  return PRIORITY.includes(p) ? p : 'none';
+function issuePriority(issue?: IssueRecord): IssuePriority {
+  const priority = enumTail(
+    issue?.priority,
+    'ISSUE_PRIORITY_',
+  ) as IssuePriority;
+  return PRIORITY.includes(priority) ? priority : 'none';
 }
 
-function userRole(user) {
-  const r = enumTail(user?.role, 'USER_ROLE_');
-  return ROLE_LABEL[r] ? r : 'member';
+function userRole(user?: UserRecord): UserRole {
+  const role = enumTail(user?.role, 'USER_ROLE_') as UserRole;
+  return ROLE.includes(role) ? role : 'member';
 }
 
-function protoStatus(status) {
-  return `ISSUE_STATUS_${status.toUpperCase()}`;
+function protoStatus(status: string): IssueStatus {
+  return status as IssueStatus;
 }
 
-function protoPriority(priority) {
-  return `ISSUE_PRIORITY_${priority.toUpperCase()}`;
+function protoPriority(priority: string): IssuePriority {
+  return priority as IssuePriority;
 }
 
-function protoRole(role) {
-  return `USER_ROLE_${role.toUpperCase()}`;
+function protoRole(role: string): UserRole {
+  return role as UserRole;
 }
 
-function initials(name) {
+function initials(name: string | undefined): string {
   return String(name || '?')
     .split(/\s+/)
     .slice(0, 2)
@@ -83,39 +107,38 @@ function initials(name) {
     .toUpperCase();
 }
 
-function colorFor(id) {
+function colorFor(id: string): string {
   let n = 0;
-  for (const ch of String(id || ''))
-    n = (n + ch.charCodeAt(0)) % AVATAR_COLORS.length;
-  return AVATAR_COLORS[n];
+  for (const ch of id) n = (n + ch.charCodeAt(0)) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[n]!;
 }
 
-function userById(id) {
-  return users.find((u) => u.id === id);
+function userById(id: string | undefined): UserRecord | undefined {
+  return users.find((user) => user.id === id);
 }
 
-function teamById(id) {
-  return teams.find((t) => t.id === id);
+function teamById(id: string | undefined): TeamRecord | undefined {
+  return teams.find((team) => team.id === id);
 }
 
-function teamsOf(userId) {
-  return teams.filter((team) => (team.memberIds || []).includes(userId));
+function teamsOf(userId: string): TeamRecord[] {
+  return teams.filter((team) => team.memberIds.includes(userId));
 }
 
-function fail(err) {
+function fail(err: unknown): void {
   $('status').className = 'bad';
-  $('status').textContent = String(err.message || err);
+  $('status').textContent = err instanceof Error ? err.message : String(err);
 }
 
-function ok(text) {
+function ok(text: string): void {
   $('status').className = 'ok';
   $('status').textContent = text;
 }
 
 function parseRoute() {
   const raw = location.hash.replace(/^#\/?/, '') || 'inbox';
-  const [path, query] = raw.split('?');
-  const [name, id] = path.split('/');
+  const [path = 'inbox', query] = raw.split('?');
+  const [name = 'inbox', id] = path.split('/');
   return {
     name: name === 'team' ? 'people' : name,
     id,
@@ -123,25 +146,25 @@ function parseRoute() {
   };
 }
 
-function markNav() {
+function markNav(): void {
   const { name, id } = parseRoute();
-  for (const link of document.querySelectorAll('nav a')) {
+  for (const link of document.querySelectorAll<HTMLElement>('nav a')) {
     link.classList.toggle('active', link.dataset.nav === name);
   }
-  for (const link of document.querySelectorAll('.rail-key')) {
+  for (const link of document.querySelectorAll<HTMLElement>('.rail-key')) {
     link.classList.toggle('active', name === 'teams' && link.dataset.id === id);
   }
 }
 
-function setCrumb(text) {
+function setCrumb(text: string): void {
   $('crumb').textContent = text;
 }
 
-function prioBars(priority) {
+function prioBars(priority: IssuePriority): string {
   return `<span class="prio ${priority}"><i></i><i></i><i></i><i></i></span>`;
 }
 
-function escapeHtml(value) {
+function escapeHtml(value: unknown): string {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -149,7 +172,7 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;');
 }
 
-function issueRow(issue, index) {
+function issueRow(issue: IssueRecord, index: number): string {
   const status = issueStatus(issue);
   const priority = issuePriority(issue);
   const person = userById(issue.assigneeId);
@@ -169,30 +192,35 @@ function issueRow(issue, index) {
   </article>`;
 }
 
-function filtered(view, status, teamId) {
+function filtered(
+  view: string,
+  status = '',
+  teamId?: string,
+): IssueRecord[] {
   let list = issues.slice();
-  if (view === 'inbox')
+  if (view === 'inbox') {
     list = list.filter((issue) => issueStatus(issue) !== 'done');
+  }
   if (status) list = list.filter((issue) => issueStatus(issue) === status);
   if (teamId) list = list.filter((issue) => issue.teamId === teamId);
   return list;
 }
 
-function bindRows(root) {
-  root.querySelectorAll('.issue-row').forEach((row) => {
+function bindRows(root: HTMLElement): void {
+  root.querySelectorAll<HTMLElement>('.issue-row').forEach((row) => {
     row.onclick = () => {
       location.hash = `#/issues/${row.dataset.id}`;
     };
   });
 }
 
-function listView(view, teamId) {
+function listView(view: string, teamId?: string): string {
   const status = parseRoute().status;
   const list = filtered(view, status, teamId);
   const base = teamId ? `#/teams/${teamId}` : `#/${view}`;
   const chips = ['', ...STATUS]
     .map((value) => {
-      const label = value ? STATUS_LABEL[value] : 'All';
+      const label = value ? STATUS_LABEL[value as IssueStatus] : 'All';
       const on = status === value ? ' on' : '';
       const href = value ? `${base}?status=${value}` : base;
       return `<a class="chip${on}" href="${href}">${label}</a>`;
@@ -213,7 +241,11 @@ function listView(view, teamId) {
   }`;
 }
 
-function optionList(values, labels, selected) {
+function optionList<T extends string>(
+  values: readonly T[],
+  labels: Record<T, string>,
+  selected: string | undefined,
+): string {
   return values
     .map((value) => {
       const label = labels[value] || value;
@@ -223,7 +255,7 @@ function optionList(values, labels, selected) {
     .join('');
 }
 
-function teamOptions(selected) {
+function teamOptions(selected?: string): string {
   return `<option value="">No team</option>${teams
     .map(
       (team) =>
@@ -232,7 +264,7 @@ function teamOptions(selected) {
     .join('')}`;
 }
 
-function peopleOptions(selected) {
+function peopleOptions(selected?: string): string {
   return `<option value="">Unassigned</option>${users
     .map(
       (user) =>
@@ -241,7 +273,7 @@ function peopleOptions(selected) {
     .join('')}`;
 }
 
-function detailView(issue) {
+function detailView(issue: IssueRecord | undefined): string {
   if (!issue) return `<div class="empty">Issue not found</div>`;
   const status = issueStatus(issue);
   const priority = issuePriority(issue);
@@ -255,7 +287,7 @@ function detailView(issue) {
       <label>Status</label>
       <select id="issue-status">${optionList(STATUS, STATUS_LABEL, status)}</select>
       <label>Priority</label>
-      <select id="issue-priority">${optionList(PRIORITY, Object.fromEntries(PRIORITY.map((p) => [p, p])), priority)}</select>
+      <select id="issue-priority">${optionList(PRIORITY, PRIORITY_LABEL, priority)}</select>
       <label>Team</label>
       <select id="issue-team">${teamOptions(issue.teamId)}</select>
       <label>Assignee</label>
@@ -264,7 +296,7 @@ function detailView(issue) {
   </div>`;
 }
 
-function peopleView() {
+function peopleView(): string {
   const rows = users
     .map((user, i) => {
       const role = userRole(user);
@@ -280,7 +312,7 @@ function peopleView() {
         <td>${escapeHtml(user.email)}</td>
         <td>
           <select class="role-sel" data-id="${user.id}">
-            ${optionList(['admin', 'member', 'guest'], ROLE_LABEL, role)}
+            ${optionList(ROLE, ROLE_LABEL, role)}
           </select>
         </td>
         <td>${keys || '—'}</td>
@@ -307,35 +339,42 @@ function peopleView() {
     </table>`;
 }
 
-async function load() {
-  const client = api();
-  const steps = [
-    ['issue.list', () => client.issue.list.query({})],
-    ['user.list', () => client.user.list.query({})],
-    ['stats', () => client.org.workspace.stats.query()],
-    ['team.list', () => client.team.list.query({})],
-  ];
-  for (const [name, fn] of steps) {
-    try {
-      const value = await fn();
-      if (name === 'issue.list') issues = value.items || [];
-      if (name === 'user.list') users = value.items || [];
-      if (name === 'stats') stats = value;
-      if (name === 'team.list') teams = value.items || [];
-    } catch (err) {
-      throw new Error(`${name}: ${err.message || err}`);
-    }
+async function loadStep<T>(
+  name: string,
+  call: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    throw new Error(
+      `${name}: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
   }
+}
+
+async function load(): Promise<void> {
+  const client = api();
+  const [issueList, userList, workspaceStats, teamList] = await Promise.all([
+    loadStep('issue.list', () => client.issue.list.query({})),
+    loadStep('user.list', () => client.user.list.query({})),
+    loadStep('stats', () => client.org.workspace.stats.query()),
+    loadStep('team.list', () => client.team.list.query({})),
+  ]);
+  issues = issueList.items;
+  users = userList.items;
+  stats = workspaceStats;
+  teams = teamList.items;
   paintRail();
 }
 
-function teamPage(team) {
+function teamPage(team: TeamRecord | null | undefined): string {
   if (!team) return `<div class="empty">Team not found</div>`;
-  const members = (team.memberIds || [])
+  const members = team.memberIds
     .map((id) => userById(id))
-    .filter(Boolean);
+    .filter((user): user is UserRecord => user !== undefined);
   const outsiders = users.filter(
-    (user) => !(team.memberIds || []).includes(user.id),
+    (user) => !team.memberIds.includes(user.id),
   );
   const chips = members
     .map(
@@ -373,14 +412,12 @@ function teamPage(team) {
     ${listView('issues', team.id)}`;
 }
 
-function workspaceView() {
+function workspaceView(): string {
   const labels = stats?.labels || {};
-  const cells = ['backlog', 'todo', 'in_progress', 'done']
-    .map(
-      (key, i) =>
-        `<div class="stat" style="animation-delay:${i * 50}ms"><b>${labels[key] ?? 0}</b><span>${STATUS_LABEL[key]}</span></div>`,
-    )
-    .join('');
+  const cells = STATUS.map(
+    (key, index) =>
+      `<div class="stat" style="animation-delay:${index * 50}ms"><b>${labels[key] ?? 0}</b><span>${STATUS_LABEL[key]}</span></div>`,
+  ).join('');
   return `<div class="stats">${cells}
       <div class="stat" style="animation-delay:200ms"><b>${teams.length}</b><span>Teams</span></div>
       <div class="stat" style="animation-delay:250ms"><b>${users.length}</b><span>People</span></div>
@@ -394,7 +431,7 @@ function workspaceView() {
     </form>`;
 }
 
-function paintRail() {
+function paintRail(): void {
   $('ws-name').textContent = stats?.name || 'analytical-engine';
   document.title = stats?.name || 'analytical-engine';
 
@@ -426,12 +463,12 @@ function paintRail() {
   markNav();
 }
 
-function listen() {
+function listen(): void {
   if (sub) return;
-  sub = api().issue.onChange.subscribe(undefined, {
+  sub = api().issue.onChange.subscribe({}, {
     onData(issue) {
-      const idx = issues.findIndex((row) => row.id === issue.id);
-      if (idx >= 0) issues[idx] = issue;
+      const index = issues.findIndex((row) => row.id === issue.id);
+      if (index >= 0) issues[index] = issue;
       else issues.unshift(issue);
       flashId = issue.id;
       paintRail();
@@ -452,13 +489,13 @@ function listen() {
   $('live').classList.add('on');
 }
 
-function closeVeil() {
+function closeVeil(): void {
   const veil = $('veil');
   veil.hidden = true;
   veil.innerHTML = '';
 }
 
-function openComposer(teamId) {
+function openComposer(teamId?: string): void {
   const veil = $('veil');
   veil.hidden = false;
   veil.innerHTML = `<form class="sheet" id="compose">
@@ -466,7 +503,7 @@ function openComposer(teamId) {
     <input id="c-title" placeholder="Issue title" autofocus required />
     <textarea id="c-desc" placeholder="Description"></textarea>
     <select id="c-status">${optionList(STATUS, STATUS_LABEL, 'todo')}</select>
-    <select id="c-priority">${optionList(PRIORITY, Object.fromEntries(PRIORITY.map((p) => [p, p])), 'none')}</select>
+    <select id="c-priority">${optionList(PRIORITY, PRIORITY_LABEL, 'none')}</select>
     <select id="c-team">${teamOptions(teamId || '')}</select>
     <select id="c-assignee">${peopleOptions('')}</select>
     <button class="primary" type="submit">Create issue</button>
@@ -490,7 +527,7 @@ function openComposer(teamId) {
   };
 }
 
-function openTeamComposer() {
+function openTeamComposer(): void {
   const veil = $('veil');
   veil.hidden = false;
   veil.innerHTML = `<form class="sheet" id="compose-team">
@@ -517,7 +554,7 @@ function openTeamComposer() {
   };
 }
 
-function openInvite() {
+function openInvite(): void {
   const veil = $('veil');
   veil.hidden = false;
   const teamPick = `<option value="">No team yet</option>${teams
@@ -529,7 +566,7 @@ function openInvite() {
     <h2>Invite person</h2>
     <input id="invite-name" placeholder="Full name" required />
     <input id="invite-email" type="email" placeholder="Email" required />
-    <select id="invite-role">${optionList(['member', 'admin', 'guest'], ROLE_LABEL, 'member')}</select>
+    <select id="invite-role">${optionList(ROLE, ROLE_LABEL, 'member')}</select>
     <input id="invite-city" placeholder="City" value="London" />
     <select id="invite-team">${teamPick}</select>
     <button class="primary" type="submit">Invite</button>
@@ -557,7 +594,8 @@ function openInvite() {
   };
 }
 
-function openUserEditor(user) {
+function openUserEditor(user: UserRecord | undefined): void {
+  if (!user) return;
   const veil = $('veil');
   veil.hidden = false;
   const role = userRole(user);
@@ -565,7 +603,7 @@ function openUserEditor(user) {
     <h2>Edit ${escapeHtml(user.name)}</h2>
     <input id="u-name" value="${escapeHtml(user.name)}" required />
     <input id="u-email" type="email" value="${escapeHtml(user.email)}" required />
-    <select id="u-role">${optionList(['admin', 'member', 'guest'], ROLE_LABEL, role)}</select>
+    <select id="u-role">${optionList(ROLE, ROLE_LABEL, role)}</select>
     <input id="u-city" value="${escapeHtml(user.address?.city || '')}" placeholder="City" />
     <input id="u-tags" value="${escapeHtml((user.tags || []).join(', '))}" placeholder="tags, comma separated" />
     <button class="primary" type="submit">Save</button>
@@ -593,10 +631,10 @@ function openUserEditor(user) {
   };
 }
 
-function openCommand() {
+function openCommand(): void {
   const veil = $('veil');
   veil.hidden = false;
-  const items = [
+  const items: Array<{ label: string; run(): void }> = [
     { label: 'Go to Inbox', run: () => (location.hash = '#/inbox') },
     { label: 'Go to Issues', run: () => (location.hash = '#/issues') },
     { label: 'Go to People', run: () => (location.hash = '#/people') },
@@ -631,7 +669,9 @@ function openCommand() {
       )
       .join('');
     $('cmdk-list').onclick = (event) => {
-      const node = event.target.closest('.cmdk-item');
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const node = target.closest<HTMLElement>('.cmdk-item');
       if (!node) return;
       closeVeil();
       shown[Number(node.dataset.i)]?.run();
@@ -660,7 +700,7 @@ function openCommand() {
   };
 }
 
-async function render(reload = true) {
+async function render(reload = true): Promise<void> {
   markNav();
   try {
     if (reload) await load();
@@ -670,12 +710,13 @@ async function render(reload = true) {
       setCrumb('People');
       view.innerHTML = peopleView();
       $('invite-open').onclick = openInvite;
-      view.querySelectorAll('.edit-user').forEach((btn) => {
-        btn.onclick = () => openUserEditor(userById(btn.dataset.id));
+      view.querySelectorAll<HTMLButtonElement>('.edit-user').forEach((button) => {
+        button.onclick = () => openUserEditor(userById(button.dataset.id));
       });
-      view.querySelectorAll('.toggle-user').forEach((btn) => {
-        btn.onclick = async () => {
-          const user = userById(btn.dataset.id);
+      view.querySelectorAll<HTMLButtonElement>('.toggle-user').forEach((button) => {
+        button.onclick = async () => {
+          const user = userById(button.dataset.id);
+          if (!user) return;
           try {
             await api().user.update.mutate({
               id: user.id,
@@ -687,12 +728,14 @@ async function render(reload = true) {
           }
         };
       });
-      view.querySelectorAll('.role-sel').forEach((sel) => {
-        sel.onchange = async (event) => {
+      view.querySelectorAll<HTMLSelectElement>('.role-sel').forEach((select) => {
+        select.onchange = async () => {
+          const userId = select.dataset.id;
+          if (!userId) return;
           try {
             await api().user.update.mutate({
-              id: sel.dataset.id,
-              role: protoRole(event.target.value),
+              id: userId,
+              role: protoRole(select.value),
             });
             ok('role updated');
           } catch (err) {
@@ -707,8 +750,9 @@ async function render(reload = true) {
         teamById(id) || (id ? await api().team.getById.query({ id }) : null);
       setCrumb(team ? `${team.key} · ${team.name}` : 'Team');
       view.innerHTML = teamPage(team);
+      if (!team) return;
       bindRows(view);
-      const add = $('add-member');
+      const add = view.querySelector<HTMLSelectElement>('#add-member');
       if (add) {
         add.onchange = async () => {
           if (!add.value) return;
@@ -724,13 +768,15 @@ async function render(reload = true) {
           }
         };
       }
-      view.querySelectorAll('.drop-member').forEach((btn) => {
-        btn.onclick = async (event) => {
+      view.querySelectorAll<HTMLButtonElement>('.drop-member').forEach((button) => {
+        button.onclick = async (event) => {
           event.stopPropagation();
+          const userId = button.dataset.id;
+          if (!userId) return;
           try {
             await api().team.removeMember.mutate({
               teamId: team.id,
-              userId: btn.dataset.id,
+              userId,
             });
             await render(true);
             ok('removed');
@@ -765,26 +811,31 @@ async function render(reload = true) {
         (await api().issue.getById.query({ id }));
       setCrumb(issue?.id || 'Issue');
       view.innerHTML = detailView(issue);
-      const save = async (patch) => {
+      if (!issue) return;
+      const save = async (patch: IssueUpdate): Promise<void> => {
         try {
           const next = await api().issue.update.mutate(patch);
-          const idx = issues.findIndex((row) => row.id === next.id);
-          if (idx >= 0) issues[idx] = next;
+          const index = issues.findIndex((row) => row.id === next.id);
+          if (index >= 0) issues[index] = next;
           ok('saved');
         } catch (err) {
           fail(err);
         }
       };
-      $('issue-status').onchange = (event) =>
-        save({ id, status: protoStatus(event.target.value) });
-      $('issue-priority').onchange = (event) =>
-        save({ id, priority: protoPriority(event.target.value) });
-      $('issue-assignee').onchange = (event) =>
-        save({ id, assigneeId: event.target.value || '' });
-      $('issue-team').onchange = (event) =>
-        save({ id, teamId: event.target.value || '' });
-      $('issue-desc').onchange = (event) =>
-        save({ id, description: event.target.value });
+      const status = $('issue-status');
+      const priority = $('issue-priority');
+      const assignee = $('issue-assignee');
+      const team = $('issue-team');
+      const description = $('issue-desc');
+      status.onchange = () =>
+        void save({ id, status: protoStatus(status.value) });
+      priority.onchange = () =>
+        void save({ id, priority: protoPriority(priority.value) });
+      assignee.onchange = () =>
+        void save({ id, assigneeId: assignee.value || '' });
+      team.onchange = () => void save({ id, teamId: team.value || '' });
+      description.onchange = () =>
+        void save({ id, description: description.value });
       return;
     }
     setCrumb(name === 'issues' ? 'All issues' : 'Inbox');

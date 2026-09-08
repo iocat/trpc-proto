@@ -1,3 +1,4 @@
+import { assumeExhaustive } from '@trpc-proto/utility';
 import * as grpc from '@grpc/grpc-js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Codec } from './codec/codec.js';
@@ -316,7 +317,15 @@ export function createGrpcWebHttpHandler(
         encoding,
         compression: requestHeader(req, 'grpc-encoding'),
       })) {
-        if (value.kind === 'message') messages.push(value.payload);
+        switch (value.kind) {
+          case 'message':
+            messages.push(value.payload);
+            break;
+          case 'trailers':
+            break;
+          default:
+            assumeExhaustive(value);
+        }
       }
       const message = messages.length === 1 ? messages[0] : undefined;
       if (!message) throw new Error('unary gRPC-Web expects one data frame');

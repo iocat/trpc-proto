@@ -10,7 +10,8 @@ function flag(name: string) {
 
 if (process.argv.includes('-h') || process.argv.includes('--help')) {
   process.stdout.write(
-    'trpc-proto generate --router src/router.ts [--export appRouter] [--out generated] [--package pkg] [--cache generated/schema.json]\n' +
+    'trpc-proto generate --router src/router.ts [--export appRouter] [--out generated] [--package pkg] [--cache generated/schema.ts]\n' +
+      'writes <out>/<package>.proto and <cache> (default <out>/schema.ts)\n' +
       'package/syntax/cache/options default from defaultMeta.proto\n',
   );
   process.exit(0);
@@ -28,7 +29,6 @@ const options: GenerateOptions = {
   routerFile: flag('--router'),
   routerExport: flag('--export'),
   packageName: flag('--package'),
-  rootService: flag('--root-service'),
   proto: cache ? { cache } : undefined,
 };
 

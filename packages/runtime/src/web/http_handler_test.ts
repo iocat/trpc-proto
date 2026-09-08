@@ -18,7 +18,7 @@ import {
 } from './content_type.js';
 import { createGrpcWebFetchCall } from './fetch_call.js';
 import { serveGrpc } from '../grpc/server.js';
-import type { ProtoMeta } from '@trpc-proto/schema_ir';
+import { schemaFromRouter, type ProtoMeta } from '@trpc-proto/schema_ir';
 const frameCodec = new GrpcWebFrameCodec();
 const protocolCodec = new GrpcWebProtocolCodec();
 async function decodeProtocol(
@@ -46,7 +46,11 @@ describe('createGrpcWebHttpHandler', () => {
         .query(({ input }) => ({ message: `hello ${input.name}` })),
     });
     type AppRouter = typeof appRouter;
-    const grpcServer = await serveGrpc(appRouter, { address: '127.0.0.1:0' });
+    const schema = schemaFromRouter(appRouter);
+    const grpcServer = await serveGrpc(appRouter, {
+      schema,
+      address: '127.0.0.1:0',
+    });
     const handleGrpcWeb = createGrpcWebHttpHandler({
       address: `127.0.0.1:${grpcServer.port}`,
     });
@@ -67,8 +71,8 @@ describe('createGrpcWebHttpHandler', () => {
     try {
       const client = createTRPCClient<AppRouter>({
         links: [
-          grpcWebLink({
-            router: appRouter,
+          grpcWebLink<AppRouter>({
+            schema,
             url: `http://127.0.0.1:${port}`,
             encoding: 'base64',
             compress: true,
@@ -364,7 +368,7 @@ describe('createGrpcWebHttpHandler', () => {
     }
   });
 
-  it('rejects malformed requests and negotiates text error responses', async () => {
+  it('rejects malformed requests and negotiates base64 errors', async () => {
     const handleGrpcWeb = createGrpcWebHttpHandler();
     const server = http.createServer(async (req, res) => {
       if (!(await handleGrpcWeb(req, res))) {

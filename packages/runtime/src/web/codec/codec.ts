@@ -1,3 +1,4 @@
+import { isAsyncIterable } from '@trpc-proto/utility';
 import type { MaybePromise } from '../../types.js';
 
 /** One encoded chunk or an asynchronous stream of encoded chunks. */
@@ -15,15 +16,6 @@ export interface Codec<Value, Encoded, Options = undefined> {
   ): AsyncIterable<Value>;
 }
 
-function isAsyncIterable<Value>(
-  value: Value | AsyncIterable<Value>,
-): value is AsyncIterable<Value> {
-  return (
-    value !== null &&
-    value !== undefined &&
-    typeof (value as AsyncIterable<Value>)[Symbol.asyncIterator] === 'function'
-  );
-}
 
 /** Iterates uniformly over one encoded chunk or an asynchronous chunk stream. */
 export async function* codecChunks<Chunk>(
