@@ -3,10 +3,7 @@ import { TRPCError, type AnyRouter } from '@trpc/server';
 import type { ProtoSchema } from '@trpc-proto/schema_ir';
 import { grpcStatus } from '../../grpc/status.js';
 import { ProtoCodec } from '../../proto_codec/proto_codec.js';
-import {
-  createRouterInvoker,
-  toAsyncIterable,
-} from '../../router_invoker.js';
+import { createRouterInvoker, toAsyncIterable } from '../../router_invoker.js';
 import type { GrpcWebDispatcher } from './types.js';
 
 /** Dependencies needed to execute gRPC-Web calls against a tRPC router. */
@@ -77,9 +74,7 @@ export function createDirectDispatcher(
     } catch (error) {
       return {
         code:
-          error instanceof TRPCError
-            ? grpcStatus(error)
-            : grpc.status.UNKNOWN,
+          error instanceof TRPCError ? grpcStatus(error) : grpc.status.UNKNOWN,
         message: error instanceof Error ? error.message : String(error),
       };
     }

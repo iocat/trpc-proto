@@ -17,8 +17,7 @@ interface ServeGrpcWebBaseOptions {
 }
 
 /** Direct in-process tRPC router dispatch. */
-export interface ServeGrpcWebDirectOptions
-  extends ServeGrpcWebBaseOptions {
+export interface ServeGrpcWebDirectOptions extends ServeGrpcWebBaseOptions {
   mode: 'direct';
   router: AnyRouter;
   schema: ProtoSchema;
@@ -26,16 +25,15 @@ export interface ServeGrpcWebDirectOptions
 }
 
 /** Forwarding to a separately hosted native gRPC server. */
-export interface ServeGrpcWebForwardOptions
-  extends ServeGrpcWebBaseOptions {
+export interface ServeGrpcWebForwardOptions extends ServeGrpcWebBaseOptions {
   mode: 'forward';
-  backend: Omit<ForwardingGrpcWebHttpHandlerOptions, 'cors'>;
+  schema: ProtoSchema;
+  backend: Omit<ForwardingGrpcWebHttpHandlerOptions, 'cors' | 'schema'>;
 }
 
 /** Direct router dispatch or forwarding gRPC-Web server configuration. */
 export type ServeGrpcWebOptions =
-  | ServeGrpcWebDirectOptions
-  | ServeGrpcWebForwardOptions;
+  ServeGrpcWebDirectOptions | ServeGrpcWebForwardOptions;
 
 /** Bound gRPC-Web server and its lifecycle controls. */
 export interface GrpcWebServerHandle {
@@ -65,6 +63,7 @@ export async function serveGrpcWeb(
   options: ServeGrpcWebOptions,
 ): Promise<GrpcWebServerHandle> {
   const target = listenTarget(options.address ?? DEFAULT_ADDRESS);
+  let closeUpstream: (() => void) | undefined;
   const handleGrpcWeb =
     options.mode === 'direct'
       ? createDirectGrpcWebHttpHandler(options.router, {
@@ -72,10 +71,15 @@ export async function serveGrpcWeb(
           createContext: options.createContext,
           cors: options.cors,
         })
-      : createForwardingGrpcWebHttpHandler({
-          ...options.backend,
-          cors: options.cors,
-        });
+      : (() => {
+          const handler = createForwardingGrpcWebHttpHandler({
+            ...options.backend,
+            schema: options.schema,
+            cors: options.cors,
+          });
+          closeUpstream = handler.close;
+          return handler;
+        })();
   const server = http.createServer((request, response) => {
     void handleGrpcWeb(request, response).then(
       (handled) => {
@@ -92,11 +96,17 @@ export async function serveGrpcWeb(
   const listening = Promise.withResolvers<void>();
   server.once('error', listening.reject);
   server.listen(target.port, target.host, listening.resolve);
-  await listening.promise;
+  try {
+    await listening.promise;
+  } catch (error) {
+    closeUpstream?.();
+    throw error;
+  }
   server.removeListener('error', listening.reject);
   const bound = server.address();
   if (bound === null || typeof bound === 'string') {
     server.close();
+    closeUpstream?.();
     throw new Error('gRPC-Web server did not bind a TCP port');
   }
 
@@ -106,6 +116,7 @@ export async function serveGrpcWeb(
     close() {
       const closed = Promise.withResolvers<void>();
       server.close((error) => {
+        closeUpstream?.();
         if (error) closed.reject(error);
         else closed.resolve();
       });

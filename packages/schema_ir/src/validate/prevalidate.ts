@@ -1,6 +1,5 @@
 import type { ProtoFileHeader } from '../ir/types.js';
 
-
 export type ProtoIssueLevel = 'error' | 'warning';
 
 export type ProtoIssueCode =

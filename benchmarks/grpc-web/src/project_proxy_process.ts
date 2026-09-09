@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { Session } from 'node:inspector';
 import { serveGrpcWeb } from '@trpc-proto/runtime';
+import { schema } from './fixture.js';
 
 const backendAddress = process.env.GRPC_BACKEND_ADDRESS;
 if (!backendAddress) throw new Error('GRPC_BACKEND_ADDRESS is required');
@@ -24,6 +25,7 @@ if (profiler) {
 
 const server = await serveGrpcWeb({
   mode: 'forward',
+  schema,
   backend: { address: backendAddress },
   address: '127.0.0.1:0',
 });

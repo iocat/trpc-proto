@@ -15,6 +15,9 @@ export type {
   GrpcWebCorsOptions,
   DirectGrpcWebHttpHandlerOptions,
   ForwardingGrpcWebHttpHandlerOptions,
+  GrpcWebUpstreamCredentials,
+  MtlsConfig,
+  ForwardingGrpcWebHttpHandler,
 } from './web/http_handler.js';
 export { serveGrpcWeb } from './web/server.js';
 export type {

@@ -41,18 +41,18 @@ or production deployment readiness.
 
 ## Components
 
-| Component | File | Responsibility |
-| --- | --- | --- |
-| `grpcWebLink` | `src/web/link.ts` | tRPC link that protobuf-encodes input and selects raw or base64 transport. |
-| Fetch transport | `src/web/fetch_call.ts` | Sends gRPC-Web requests and decodes unary or server-streaming responses. |
-| Content negotiation | `src/web/content_type.ts` | Maps content types to raw or base64 encoding and negotiates `Accept`. |
-| Codec contract | `src/web/codec/codec.ts` | Defines the shared `encode` and streaming `decode` interface. |
-| Frame codec | `src/web/codec/frame_codec.ts` | Encodes and incrementally decodes binary data and trailer frames. |
-| Compression codec | `src/web/codec/compression.ts` | Encodes and decodes message-local gzip streams. |
-| Base64 codec | `src/web/codec/base64_codec.ts` | Encodes and incrementally decodes base64 body chunks. |
-| Protocol codec | `src/web/codec/protocol_codec.ts` | Composes frame, compression, and body codecs through `encode` and `decode`. |
-| `createForwardingGrpcWebHttpHandler` | `src/web/http_handler.ts` | Validates the Node HTTP boundary and forwards requests to grpc-js. |
-| `serveGrpcWeb` | `src/web/server.ts` | Owns gRPC-Web HTTP ingress in direct-router or forwarding mode. |
+| Component                            | File                              | Responsibility                                                              |
+| ------------------------------------ | --------------------------------- | --------------------------------------------------------------------------- |
+| `grpcWebLink`                        | `src/web/link.ts`                 | tRPC link that protobuf-encodes input and selects raw or base64 transport.  |
+| Fetch transport                      | `src/web/fetch_call.ts`           | Sends gRPC-Web requests and decodes unary or server-streaming responses.    |
+| Content negotiation                  | `src/web/content_type.ts`         | Maps content types to raw or base64 encoding and negotiates `Accept`.       |
+| Codec contract                       | `src/web/codec/codec.ts`          | Defines the shared `encode` and streaming `decode` interface.               |
+| Frame codec                          | `src/web/codec/frame_codec.ts`    | Encodes and incrementally decodes binary data and trailer frames.           |
+| Compression codec                    | `src/web/codec/compression.ts`    | Encodes and decodes message-local gzip streams.                             |
+| Base64 codec                         | `src/web/codec/base64_codec.ts`   | Encodes and incrementally decodes base64 body chunks.                       |
+| Protocol codec                       | `src/web/codec/protocol_codec.ts` | Composes frame, compression, and body codecs through `encode` and `decode`. |
+| `createForwardingGrpcWebHttpHandler` | `src/web/http_handler.ts`         | Validates the Node HTTP boundary and forwards requests to grpc-js.          |
+| `serveGrpcWeb`                       | `src/web/server.ts`               | Owns gRPC-Web HTTP ingress in direct-router or forwarding mode.             |
 
 The browser link and forwarding handler keep protobuf payloads opaque. Direct
 mode uses the runtime protobuf codec before invoking the router in-process.
@@ -133,12 +133,18 @@ native gRPC service:
 ```ts
 const server = await serveGrpcWeb({
   mode: 'forward',
+  schema: protoSchema,
   backend: {
     address: '127.0.0.1:50051',
   },
   address: '127.0.0.1:50052',
 });
 ```
+
+Forward mode requires the generated schema. It selects
+`grpc.Client.makeUnaryRequest` for unary methods and
+`grpc.Client.makeServerStreamRequest` for server-streaming methods. Paths not
+present in the schema return `UNIMPLEMENTED` without reaching the backend.
 
 A grpc-js server interceptor cannot implement direct mode's wire adapter:
 interceptors receive calls only after grpc-js accepts native HTTP/2 gRPC.
@@ -153,8 +159,10 @@ below to integrate forwarding mode with an HTTP server that owns other routes.
 ```ts
 import http from 'node:http';
 import { createForwardingGrpcWebHttpHandler } from '@trpc-proto/runtime';
+import { protoSchema } from './generated/schema.js';
 
 const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
+  schema: protoSchema,
   address: '127.0.0.1:50051',
 });
 
@@ -168,12 +176,31 @@ http.createServer(async (req, res) => {
 
 The handler returns `true` after it writes a response. It returns `false` for a
 request it does not own, allowing the surrounding server to continue routing.
-The handler currently accepts gRPC-Web `POST` requests through Node's
-`node:http` request and response types. HTTP/2 ingress is not implemented or
-tested.
+The handler accepts gRPC-Web `POST` requests through Node's `node:http`
+request and response types. Call `handleGrpcWeb.close()` when the surrounding
+HTTP server shuts down; `serveGrpcWeb().close()` closes its upstream client
+automatically.
 
-The native gRPC backend address defaults to `127.0.0.1:50051`. The backend
-channel is insecure unless `credentials` is provided.
+The native gRPC backend address defaults to `127.0.0.1:50051`. When
+`credentials` is omitted, the upstream channel defaults to
+`{ type: 'insecure' }`. For verified TLS or mTLS, provide:
+
+```ts
+credentials: {
+  type: 'mtls',
+  caCertPath: '/run/secrets/upstream-ca.pem',
+  serverNameOverride: 'api.internal.example',
+  clientIdentity: {
+    certPath: '/run/secrets/client-cert.pem',
+    keyPath: '/run/secrets/client-key.pem',
+  },
+}
+```
+
+`caCertPath` verifies the upstream certificate. `serverNameOverride`, when
+set, becomes grpc-js's `grpc.ssl_target_name_override`. Omit `clientIdentity`
+for one-way TLS. grpc-js checks the configured files once per second and uses
+valid replacements for new TLS connections without recreating the handler.
 
 ## Body representations
 
@@ -181,9 +208,9 @@ The configuration names describe the bytes placed in the HTTP body. The
 standard gRPC-Web media types retain their protocol-defined binary and text
 names:
 
-| Configuration | Content type | HTTP body |
-| --- | --- | --- |
-| `raw` | `application/grpc-web+proto` | Raw length-prefixed binary frames without base64. |
+| Configuration      | Content type                      | HTTP body                                               |
+| ------------------ | --------------------------------- | ------------------------------------------------------- |
+| `raw`              | `application/grpc-web+proto`      | Raw length-prefixed binary frames without base64.       |
 | `base64` (default) | `application/grpc-web-text+proto` | Base64 representation of length-prefixed binary frames. |
 
 The content-type parser also accepts both media types without `+proto`, as
@@ -200,16 +227,15 @@ Before optional base64 encoding, each frame is length-prefixed:
 
 Implemented flags:
 
-| Flag | Meaning | Current behavior |
-| --- | --- | --- |
-| `0x00` | Uncompressed protobuf data | Supported. |
-| `0x01` | Compressed protobuf data | Supported with `grpc-encoding: gzip`. |
-| `0x80` | Uncompressed in-body trailers | Supported. |
-| `0x81` | Compressed in-body trailers | Rejected. |
+| Flag   | Meaning                       | Current behavior                      |
+| ------ | ----------------------------- | ------------------------------------- |
+| `0x00` | Uncompressed protobuf data    | Supported.                            |
+| `0x01` | Compressed protobuf data      | Supported with `grpc-encoding: gzip`. |
+| `0x80` | Uncompressed in-body trailers | Supported.                            |
+| `0x81` | Compressed in-body trailers   | Rejected.                             |
 
 The raw frame decoder accepts arbitrary transport chunk boundaries and rejects
-truncated headers and payloads. It does not yet reject every unknown flag
-combination or enforce that a trailer frame is last.
+truncated headers and payloads.
 
 In base64 mode, each flushed frame is base64-encoded independently. Padding can
 therefore occur before the end of the HTTP body:
@@ -281,12 +307,9 @@ The HTTP handler:
 9. In direct mode, resolves that gRPC path through `ProtoSchema` to the
    `ProtoMethod.path` tRPC key, such as `user.getById`, decodes the request
    type, and invokes that router procedure.
-10. In forward mode, converts permitted request headers into grpc-js metadata
-    and sends the gRPC path and opaque protobuf message to the configured
-    backend.
-
-Client-streaming and bidirectional-streaming request bodies are not supported.
-There is no request-body size limit yet.
+10. In forward mode, resolves the path to a schema-derived grpc-js method
+    definition, converts permitted request headers into grpc-js metadata, and
+    invokes the backend with unary or server-streaming cardinality.
 
 ## Response and streaming flow
 
@@ -297,10 +320,8 @@ then end the HTTP response. Each frame is written raw for binary mode or
 independently base64-encoded for text mode.
 
 grpc-js removes native gRPC message compression before invoking the handler's
-`data` callback. The handler therefore emits uncompressed `0x00` Web response
-frames even when the native gRPC backend selected gzip. It does not recompress
-backend responses. The bundled example backends do not configure response
-compression.
+`data` callback, so forwarded responses use uncompressed `0x00` Web response
+frames. The bundled example backends do not configure response compression.
 
 The handler chooses the first supported media type in `Accept`; when `Accept`
 does not select one, it uses the request encoding. A unary RPC naturally
@@ -330,8 +351,7 @@ grpc-message: \r\n
 ```
 
 The frame containing this block has flag `0x80`. Additional string grpc-js
-status metadata is copied into the block. Binary status metadata is currently
-omitted.
+status metadata is copied into the block.
 
 The handler percent-encodes `grpc-message` and additional values when it writes
 trailers. The Fetch client percent-decodes `grpc-message`; additional metadata
@@ -344,25 +364,23 @@ standard client-only HTTP-to-gRPC mapping: `400` to `INTERNAL`; `401` to
 `429`, `502`, `503`, and `504` to `UNAVAILABLE`; and every other status,
 including `200`, to `UNKNOWN`.
 
-
 Transport outcomes:
 
-| Condition | HTTP result | gRPC-Web result |
-| --- | --- | --- |
-| Successful backend gRPC call | `200` | Data frames followed by `grpc-status: 0`. |
-| Backend gRPC error | `200` | Final trailer contains the backend status, message, and string metadata. |
-| Malformed framed request | `200` | Final trailer contains `grpc-status: 13` (`INTERNAL`). |
-| Request not owned by handler | No response written | Handler returns `false`. |
-| Rejected CORS origin or header | `403` | No backend gRPC call. |
-| Rejected preflight method | `405` | `POST` reported as the allowed method. |
+| Condition                      | HTTP result         | gRPC-Web result                                                          |
+| ------------------------------ | ------------------- | ------------------------------------------------------------------------ |
+| Successful backend gRPC call   | `200`               | Data frames followed by `grpc-status: 0`.                                |
+| Backend gRPC error             | `200`               | Final trailer contains the backend status, message, and string metadata. |
+| Malformed framed request       | `200`               | Final trailer contains `grpc-status: 13` (`INTERNAL`).                   |
+| Request not owned by handler   | No response written | Handler returns `false`.                                                 |
+| Rejected CORS origin or header | `403`               | No backend gRPC call.                                                    |
+| Rejected preflight method      | `405`               | `POST` reported as the allowed method.                                   |
 
 For both unary and streaming responses, EOF without a trailer is rejected as a
 missing final status. `grpc-status` is required inside the trailer and must be
 an ASCII decimal status code from `0` through `16`; missing, malformed, and
 out-of-range values produce a `GrpcWebError` with status `UNKNOWN`.
-`grpc-message` is strictly percent-decoded, and malformed percent escapes also
-produce `UNKNOWN`. Duplicate trailers and data after trailers are not yet
-strictly rejected.
+`grpc-message` is strictly percent-decoded, and malformed percent escapes
+produce `UNKNOWN`.
 
 ## CORS behavior
 
@@ -371,6 +389,7 @@ origin allowlist:
 
 ```ts
 const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
+  schema: protoSchema,
   address: '127.0.0.1:50051',
   cors: {
     allowedOrigins: ['https://app.example.com'],
@@ -464,14 +483,6 @@ Other non-pseudo headers are forwarded as string grpc-js metadata. This
 includes `authorization`, `grpc-timeout`, and application headers allowed by
 the browser's CORS preflight.
 
-Current limitations:
-
-- `*-bin` request metadata is not decoded into `Buffer` values.
-- Header forwarding has no application allowlist.
-- Repeated header values are joined with commas.
-- `grpc-timeout` is forwarded as metadata but is not parsed into local grpc-js
-  call options.
-
 ## Connection and cancellation behavior
 
 One `grpc.Client` is created when `createForwardingGrpcWebHttpHandler` is called and is
@@ -483,38 +494,26 @@ the backend gRPC call finishes, the handler cancels that gRPC call. Listener
 cleanup after backend status prevents completed calls from being cancelled
 when their successful browser-facing HTTP response closes.
 
-Current operational limitations:
-
-- The returned function has no explicit channel `close()` lifecycle method.
-- There is no pool for multiple backend gRPC addresses.
-- There is no local deadline timer, circuit breaker, health check, rate limit,
-  metric collection, or access logging.
-
 ## Supported capability matrix
 
-| Capability | State |
-| --- | --- |
-| Binary unary request and response | Supported |
-| Binary server-streaming response | Supported |
-| Text unary request and response | Supported |
-| Text server-streaming response | Supported |
-| Independently padded base64 chunks | Supported |
-| Arbitrarily split response chunks | Supported |
-| In-body status trailers | Supported |
-| Request metadata and bearer authorization | Supported for string values |
-| Exact-origin CORS preflight | Opt-in |
-| Gzip-compressed request messages | Opt-in with `compress: true` |
-| Gzip-compressed unary and streaming responses | Supported |
-| Compressed in-body trailers | Not supported |
-| Client streaming | Not supported |
-| Bidirectional streaming | Not supported |
-| HTTP/2 browser ingress | Not implemented or tested |
-| Final-status presence and syntax validation | Supported |
-| Trailer-last and no-data-after-trailers validation | Not supported |
-| Binary metadata | Not supported |
-| Browser connection cancellation reaches backend gRPC call | Supported |
-| Multiple-backend pooling | Not supported |
-| Production resilience and observability | Not supported |
+| Capability                                                | State                        |
+| --------------------------------------------------------- | ---------------------------- |
+| Binary unary request and response                         | Supported                    |
+| Binary server-streaming response                          | Supported                    |
+| Text unary request and response                           | Supported                    |
+| Text server-streaming response                            | Supported                    |
+| Independently padded base64 chunks                        | Supported                    |
+| Arbitrarily split response chunks                         | Supported                    |
+| In-body status trailers                                   | Supported                    |
+| Request metadata and bearer authorization                 | Supported for string values  |
+| Exact-origin CORS preflight                               | Opt-in                       |
+| Gzip-compressed request messages                          | Opt-in with `compress: true` |
+| Gzip-compressed unary and streaming responses             | Supported                    |
+| Final-status presence and syntax validation               | Supported                    |
+| Browser connection cancellation reaches backend gRPC call | Supported                    |
+
+Unsupported capabilities and planned protocol and operational work are tracked
+in the [project backlog](../../BACKLOG.md).
 
 ## Tests
 
@@ -543,5 +542,3 @@ status validation, required final status, and the HTTP fallback mapping.
 flags, content negotiation, raw frame boundaries, independently padded base64
 segments, received message decoding, strict status parsing, arbitrary base64
 transport boundaries, and malformed input.
-HTTP/2 ingress, strict trailer ordering, deadlines, and operational safeguards
-remain unimplemented.

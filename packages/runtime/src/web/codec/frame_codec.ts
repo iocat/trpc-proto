@@ -10,7 +10,6 @@ const TRAILER_FLAG = 0x80;
 const COMPRESSED_FLAG = 0x01;
 const NO_FRAMES: readonly GrpcWebFrame[] = [];
 
-
 /** One protobuf data frame. */
 export interface GrpcWebMessageFrame {
   kind: 'message';
@@ -26,7 +25,6 @@ export interface GrpcWebTrailerFrame {
 
 /** Complete frame emitted by the incremental binary decoder. */
 export type GrpcWebFrame = GrpcWebMessageFrame | GrpcWebTrailerFrame;
-
 
 function writeLength(out: Uint8Array, length: number) {
   out[1] = (length >>> 24) & 0xff;
@@ -83,10 +81,7 @@ function encodeGrpcMessage(value: string) {
     .join('');
 }
 
-
-class FrameDecoder
-  implements IncrementalDecoder<Uint8Array, GrpcWebFrame>
-{
+class FrameDecoder implements IncrementalDecoder<Uint8Array, GrpcWebFrame> {
   #buffer = new Uint8Array();
 
   push(chunk: Uint8Array): readonly GrpcWebFrame[] {
@@ -125,9 +120,7 @@ class FrameDecoder
 }
 
 /** Binary gRPC-Web frame codec. */
-export class GrpcWebFrameCodec
-  implements Codec<GrpcWebFrame, Uint8Array>
-{
+export class GrpcWebFrameCodec implements Codec<GrpcWebFrame, Uint8Array> {
   encode(frame: GrpcWebFrame): Uint8Array {
     switch (frame.kind) {
       case 'message':
@@ -150,15 +143,11 @@ export class GrpcWebFrameCodec
     }
   }
 
-  async *decode(
-    encoded: CodecInput<Uint8Array>,
-  ): AsyncIterable<GrpcWebFrame> {
+  async *decode(encoded: CodecInput<Uint8Array>): AsyncIterable<GrpcWebFrame> {
     const decoder = new FrameDecoder();
     for await (const chunk of codecChunks(encoded)) {
       yield* decoder.push(chunk);
     }
     yield* decoder.finish();
   }
-
 }
-

@@ -29,8 +29,7 @@ export interface GrpcWebProtocolTrailers {
 
 /** Semantic value encoded in a gRPC-Web HTTP body. */
 export type GrpcWebProtocolValue =
-  | GrpcWebProtocolMessage
-  | GrpcWebProtocolTrailers;
+  GrpcWebProtocolMessage | GrpcWebProtocolTrailers;
 
 /** Wire choices applied by the protocol codec. */
 export interface GrpcWebProtocolCodecOptions {

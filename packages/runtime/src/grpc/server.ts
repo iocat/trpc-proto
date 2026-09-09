@@ -9,10 +9,8 @@ import { ProtoCodec } from '../proto_codec/proto_codec.js';
 import type { ProtoSchema } from '@trpc-proto/schema_ir';
 import { grpcStatus } from './status.js';
 
-
 /** Default insecure gRPC dial target for local development. */
 const DEFAULT_ADDRESS = '127.0.0.1:50051';
-
 
 /** `{ UserService: { GetById: (input) => ... } }` — spread onto generated server stubs. */
 export type StubHandlers = Record<
@@ -20,8 +18,10 @@ export type StubHandlers = Record<
   Record<string, (input: unknown) => Promise<unknown>>
 >;
 
-
-function bindStubHandlers(schema: ProtoSchema, invoke: RouterInvoker): StubHandlers {
+function bindStubHandlers(
+  schema: ProtoSchema,
+  invoke: RouterInvoker,
+): StubHandlers {
   const services: StubHandlers = {};
   for (const service of schema.services) {
     const methods: Record<string, (input: unknown) => Promise<unknown>> = {};
@@ -32,7 +32,6 @@ function bindStubHandlers(schema: ProtoSchema, invoke: RouterInvoker): StubHandl
   }
   return services;
 }
-
 
 /** Schema and context used to bind generated service handlers. */
 export interface BindRouterOptions {
@@ -51,8 +50,6 @@ export function bindRouter(
   );
 }
 
-
-
 /** Options for serving a tRPC router over native gRPC. */
 export interface ServeGrpcOptions {
   schema: ProtoSchema;
@@ -67,7 +64,6 @@ export interface GrpcServerHandle {
   port: number;
   close(): Promise<void>;
 }
-
 
 function toServiceError(err: unknown): grpc.ServiceError {
   if (err instanceof TRPCError) {

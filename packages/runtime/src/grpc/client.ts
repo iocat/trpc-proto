@@ -36,8 +36,7 @@ export function createGrpcStubCall(opts: GrpcProtoOptions): StubCall {
       return Promise.reject(new Error('no gRPC mapping for call'));
     }
     const rpcPath =
-      request.grpcPath ??
-      `/${schema.package}.${serviceName}/${method.name}`;
+      request.grpcPath ?? `/${schema.package}.${serviceName}/${method.name}`;
     const payload = request.bytes
       ? Buffer.from(request.bytes)
       : Buffer.from(codec.encode(method.requestType, request.input));

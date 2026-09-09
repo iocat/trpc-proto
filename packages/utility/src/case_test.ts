@@ -19,7 +19,11 @@ const pascalCases: Case[] = [
   { name: 'dot path', input: 'user.getById', expected: 'UserGetById' },
   { name: 'snake', input: 'user_role', expected: 'UserRole' },
   { name: 'kebab', input: 'user-role', expected: 'UserRole' },
-  { name: 'mixed separators', input: 'org.workspace_stats', expected: 'OrgWorkspaceStats' },
+  {
+    name: 'mixed separators',
+    input: 'org.workspace_stats',
+    expected: 'OrgWorkspaceStats',
+  },
   { name: 'leading separator dropped', input: '_id', expected: 'Id' },
 ];
 
@@ -37,7 +41,11 @@ const screamingCases: Case[] = [
   { name: 'kebab', input: 'user-role', expected: 'USER_ROLE' },
   { name: 'dot', input: 'issue.status', expected: 'ISSUE_STATUS' },
   { name: 'leading underscore stripped', input: '_foo', expected: 'FOO' },
-  { name: 'repeated separators collapsed', input: 'a--b__c', expected: 'A_B_C' },
+  {
+    name: 'repeated separators collapsed',
+    input: 'a--b__c',
+    expected: 'A_B_C',
+  },
 ];
 
 const camelCases: Case[] = [
@@ -46,7 +54,6 @@ const camelCases: Case[] = [
   { name: 'one underscore', input: 'team_id', expected: 'teamId' },
   { name: 'two underscores', input: 'created_at_ms', expected: 'createdAtMs' },
   { name: 'leading underscore', input: '_id', expected: 'Id' },
-
 ];
 
 describe('toPascalCase', () => {

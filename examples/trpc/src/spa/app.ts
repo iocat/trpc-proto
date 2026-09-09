@@ -37,19 +37,22 @@ function paintStream(): void {
 
 function listen() {
   if (sub) return;
-  sub = client.note.onChange.subscribe({}, {
-    onData(note) {
-      edits.push({
-        at: new Date().toISOString(),
-        id: note.id,
-        body: note.body,
-      });
-      paintStream();
+  sub = client.note.onChange.subscribe(
+    {},
+    {
+      onData(note) {
+        edits.push({
+          at: new Date().toISOString(),
+          id: note.id,
+          body: note.body,
+        });
+        paintStream();
+      },
+      onError(err) {
+        fail(err);
+      },
     },
-    onError(err) {
-      fail(err);
-    },
-  });
+  );
 }
 
 function route() {

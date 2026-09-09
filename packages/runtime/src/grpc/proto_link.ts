@@ -13,7 +13,6 @@ const AUTH_METADATA_KEY = 'authorization';
 /** Default authorization scheme. Empty `AuthConfig.scheme` sends a raw token. */
 const AUTH_SCHEME_BEARER = 'Bearer';
 
-
 /** Transport-neutral request passed from a protobuf link to its stub call. */
 export interface StubRequest {
   path: string;
@@ -51,7 +50,6 @@ export type CallInterceptor = (
   next: (ctx: CallContext) => Promise<unknown>,
 ) => Promise<unknown>;
 
-
 /** Authorization metadata generated for each protobuf link call. */
 export interface AuthConfig {
   /** Bearer token, or getter. Empty/undefined skips the header. */
@@ -71,7 +69,6 @@ export interface ProtoLinkOptions {
   interceptors?: CallInterceptor[];
   auth?: AuthConfig;
 }
-
 
 function compose(
   interceptors: CallInterceptor[],

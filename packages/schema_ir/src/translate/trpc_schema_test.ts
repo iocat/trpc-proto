@@ -14,7 +14,6 @@ import type {
   SchemaGenerateCache,
 } from '../ir/types.js';
 
-
 function proc(
   path: string,
   opts: {
@@ -655,7 +654,6 @@ describe('translate', () => {
       /protoEnumName must be PascalCase/,
     );
   });
-
 
   it('encodes protoUseKnownType as a well-known message', () => {
     const Duration = z

@@ -46,9 +46,7 @@ describe('bindRouter', () => {
     ) {
       throw new Error('expected async iterable');
     }
-    const iterator = (
-      result as AsyncIterable<unknown>
-    )[Symbol.asyncIterator]();
+    const iterator = (result as AsyncIterable<unknown>)[Symbol.asyncIterator]();
     await assert.rejects(iterator.next());
   });
 });

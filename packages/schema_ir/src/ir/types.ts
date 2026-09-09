@@ -146,7 +146,6 @@ export interface ProtoObjectMeta {
   protoUseKnownType?: string;
 }
 
-
 /** Complete protobuf schema intermediate representation. */
 export interface ProtoSchema {
   syntax: ProtoSyntax;

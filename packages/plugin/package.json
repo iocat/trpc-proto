@@ -12,8 +12,6 @@
   "bin": {
     "trpc-proto": "./dist/cli.js"
   },
-
-
   "files": [
     "dist"
   ],

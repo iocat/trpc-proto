@@ -29,8 +29,8 @@ describe('gRPC-Web message compression', () => {
   });
 
   it('rejects corrupted gzip payloads', async () => {
-    await assert.rejects(
-      async () => decode(new Uint8Array([0x1f, 0x8b, 0x00])),
+    await assert.rejects(async () =>
+      decode(new Uint8Array([0x1f, 0x8b, 0x00])),
     );
   });
 });

@@ -6,8 +6,6 @@ import {
   toScreamingSnake,
 } from '@trpc-proto/utility';
 
-
-
 import type {
   ProcedureType,
   PropertyGenCache,
@@ -46,9 +44,6 @@ const SCALARS = new Set<string>([
   'string',
   'bytes',
 ]);
-
-
-
 
 function protoEnumValue(enumName: string, valueName: string): string {
   const prefix = toScreamingSnake(enumName);

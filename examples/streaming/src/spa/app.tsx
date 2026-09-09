@@ -163,27 +163,35 @@ function App() {
           </span>
         </a>
 
-        <button className="new-chat" type="button" onClick={() => {
-          stop();
-          setSubmittedPrompt('');
-          setResponse('');
-          setEvents([]);
-          setTokenCount(0);
-          setLatencyMs(0);
-          setError('');
-          responseBuffer.current = '';
-          eventBuffer.current = [];
-          receivedTokens.current = 0;
-          totalLatency.current = 0;
-          setPhase('Waiting for a prompt');
-        }}>
+        <button
+          className="new-chat"
+          type="button"
+          onClick={() => {
+            stop();
+            setSubmittedPrompt('');
+            setResponse('');
+            setEvents([]);
+            setTokenCount(0);
+            setLatencyMs(0);
+            setError('');
+            responseBuffer.current = '';
+            eventBuffer.current = [];
+            receivedTokens.current = 0;
+            totalLatency.current = 0;
+            setPhase('Waiting for a prompt');
+          }}
+        >
           <span>＋</span> New thread
         </button>
 
         <p className="side-label">Try a prompt</p>
         <nav className="presets" aria-label="Prompt presets">
           {PRESETS.map((preset, index) => (
-            <button type="button" key={preset} onClick={() => setPrompt(preset)}>
+            <button
+              type="button"
+              key={preset}
+              onClick={() => setPrompt(preset)}
+            >
               <span>0{index + 1}</span>
               {preset}
             </button>
@@ -192,11 +200,23 @@ function App() {
 
         <div className="architecture">
           <p className="side-label">Live route</p>
-          <div><i className="react-dot" /><span>React</span><b>browser</b></div>
+          <div>
+            <i className="react-dot" />
+            <span>React</span>
+            <b>browser</b>
+          </div>
           <em />
-          <div><i className="proxy-dot" /><span>Forwarder</span><b>:3103</b></div>
+          <div>
+            <i className="proxy-dot" />
+            <span>Forwarder</span>
+            <b>:3103</b>
+          </div>
           <em />
-          <div><i className="rust-dot" /><span>Rust tonic</span><b>:50054</b></div>
+          <div>
+            <i className="rust-dot" />
+            <span>Rust tonic</span>
+            <b>:50054</b>
+          </div>
         </div>
       </aside>
 
@@ -207,9 +227,18 @@ function App() {
             <strong>Respond</strong>
           </div>
           <div className="top-stats">
-            <span><small>Chunks</small>{tokenCount}</span>
-            <span><small>Mean latency</small>{latencyMs.toFixed(1)} ms</span>
-            <span className={`connection connection-${state}`}><i />{statusLabel}</span>
+            <span>
+              <small>Chunks</small>
+              {tokenCount}
+            </span>
+            <span>
+              <small>Mean latency</small>
+              {latencyMs.toFixed(1)} ms
+            </span>
+            <span className={`connection connection-${state}`}>
+              <i />
+              {statusLabel}
+            </span>
           </div>
         </header>
 
@@ -218,24 +247,53 @@ function App() {
             <div className="welcome">
               <span className="welcome-mark">R/</span>
               <p className="eyebrow">Rust-powered response streaming</p>
-              <h1>Ask once.<br /><em>Watch every chunk arrive.</em></h1>
-              <p>This local AI simulator streams typed protobuf events through the forwarding gRPC-Web path. No cloud model or hidden HTTP endpoint.</p>
+              <h1>
+                Ask once.
+                <br />
+                <em>Watch every chunk arrive.</em>
+              </h1>
+              <p>
+                This local AI simulator streams typed protobuf events through
+                the forwarding gRPC-Web path. No cloud model or hidden HTTP
+                endpoint.
+              </p>
               <div className="contract-strip">
-                <span>React 19</span><b>→</b><span>gRPC-Web</span><b>→</b><span>Rust</span><b>→</b><span>server stream</span>
+                <span>React 19</span>
+                <b>→</b>
+                <span>gRPC-Web</span>
+                <b>→</b>
+                <span>Rust</span>
+                <b>→</b>
+                <span>server stream</span>
               </div>
             </div>
           ) : (
             <div className="thread">
               <article className="message user-message">
                 <div className="avatar user-avatar">TN</div>
-                <div><header><strong>You</strong><span>just now</span></header><p>{submittedPrompt}</p></div>
+                <div>
+                  <header>
+                    <strong>You</strong>
+                    <span>just now</span>
+                  </header>
+                  <p>{submittedPrompt}</p>
+                </div>
               </article>
               <article className="message assistant-message">
                 <div className="avatar assistant-avatar">R/</div>
                 <div className="message-body">
-                  <header><strong>Relay</strong><span>Rust simulator</span></header>
-                  <div className="phase"><i />{phase}</div>
-                  <p className="answer">{response}<span className={active ? 'cursor' : 'cursor hidden'} /></p>
+                  <header>
+                    <strong>Relay</strong>
+                    <span>Rust simulator</span>
+                  </header>
+                  <div className="phase">
+                    <i />
+                    {phase}
+                  </div>
+                  <p className="answer">
+                    {response}
+                    <span className={active ? 'cursor' : 'cursor hidden'} />
+                  </p>
                   {response ? (
                     <footer>
                       <span>{tokenCount} protobuf chunks</span>
@@ -246,13 +304,20 @@ function App() {
               </article>
 
               <section className="trace">
-                <header><span>Stream trace</span><small>most recent frames</small></header>
+                <header>
+                  <span>Stream trace</span>
+                  <small>most recent frames</small>
+                </header>
                 <div>
                   {events.map((event) => (
                     <p key={event.sequence}>
                       <span>#{event.sequence.toString().padStart(4, '0')}</span>
                       <b className={`kind kind-${event.kind}`}>{event.kind}</b>
-                      <em>{event.kind === 'token' ? JSON.stringify(event.content) : event.content}</em>
+                      <em>
+                        {event.kind === 'token'
+                          ? JSON.stringify(event.content)
+                          : event.content}
+                      </em>
                     </p>
                   ))}
                 </div>
@@ -261,7 +326,11 @@ function App() {
           )}
         </section>
 
-        {error ? <div className="error" role="alert">{error}</div> : null}
+        {error ? (
+          <div className="error" role="alert">
+            {error}
+          </div>
+        ) : null}
 
         <section className="composer">
           <textarea
@@ -282,7 +351,14 @@ function App() {
             <div className="settings">
               <label>
                 Speed
-                <select aria-label="Generation speed" value={tokensPerSecond} onChange={(event) => setTokensPerSecond(Number(event.target.value))} disabled={active}>
+                <select
+                  aria-label="Generation speed"
+                  value={tokensPerSecond}
+                  onChange={(event) =>
+                    setTokensPerSecond(Number(event.target.value))
+                  }
+                  disabled={active}
+                >
                   <option value="40">40 chunks/s</option>
                   <option value="80">80 chunks/s</option>
                   <option value="160">160 chunks/s</option>
@@ -291,7 +367,12 @@ function App() {
               </label>
               <label>
                 Length
-                <select aria-label="Response length" value={maxTokens} onChange={(event) => setMaxTokens(Number(event.target.value))} disabled={active}>
+                <select
+                  aria-label="Response length"
+                  value={maxTokens}
+                  onChange={(event) => setMaxTokens(Number(event.target.value))}
+                  disabled={active}
+                >
                   <option value="120">120 chunks</option>
                   <option value="260">260 chunks</option>
                   <option value="600">600 chunks</option>
@@ -299,12 +380,18 @@ function App() {
                 </select>
               </label>
             </div>
-            <button className={active ? 'send stop' : 'send'} type="button" onClick={active ? stop : generate}>
+            <button
+              className={active ? 'send stop' : 'send'}
+              type="button"
+              onClick={active ? stop : generate}
+            >
               {active ? 'Stop' : 'Generate'}
               <kbd>{active ? '■' : '⌘↵'}</kbd>
             </button>
           </div>
-          <div className="progress"><i style={{ '--progress': `${progress}%` } as CSSProperties} /></div>
+          <div className="progress">
+            <i style={{ '--progress': `${progress}%` } as CSSProperties} />
+          </div>
         </section>
       </main>
     </div>

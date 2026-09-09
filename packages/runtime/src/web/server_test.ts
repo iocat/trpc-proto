@@ -1,23 +1,126 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
+import * as grpc from '@grpc/grpc-js';
 import { createTRPCClient } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
 import {
   schemaFromRouter,
   zAsyncIterable,
   type ProtoMeta,
+  type ProtoSchema,
 } from '@trpc-proto/schema_ir';
 import { z } from 'zod';
 import { serveGrpc } from '../grpc/server.js';
 import { createGrpcWebFetchCall } from './fetch_call.js';
 import { GrpcWebError } from './codec/protocol_codec.js';
 import { grpcWebLink } from './link.js';
+import type { MtlsConfig } from './http_handler.js';
 import { serveGrpcWeb } from './server.js';
 
 const t = initTRPC.meta<ProtoMeta>().create({
   defaultMeta: { proto: { package: 'direct.v1' } },
 });
+
+const testCertificatePath = (name: string): string =>
+  fileURLToPath(new URL(`./testdata/${name}`, import.meta.url));
+const caCertPath = testCertificatePath('ca-cert.pem');
+const clientIdentity = {
+  certPath: testCertificatePath('client-cert.pem'),
+  keyPath: testCertificatePath('client-key.pem'),
+};
+const tlsCases = [
+  {
+    name: 'one-way TLS',
+    checkClientCertificate: false,
+  },
+  {
+    name: 'mutual TLS',
+    checkClientCertificate: true,
+    clientIdentity,
+  },
+] satisfies readonly {
+  name: string;
+  checkClientCertificate: boolean;
+  clientIdentity?: MtlsConfig['clientIdentity'];
+}[];
+
+const identitySchema = {
+  syntax: 'proto3',
+  package: 'rotation.v1',
+  services: [
+    {
+      name: 'IdentityService',
+      methods: [
+        {
+          name: 'WhoAmI',
+          path: 'whoAmI',
+          type: 'query',
+          requestType: 'WhoAmIRequest',
+          responseType: 'WhoAmIResponse',
+          isResponseStreaming: false,
+        },
+      ],
+    },
+  ],
+  messages: [],
+  enums: [],
+} satisfies ProtoSchema;
+
+async function startIdentityBackend(port: number) {
+  const server = new grpc.Server();
+  server.addService(
+    {
+      WhoAmI: {
+        path: '/rotation.v1.IdentityService/WhoAmI',
+        requestStream: false,
+        responseStream: false,
+        requestSerialize: (value: Buffer) => value,
+        requestDeserialize: (value: Buffer) => value,
+        responseSerialize: (value: Buffer) => value,
+        responseDeserialize: (value: Buffer) => value,
+      },
+    },
+    {
+      WhoAmI(
+        call: grpc.ServerUnaryCall<Buffer, Buffer>,
+        callback: grpc.sendUnaryData<Buffer>,
+      ) {
+        const commonName =
+          call.getAuthContext().sslPeerCertificate?.subject.CN ?? '';
+        callback(null, Buffer.from(commonName));
+      },
+    },
+  );
+  const boundPort = await new Promise<number>((resolve, reject) => {
+    server.bindAsync(
+      `127.0.0.1:${port}`,
+      grpc.ServerCredentials.createSsl(
+        readFileSync(caCertPath),
+        [
+          {
+            cert_chain: readFileSync(testCertificatePath('server-cert.pem')),
+            private_key: readFileSync(testCertificatePath('server-key.pem')),
+          },
+        ],
+        true,
+      ),
+      (error, bound) => (error ? reject(error) : resolve(bound)),
+    );
+  });
+  return { server, port: boundPort };
+}
+
+async function closeGrpcServer(server: grpc.Server): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.tryShutdown((error) => (error ? reject(error) : resolve()));
+  });
+}
 
 describe('serveGrpcWeb', () => {
   it('dispatches unary and streaming procedures directly', async () => {
@@ -116,6 +219,7 @@ describe('serveGrpcWeb', () => {
     });
     const server = await serveGrpcWeb({
       mode: 'forward',
+      schema,
       backend: { address: backend.address },
       address: '127.0.0.1:0',
     });
@@ -136,6 +240,135 @@ describe('serveGrpcWeb', () => {
     } finally {
       await server.close();
       await backend.close();
+    }
+  });
+
+  for (const tlsCase of tlsCases) {
+    it(`forwards over ${tlsCase.name}`, async () => {
+      const appRouter = t.router({
+        hello: t.procedure
+          .input(z.object({ name: z.string() }))
+          .output(z.object({ message: z.string() }))
+          .query(({ input }) => ({ message: `secure hello ${input.name}` })),
+      });
+      type AppRouter = typeof appRouter;
+      const schema = schemaFromRouter(appRouter);
+      const backend = await serveGrpc(appRouter, {
+        schema,
+        address: '127.0.0.1:0',
+        credentials: grpc.ServerCredentials.createSsl(
+          readFileSync(caCertPath),
+          [
+            {
+              cert_chain: readFileSync(testCertificatePath('server-cert.pem')),
+              private_key: readFileSync(testCertificatePath('server-key.pem')),
+            },
+          ],
+          tlsCase.checkClientCertificate,
+        ),
+      });
+      let server: Awaited<ReturnType<typeof serveGrpcWeb>> | undefined;
+
+      try {
+        const credentials: MtlsConfig = {
+          type: 'mtls',
+          caCertPath,
+          serverNameOverride: 'grpc.test',
+          ...(tlsCase.clientIdentity
+            ? { clientIdentity: tlsCase.clientIdentity }
+            : {}),
+        };
+        server = await serveGrpcWeb({
+          mode: 'forward',
+          schema,
+          backend: { address: backend.address, credentials },
+          address: '127.0.0.1:0',
+        });
+        const client = createTRPCClient<AppRouter>({
+          links: [
+            grpcWebLink<AppRouter>({
+              schema,
+              url: `http://${server.address}`,
+              encoding: 'raw',
+            }),
+          ],
+        });
+
+        assert.deepEqual(await client.hello.query({ name: 'Ada' }), {
+          message: 'secure hello Ada',
+        });
+      } finally {
+        await server?.close();
+        await backend.close();
+      }
+    });
+  }
+
+  it('reloads rotated client certificate files', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'trpc-proto-mtls-'));
+    const watchedCaPath = join(directory, 'ca-cert.pem');
+    const watchedCertPath = join(directory, 'client-cert.pem');
+    const watchedKeyPath = join(directory, 'client-key.pem');
+    await Promise.all([
+      copyFile(caCertPath, watchedCaPath),
+      copyFile(clientIdentity.certPath, watchedCertPath),
+      copyFile(clientIdentity.keyPath, watchedKeyPath),
+    ]);
+    let backend: Awaited<ReturnType<typeof startIdentityBackend>> | undefined;
+    let server: Awaited<ReturnType<typeof serveGrpcWeb>> | undefined;
+
+    try {
+      backend = await startIdentityBackend(0);
+      const backendPort = backend.port;
+      server = await serveGrpcWeb({
+        mode: 'forward',
+        schema: identitySchema,
+        backend: {
+          address: `127.0.0.1:${backendPort}`,
+          credentials: {
+            type: 'mtls',
+            caCertPath: watchedCaPath,
+            serverNameOverride: 'grpc.test',
+            clientIdentity: {
+              certPath: watchedCertPath,
+              keyPath: watchedKeyPath,
+            },
+          },
+        },
+        address: '127.0.0.1:0',
+      });
+      const call = createGrpcWebFetchCall({
+        baseUrl: `http://${server.address}`,
+        encoding: 'raw',
+      });
+      const whoAmI = async () =>
+        Buffer.from(
+          (await call({
+            path: 'whoAmI',
+            type: 'query',
+            bytes: new Uint8Array(),
+            grpcPath: '/rotation.v1.IdentityService/WhoAmI',
+          })) as Uint8Array,
+        ).toString();
+
+      assert.equal(await whoAmI(), 'trpc-proto-test-client-a');
+      await closeGrpcServer(backend.server);
+      backend = undefined;
+      await Promise.all([
+        copyFile(
+          testCertificatePath('client-rotated-cert.pem'),
+          watchedCertPath,
+        ),
+        copyFile(testCertificatePath('client-rotated-key.pem'), watchedKeyPath),
+      ]);
+      await delay(1_200);
+      backend = await startIdentityBackend(backendPort);
+
+      assert.equal(await whoAmI(), 'trpc-proto-test-client-b');
+    } finally {
+      await server?.close();
+      if (backend) await closeGrpcServer(backend.server);
+      await rm(directory, { recursive: true, force: true });
     }
   });
 
@@ -168,8 +401,7 @@ describe('serveGrpcWeb', () => {
         (error: unknown) =>
           error instanceof GrpcWebError &&
           error.code === 12 &&
-          error.message ===
-            'no gRPC mapping for /direct.v1.AppService/Missing',
+          error.message === 'no gRPC mapping for /direct.v1.AppService/Missing',
       );
     } finally {
       await server.close();

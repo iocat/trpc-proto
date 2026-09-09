@@ -17,8 +17,6 @@ import {
 import { asRuntime, type ZodRuntime } from './zod_node.js';
 import { asyncIterableYieldSchema } from '../zod/async_iterable.js';
 
-
-
 import type {
   ProcedureType,
   PropertyGenCache,
@@ -35,7 +33,6 @@ import type {
   ProtoType,
   SchemaGenerateCache,
 } from '../ir/types.js';
-
 
 /** Overrides applied while translating tRPC procedures into protobuf schema. */
 export interface TranslateOptions {
@@ -65,7 +62,6 @@ class TrpcSchemaTranslator {
     this.#cache = cache;
   }
 
-
   #messageName(zod: ZodRuntime, fallback: string): string {
     const cached = this.#seenMessages.get(zod);
     if (cached) return cached;
@@ -94,7 +90,6 @@ class TrpcSchemaTranslator {
     }
     return named;
   }
-
 
   #convertObject(
     zod: ZodRuntime,
@@ -283,7 +278,12 @@ class TrpcSchemaTranslator {
       case 'array':
       case 'set': {
         const element = asRuntime(inner.element ?? inner.def.element ?? inner);
-        const mapped = this.#mapField(element, parentMessage, fieldName, nested);
+        const mapped = this.#mapField(
+          element,
+          parentMessage,
+          fieldName,
+          nested,
+        );
         return { ...mapped, repeated: true };
       }
       case 'object': {
@@ -399,9 +399,7 @@ class TrpcSchemaTranslator {
             message,
           };
         }
-        assumeExhaustiveAllowing<'intersection', typeof inner.type>(
-          inner.type,
-        );
+        assumeExhaustiveAllowing<'intersection', typeof inner.type>(inner.type);
 
         throw new Error(
           `Unsupported Zod type "${inner.type}" at ${parentMessage}.${fieldName}`,
@@ -437,7 +435,12 @@ class TrpcSchemaTranslator {
         );
         const meaningful = options.filter((option) => !isEmptyType(option));
         if (meaningful.length === 1 && meaningful[0]) {
-          return this.#mapField(meaningful[0], parentMessage, fieldName, nested);
+          return this.#mapField(
+            meaningful[0],
+            parentMessage,
+            fieldName,
+            nested,
+          );
         }
         if (
           meaningful.length > 0 &&
@@ -736,7 +739,6 @@ function procedureProto(procedure: AnyProcedure): ProtoFileHeader | undefined {
   return meta?.proto;
 }
 
-
 function emptyPropCache(): PropertyGenCache {
   return { propertyGenCache: {}, usedIds: {} };
 }
@@ -830,7 +832,6 @@ function protoMessageNameOf(zod: ZodRuntime): string | undefined {
 function protoEnumNameOf(zod: ZodRuntime): string | undefined {
   return extractProtoObjectMeta(zod).protoEnumName;
 }
-
 
 function unwrap(zod: ZodType): { inner: ZodRuntime; optional: boolean } {
   let inner = asRuntime(zod);
@@ -1015,4 +1016,3 @@ function methodName(path: string): string {
   const last = path.split('.').at(-1) ?? path;
   return toPascalCase(last);
 }
-

@@ -3,7 +3,6 @@ import { describe, it } from 'node:test';
 import { assertPrevalidate, formatIssues, prevalidate } from './prevalidate.js';
 import type { ProtoFileHeader } from '../ir/types.js';
 
-
 const proto: ProtoFileHeader = {
   package: 'demo.v1',
 };

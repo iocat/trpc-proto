@@ -35,8 +35,16 @@ body {
   overflow-x: hidden;
   color: var(--text);
   background:
-    radial-gradient(circle at 78% -10%, rgba(82, 94, 209, 0.25), transparent 38rem),
-    radial-gradient(circle at 30% 110%, rgba(68, 38, 141, 0.14), transparent 34rem),
+    radial-gradient(
+      circle at 78% -10%,
+      rgba(82, 94, 209, 0.25),
+      transparent 38rem
+    ),
+    radial-gradient(
+      circle at 30% 110%,
+      rgba(68, 38, 141, 0.14),
+      transparent 34rem
+    ),
     var(--bg);
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
@@ -181,7 +189,11 @@ nav a:hover {
 
 nav a.active {
   color: #fff;
-  background: linear-gradient(90deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.045));
+  background: linear-gradient(
+    90deg,
+    rgba(139, 92, 246, 0.2),
+    rgba(139, 92, 246, 0.045)
+  );
   border-color: rgba(167, 139, 250, 0.18);
   box-shadow: inset 3px 0 0 var(--violet);
 }
@@ -477,7 +489,11 @@ nav a.active .nav-glyph {
 
 .response-pane {
   background:
-    linear-gradient(145deg, rgba(139, 92, 246, 0.045), rgba(34, 211, 238, 0.012)),
+    linear-gradient(
+      145deg,
+      rgba(139, 92, 246, 0.045),
+      rgba(34, 211, 238, 0.012)
+    ),
     rgba(5, 6, 13, 0.17);
 }
 

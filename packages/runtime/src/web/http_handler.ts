@@ -44,12 +44,43 @@ export interface GrpcWebCorsOptions {
   readonly maxAgeSeconds?: number;
 }
 
+/** TLS configuration for the native upstream gRPC channel. */
+export interface MtlsConfig {
+  type: 'mtls';
+  /** CA bundle used to verify the upstream gRPC server's certificate. */
+  caCertPath: string;
+  /**
+   * Expected SAN or hostname on the upstream server certificate. Maps to
+   * `grpc.ssl_target_name_override` in grpc-js.
+   */
+  serverNameOverride?: string;
+  /**
+   * Client identity presented during TLS. When omitted, the channel uses
+   * one-way TLS.
+   */
+  clientIdentity?: {
+    certPath: string;
+    keyPath: string;
+  };
+}
+
+/** Explicit transport security for the native upstream gRPC channel. */
+export type GrpcWebUpstreamCredentials = { type: 'insecure' } | MtlsConfig;
+
+/** Forwarding handler with an owned upstream client lifecycle. */
+export interface ForwardingGrpcWebHttpHandler {
+  (request: IncomingMessage, response: ServerResponse): Promise<boolean>;
+  close(): void;
+}
+
 /** Configuration for forwarding browser gRPC-Web calls to a gRPC backend. */
 export interface ForwardingGrpcWebHttpHandlerOptions {
+  /** Schema used to select unary or server-streaming grpc-js calls. */
+  schema: ProtoSchema;
   /** Native gRPC backend address. Defaults to `127.0.0.1:50051`. */
   address?: string;
-  /** Channel credentials for the native gRPC backend. Defaults to insecure. */
-  credentials?: grpc.ChannelCredentials;
+  /** Transport security for the upstream channel. Defaults to insecure. */
+  credentials?: GrpcWebUpstreamCredentials;
   /** Optional cross-origin request policy. CORS is disabled when omitted. */
   cors?: GrpcWebCorsOptions;
 }
@@ -135,8 +166,7 @@ function grpcWebHeaders(
 }
 
 function createCorsPolicy(cors: GrpcWebCorsOptions): CorsPolicy {
-  const maxAgeSeconds =
-    cors.maxAgeSeconds ?? DEFAULT_CORS_MAX_AGE_SECONDS;
+  const maxAgeSeconds = cors.maxAgeSeconds ?? DEFAULT_CORS_MAX_AGE_SECONDS;
   if (!Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 0) {
     throw new RangeError('cors.maxAgeSeconds must be a non-negative integer');
   }
@@ -350,24 +380,57 @@ function createGrpcWebRequestHandler(
   };
 }
 
+function createForwardingClient(
+  address: string,
+  credentials: GrpcWebUpstreamCredentials,
+): grpc.Client {
+  if (credentials.type === 'insecure') {
+    return new grpc.Client(address, grpc.credentials.createInsecure(), {});
+  }
+  const mtls = credentials;
+  const identity = mtls.clientIdentity;
+  const certificateProvider =
+    new grpc.experimental.FileWatcherCertificateProvider({
+      caCertificateFile: mtls.caCertPath,
+      certificateFile: identity?.certPath,
+      privateKeyFile: identity?.keyPath,
+      refreshIntervalMs: 1_000,
+    });
+  const channelCredentials =
+    grpc.experimental.createCertificateProviderChannelCredentials(
+      certificateProvider,
+      identity ? certificateProvider : null,
+    );
+  const channelOptions: grpc.ChannelOptions = mtls.serverNameOverride
+    ? {
+        'grpc.ssl_target_name_override': mtls.serverNameOverride,
+        'grpc.default_authority': mtls.serverNameOverride,
+      }
+    : {};
+  return new grpc.Client(address, channelCredentials, channelOptions);
+}
+
 /**
  * Creates one Node HTTP request handler that forwards gRPC-Web calls to a
- * native gRPC backend. The default channel is insecure and CORS is disabled
- * unless configured.
+ * native gRPC backend. CORS is disabled unless configured.
  */
 export function createForwardingGrpcWebHttpHandler(
-  options: ForwardingGrpcWebHttpHandlerOptions = {},
-) {
+  options: ForwardingGrpcWebHttpHandlerOptions,
+): ForwardingGrpcWebHttpHandler {
   const {
+    schema,
     address = DEFAULT_ADDRESS,
-    credentials = grpc.credentials.createInsecure(),
+    credentials = { type: 'insecure' },
     cors,
   } = options;
-  const client = new grpc.Client(address, credentials);
-  return createGrpcWebRequestHandler(
+  const client = createForwardingClient(address, credentials);
+  const handler = createGrpcWebRequestHandler(
     cors ? createCorsPolicy(cors) : undefined,
-    createForwardingDispatcher(client),
+    createForwardingDispatcher(client, schema),
   );
+  return Object.assign(handler, {
+    close: () => client.close(),
+  });
 }
 
 /** Configuration for dispatching gRPC-Web calls directly to a tRPC router. */

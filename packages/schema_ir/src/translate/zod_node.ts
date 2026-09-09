@@ -3,7 +3,6 @@ import { assumeExhaustiveAllowing } from '@trpc-proto/utility';
 import { isWellKnownType } from '../ir/wellknown.js';
 import type { ProtoObjectMeta, ProtoScalar, ProtoType } from '../ir/types.js';
 
-
 export type ZodRuntime = ZodType & {
   type: string;
   def: {

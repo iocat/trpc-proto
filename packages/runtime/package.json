@@ -44,7 +44,6 @@
     "@trpc-proto/schema_ir": "workspace:*",
     "@trpc-proto/utility": "workspace:*",
     "protobufjs": "^7.5.4"
-
   },
   "devDependencies": {
     "@grpc/grpc-js": "^1.13.4",

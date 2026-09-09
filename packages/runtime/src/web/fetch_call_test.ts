@@ -7,17 +7,13 @@ import {
   type GrpcWebEncoding,
 } from './content_type.js';
 import { GzipCompressionCodec } from './codec/compression.js';
-import {
-  GrpcWebFrameCodec,
-  type GrpcWebFrame,
-} from './codec/frame_codec.js';
+import { GrpcWebFrameCodec, type GrpcWebFrame } from './codec/frame_codec.js';
 import { GrpcWebError } from './codec/protocol_codec.js';
-import { GrpcWebBase64Codec } from './codec/base64_codec.js'
+import { GrpcWebBase64Codec } from './codec/base64_codec.js';
 import { createGrpcWebFetchCall } from './fetch_call.js';
 const gzipCodec = new GzipCompressionCodec();
 const frameCodec = new GrpcWebFrameCodec();
 const base64Codec = new GrpcWebBase64Codec();
-
 
 function encodeResponse(
   encoding: GrpcWebEncoding,
@@ -64,7 +60,6 @@ async function decodeGzip(payload: Uint8Array): Promise<Uint8Array> {
   assert(decoded);
   return decoded;
 }
-
 
 async function withFetch<T>(
   implementation: typeof fetch,
@@ -118,10 +113,7 @@ describe('createGrpcWebFetchCall compression', () => {
     assert.equal(requestHeaders.get('grpc-accept-encoding'), 'gzip');
     const message = requestFrames?.find((frame) => frame.kind === 'message');
     assert.equal(message?.compressed, true);
-    assert.deepEqual(
-      await decodeGzip(message!.payload),
-      expectedRequest,
-    );
+    assert.deepEqual(await decodeGzip(message!.payload), expectedRequest);
   });
 
   it('decodes compressed unary responses in raw and base64 modes', async () => {
@@ -166,10 +158,7 @@ describe('createGrpcWebFetchCall compression', () => {
       new TextEncoder().encode('second '.repeat(32)),
     ];
     const frames = [
-      encodeMessageFrame(
-        await gzipCodec.encode(expected[0]!),
-        true,
-      ),
+      encodeMessageFrame(await gzipCodec.encode(expected[0]!), true),
       encodeMessageFrame(expected[1]!),
       encodeTrailers(0),
     ];
@@ -293,9 +282,9 @@ describe('createGrpcWebFetchCall compression', () => {
           bytes: new Uint8Array(),
           grpcPath: '/demo.v1.AppService/Watch',
         });
-        const iterator = (
-          response as AsyncIterable<Uint8Array>
-        )[Symbol.asyncIterator]();
+        const iterator = (response as AsyncIterable<Uint8Array>)[
+          Symbol.asyncIterator
+        ]();
         assert.deepEqual(await iterator.next(), {
           done: false,
           value: new Uint8Array([1]),
@@ -404,9 +393,9 @@ describe('createGrpcWebFetchCall compression', () => {
           grpcPath: '/demo.v1.AppService/Watch',
         });
         await assert.rejects(
-          (
-            response as AsyncIterable<Uint8Array>
-          )[Symbol.asyncIterator]().next(),
+          (response as AsyncIterable<Uint8Array>)
+            [Symbol.asyncIterator]()
+            .next(),
           /empty gRPC-Web body/,
         );
       },
@@ -547,5 +536,4 @@ describe('createGrpcWebFetchCall compression', () => {
       },
     );
   });
-
 });

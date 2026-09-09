@@ -32,10 +32,7 @@ const allowCases: AllowCase[] = [
 describe('assumeExhaustive', () => {
   for (const row of throwCases) {
     it(row.name, () => {
-      assert.throws(
-        () => assumeExhaustive(row.value as never),
-        row.error,
-      );
+      assert.throws(() => assumeExhaustive(row.value as never), row.error);
     });
   }
 });

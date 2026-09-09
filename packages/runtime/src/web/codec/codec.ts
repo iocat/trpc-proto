@@ -10,10 +10,7 @@ export interface Codec<Value, Encoded, Options = undefined> {
   encode(value: Value, options?: Options): MaybePromise<Encoded>;
 
   /** Decodes values incrementally from one chunk or a chunk stream. */
-  decode(
-    encoded: CodecInput<Encoded>,
-    options?: Options,
-  ): AsyncIterable<Value>;
+  decode(encoded: CodecInput<Encoded>, options?: Options): AsyncIterable<Value>;
 }
 
 /**
@@ -38,7 +35,6 @@ export interface IncrementalDecoder<Chunk, Value> {
   finish(): readonly Value[];
 }
 
-
 /** Iterates uniformly over one encoded chunk or an asynchronous chunk stream. */
 export async function* codecChunks<Chunk>(
   encoded: CodecInput<Chunk>,
@@ -49,4 +45,3 @@ export async function* codecChunks<Chunk>(
     yield encoded;
   }
 }
-

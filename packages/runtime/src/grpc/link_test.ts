@@ -80,8 +80,7 @@ describe('grpcLink', () => {
               signal = ctx.signal;
               return {
                 async *[Symbol.asyncIterator]() {
-                  const { promise, reject } =
-                    Promise.withResolvers<void>();
+                  const { promise, reject } = Promise.withResolvers<void>();
                   ctx.signal?.addEventListener(
                     'abort',
                     () =>

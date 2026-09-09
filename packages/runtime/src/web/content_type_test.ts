@@ -59,6 +59,9 @@ describe('gRPC-Web content types', () => {
       ),
       'base64',
     );
-    assert.equal(negotiateGrpcWebResponseEncoding(undefined, 'base64'), 'base64');
+    assert.equal(
+      negotiateGrpcWebResponseEncoding(undefined, 'base64'),
+      'base64',
+    );
   });
 });

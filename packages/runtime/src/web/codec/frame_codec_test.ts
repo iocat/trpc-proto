@@ -22,20 +22,17 @@ describe('gRPC-Web frame codec', () => {
       trailers: { 'grpc-status': '0', 'grpc-message': 'ok' },
     });
 
-    assert.deepEqual(
-      await decode(new Uint8Array([...message, ...trailers])),
-      [
-        {
-          kind: 'message',
-          compressed: false,
-          payload: new Uint8Array([1, 2, 3]),
-        },
-        {
-          kind: 'trailers',
-          trailers: { 'grpc-status': '0', 'grpc-message': 'ok' },
-        },
-      ],
-    );
+    assert.deepEqual(await decode(new Uint8Array([...message, ...trailers])), [
+      {
+        kind: 'message',
+        compressed: false,
+        payload: new Uint8Array([1, 2, 3]),
+      },
+      {
+        kind: 'trailers',
+        trailers: { 'grpc-status': '0', 'grpc-message': 'ok' },
+      },
+    ]);
   });
 
   it('preserves extra trailer metadata', async () => {

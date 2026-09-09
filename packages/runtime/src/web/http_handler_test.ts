@@ -19,7 +19,11 @@ import {
 } from './content_type.js';
 import { createGrpcWebFetchCall } from './fetch_call.js';
 import { serveGrpc } from '../grpc/server.js';
-import { schemaFromRouter, type ProtoMeta } from '@trpc-proto/schema_ir';
+import {
+  schemaFromRouter,
+  zAsyncIterable,
+  type ProtoMeta,
+} from '@trpc-proto/schema_ir';
 const frameCodec = new GrpcWebFrameCodec();
 const protocolCodec = new GrpcWebProtocolCodec();
 async function decodeProtocol(
@@ -32,8 +36,21 @@ async function decodeProtocol(
   }
   return values;
 }
-
-
+const forwardingT = initTRPC.meta<ProtoMeta>().create({
+  defaultMeta: { proto: { package: 'demo.v1' } },
+});
+const forwardingSchema = schemaFromRouter(
+  forwardingT.router({
+    hello: forwardingT.procedure
+      .input(z.object({}))
+      .output(z.object({}))
+      .query(() => ({})),
+    watch: forwardingT.procedure
+      .input(z.object({}))
+      .output(zAsyncIterable({ yield: z.object({}) }))
+      .subscription(async function* () {}),
+  }),
+);
 
 describe('createForwardingGrpcWebHttpHandler', () => {
   it('round-trips through a gRPC-Web HTTP handler to serveGrpc', async () => {
@@ -54,6 +71,7 @@ describe('createForwardingGrpcWebHttpHandler', () => {
     });
     const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
       address: `127.0.0.1:${grpcServer.port}`,
+      schema,
     });
     let requestContentType = '';
     let requestCompression = '';
@@ -92,6 +110,7 @@ describe('createForwardingGrpcWebHttpHandler', () => {
 
   it('validates CORS preflight origin, method, and headers', async () => {
     const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
+      schema: forwardingSchema,
       cors: {
         allowedOrigins: ['https://app.example'],
         additionalAllowedHeaders: ['x-trace'],
@@ -156,10 +175,7 @@ describe('createForwardingGrpcWebHttpHandler', () => {
             res.headers.get('access-control-allow-origin'),
             row.origin,
           );
-          assert.equal(
-            res.headers.get('access-control-allow-methods'),
-            'POST',
-          );
+          assert.equal(res.headers.get('access-control-allow-methods'), 'POST');
           assert.match(
             res.headers.get('access-control-allow-headers') ?? '',
             /\bx-trace\b/,
@@ -207,6 +223,7 @@ describe('createForwardingGrpcWebHttpHandler', () => {
     });
     const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
       address: `127.0.0.1:${port}`,
+      schema: forwardingSchema,
     });
     let requestContentType = '';
     const server = http.createServer(async (req, res) => {
@@ -279,6 +296,7 @@ describe('createForwardingGrpcWebHttpHandler', () => {
     const backendPort = await bound.promise;
     const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
       address: `127.0.0.1:${backendPort}`,
+      schema: forwardingSchema,
     });
     const server = http.createServer(async (req, res) => {
       if (!(await handleGrpcWeb(req, res))) {
@@ -366,6 +384,7 @@ describe('createForwardingGrpcWebHttpHandler', () => {
     });
     const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
       address: `127.0.0.1:${port}`,
+      schema: forwardingSchema,
       cors: {
         allowedOrigins: ['https://app.example'],
         additionalAllowedHeaders: ['x-trace'],
@@ -446,7 +465,9 @@ describe('createForwardingGrpcWebHttpHandler', () => {
   });
 
   it('rejects malformed requests and negotiates base64 errors', async () => {
-    const handleGrpcWeb = createForwardingGrpcWebHttpHandler();
+    const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
+      schema: forwardingSchema,
+    });
     const server = http.createServer(async (req, res) => {
       if (!(await handleGrpcWeb(req, res))) {
         res.writeHead(404);
@@ -476,18 +497,15 @@ describe('createForwardingGrpcWebHttpHandler', () => {
         compressed: true,
         payload: new Uint8Array([0x1f, 0x8b, 0x00]),
       });
-      const response = await fetch(
-        `${baseUrl}/demo.v1.AppService/Hello`,
-        {
-          method: 'POST',
-          headers: {
-            accept: GRPC_WEB_TEXT_CONTENT_TYPE,
-            'content-type': GRPC_WEB_CONTENT_TYPE,
-            'x-grpc-web': '1',
-          },
-          body: compressedFrame,
+      const response = await fetch(`${baseUrl}/demo.v1.AppService/Hello`, {
+        method: 'POST',
+        headers: {
+          accept: GRPC_WEB_TEXT_CONTENT_TYPE,
+          'content-type': GRPC_WEB_CONTENT_TYPE,
+          'x-grpc-web': '1',
         },
-      );
+        body: compressedFrame,
+      });
       assert.equal(response.status, 200);
       assert.equal(
         response.headers.get('content-type'),

@@ -75,9 +75,7 @@ const server = http.createServer((req, res) => {
   }
 });
 
-process.stdout.write(
-  `gRPC-Web listening on http://${grpcWebServer.address}\n`,
-);
+process.stdout.write(`gRPC-Web listening on http://${grpcWebServer.address}\n`);
 server.listen(PORT, HOST, () => {
   process.stdout.write(`web listening on http://${HOST}:${PORT}\n`);
 });

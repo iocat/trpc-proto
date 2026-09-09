@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { concat } from '@trpc-proto/utility';
 import { GrpcWebFrameCodec, type GrpcWebFrame } from './frame_codec.js';
-import { GrpcWebBase64Codec } from './base64_codec.js'
+import { GrpcWebBase64Codec } from './base64_codec.js';
 
 const frameCodec = new GrpcWebFrameCodec();
 const base64Codec = new GrpcWebBase64Codec();
@@ -18,12 +18,16 @@ async function decodeChunks(chunks: readonly string[]): Promise<Uint8Array> {
   return concat(decoded);
 }
 
-async function decodeFrames(chunks: readonly string[]): Promise<GrpcWebFrame[]> {
+async function decodeFrames(
+  chunks: readonly string[],
+): Promise<GrpcWebFrame[]> {
   async function* encodedChunks() {
     yield* chunks;
   }
   const frames: GrpcWebFrame[] = [];
-  for await (const frame of frameCodec.decode(base64Codec.decode(encodedChunks()))) {
+  for await (const frame of frameCodec.decode(
+    base64Codec.decode(encodedChunks()),
+  )) {
     frames.push(frame);
   }
   return frames;

@@ -44,7 +44,6 @@ Prevalidate collects every issue, then aborts on errors (no stack). Generate pri
 | `.meta({ protoUseKnownType: 'google.protobuf.Duration' })` | encode as that well-known type        |
 | `.meta({ protoEnumName: 'UserRole' })`                     | named enum; **must be PascalCase**    |
 
-
 | unnamed nested object | nested message named from the field |
 | `z.string`, template literal | `string` (`email` is still `string`) |
 | `z.boolean` | `bool` |
@@ -62,7 +61,6 @@ Prevalidate collects every issue, then aborts on errors (no stack). Generate pri
 | `zAsyncIterable({ yield: schema })` | server stream; protobuf response uses `schema` |
 
 Rejected (translate throws): open unions, mixed-type literals, mixed int/float literals, non-PascalCase `protoMessageName` / `protoEnumName`, non-scalar map keys, anything else `Unsupported Zod type`.
-
 
 Do not expect tRPC-only features (middleware-only procedures, output inference without `.output()`, superjson-only types) to round-trip through protobuf.
 
@@ -101,7 +99,6 @@ const t = initTRPC.meta<ProtoMeta>().create({
     },
   },
 });
-
 
 const User = z
   .object({
@@ -239,7 +236,10 @@ trpc-proto generate \
 # Run your language's protobuf/stub generator, then start that gRPC server.
 ```
 
-The external server listens on the address configured in `grpcLink` or `createForwardingGrpcWebHttpHandler`. It does not execute the tRPC router and does not need `schema.ts` at runtime; clients still import it for protobuf encoding. The [`users`](examples/users) and [`todo`](examples/todo) examples use Go backends.
+The external server does not execute the tRPC router and does not need
+`schema.ts`; browser clients and the forwarding handler import it for protobuf
+encoding and RPC cardinality. The [`users`](examples/users) and
+[`todo`](examples/todo) examples use Go backends.
 
 With either approach, nested routers become gRPC service names (`user.getById` → `UserService.GetById`).
 
@@ -274,37 +274,27 @@ backend:
 ```ts
 await serveGrpcWeb({
   mode: 'forward',
+  schema: protoSchema,
   backend: { address: '127.0.0.1:50051' },
   address: '127.0.0.1:50052',
 });
 ```
 
-Use `createForwardingGrpcWebHttpHandler({ address: '127.0.0.1:50051' })` instead when an
-existing Node HTTP server must own routing. Both server APIs answer valid
-preflight requests, reject disallowed origins, methods, and headers, and add
-matching CORS headers to gRPC-Web responses. Omit `cors` for same-origin
-deployments.
+Use
+`createForwardingGrpcWebHttpHandler({ schema: protoSchema, address: '127.0.0.1:50051' })`
+instead when an existing Node HTTP server must own routing, and call the
+handler's `close()` method during shutdown. Omitted `credentials` default to
+`{ type: 'insecure' }`. Provide `{ type: 'mtls', ... }` for verified TLS and
+optional client identity; grpc-js watches those certificate files for rotation.
+Both server APIs answer valid preflight requests, reject disallowed origins,
+methods, and headers, and add matching CORS headers to gRPC-Web responses.
+Omit `cors` for same-origin deployments.
 
-See the [gRPC-Web runtime protocol](packages/runtime/GRPC_WEB.md) for the implemented wire behavior, CORS semantics, security boundary, and limitations.
+See the [gRPC-Web runtime protocol](packages/runtime/GRPC_WEB.md) for the
+implemented wire behavior, CORS semantics, and security boundary.
 
-## gRPC-Web backlog
-
-The current HTTP handler supports raw and base64 unary calls, server streaming,
-opt-in gzip request-message compression, one reused grpc-js client,
-browser-connection cancellation propagated to the backend gRPC call, strict
-final-status validation, and received `grpc-message` percent-decoding. This
-table tracks the remaining transport work.
-
-| Priority | Area | State | Remaining work | Acceptance |
-| --- | --- | --- | --- | --- |
-| P0 | Framing | Not implemented | Validate unknown frame flags and reject data after trailers. | Malformed framing has table-driven negative tests; trailers are always final. |
-| P0 | Deadlines | Not implemented | Parse `grpc-timeout` and apply a deadline to the backend gRPC call. | Deadline tests observe cancellation at the backend. |
-| P0 | Boundary | Not implemented | Limit request-body size and restrict forwarded gRPC service/method paths. | Oversized bodies and unknown methods are rejected before a backend gRPC call. |
-| P1 | HTTP | Partial | Add and test HTTP/2 browser ingress; HTTP/1.1 is supported. | The same unary and streaming suite passes over both ingress protocols. |
-| P1 | Metadata | Partial | Support binary `*-bin` metadata and configurable request/response header forwarding; string metadata is supported. | Binary metadata round-trips; hop-by-hop and disallowed headers never cross the boundary. |
-| P1 | Connections | Partial | Add client lifecycle cleanup and explicit pooling for multiple backend targets; one client is currently reused. | Channels are reused, bounded, observable, and closed deterministically. |
-| P2 | Resilience | Not implemented | Add circuit breaking, active health checks, and rate limiting. | Each policy is configurable and covered by failure/recovery scenarios. |
-| P2 | Observability | Not implemented | Add structured access logs and request, latency, status, stream, and backend metrics. | Operators can attribute failures and saturation to route and backend. |
+Planned transport, Connect RPC, and forwarding-proxy work is tracked in the
+[project backlog](BACKLOG.md).
 
 ## Examples
 

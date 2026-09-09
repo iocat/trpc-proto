@@ -4,8 +4,7 @@ import { codecChunks, type Codec, type CodecInput } from './codec.js';
 export const GRPC_GZIP_ENCODING = 'gzip';
 
 /** Message compressor selected by a grpc-encoding token. */
-export interface GrpcWebCompressionCodec
-  extends Codec<Uint8Array, Uint8Array> {
+export interface GrpcWebCompressionCodec extends Codec<Uint8Array, Uint8Array> {
   readonly name: string;
 }
 
@@ -27,9 +26,7 @@ export class GzipCompressionCodec implements GrpcWebCompressionCodec {
     return transform(message, new CompressionStream(GRPC_GZIP_ENCODING));
   }
 
-  async *decode(
-    encoded: CodecInput<Uint8Array>,
-  ): AsyncIterable<Uint8Array> {
+  async *decode(encoded: CodecInput<Uint8Array>): AsyncIterable<Uint8Array> {
     for await (const message of codecChunks(encoded)) {
       yield await transform(
         message,
@@ -54,4 +51,3 @@ export function grpcWebCompressionCodec(
   if (!name || name === 'identity') return undefined;
   return COMPRESSION_CODEC_FACTORIES[name]?.();
 }
-

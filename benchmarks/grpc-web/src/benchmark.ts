@@ -1,14 +1,6 @@
-import {
-  fork,
-  spawn,
-  spawnSync,
-  type ChildProcess,
-} from 'node:child_process';
+import { fork, spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
-import {
-  createConnection,
-  createServer as createNetServer,
-} from 'node:net';
+import { createConnection, createServer as createNetServer } from 'node:net';
 import { cpus, platform, release, tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -204,15 +196,11 @@ async function startNodeService(
   moduleName: string,
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<ManagedService> {
-  const child = fork(
-    fileURLToPath(new URL(moduleName, import.meta.url)),
-    [],
-    {
-      env: environment,
-      execArgv: ['--import', import.meta.resolve('tsx')],
-      stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
-    },
-  );
+  const child = fork(fileURLToPath(new URL(moduleName, import.meta.url)), [], {
+    env: environment,
+    execArgv: ['--import', import.meta.resolve('tsx')],
+    stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
+  });
   const ready = Promise.withResolvers<string>();
   const onError = (error: Error): void => ready.reject(error);
   const onExit = (code: number | null, signal: NodeJS.Signals | null): void =>
@@ -418,11 +406,7 @@ async function startEnvoy(
   const listenerPort = await reserveTcpPort();
   const configDirectory = await mkdtemp(join(tmpdir(), 'trpc-proto-envoy-'));
   const configPath = join(configDirectory, 'envoy.json');
-  await writeFile(
-    configPath,
-    envoyConfig(listenerPort, backendPort),
-    'utf8',
-  );
+  await writeFile(configPath, envoyConfig(listenerPort, backendPort), 'utf8');
   const child = spawn(
     envoyBin,
     [
@@ -474,7 +458,10 @@ function makeWebClient(
   });
 }
 
-function unaryOperation(client: Client, payload: string): () => Promise<number> {
+function unaryOperation(
+  client: Client,
+  payload: string,
+): () => Promise<number> {
   return async () => {
     const result = await client.echo.query({ sequence: 1, payload });
     if (result.sequence !== 1 || result.payload.length !== payload.length) {
@@ -582,7 +569,10 @@ function aggregate(
   const elapsedMs = windows.reduce((sum, window) => sum + window.elapsedMs, 0);
   const errors = windows.reduce((sum, window) => sum + window.errors, 0);
   const messages = windows.reduce((sum, window) => sum + window.messages, 0);
-  const operations = windows.reduce((sum, window) => sum + window.operations, 0);
+  const operations = windows.reduce(
+    (sum, window) => sum + window.operations,
+    0,
+  );
   const latencySum = latenciesMs.reduce((sum, value) => sum + value, 0);
   const elapsedSeconds = elapsedMs / 1_000;
 
@@ -644,8 +634,7 @@ function addComparisons(results: readonly MeasuredResult[]): BenchmarkResult[] {
       );
     }
     const comparesWithForwarding =
-      result.implementation === 'direct' ||
-      result.implementation === 'envoy';
+      result.implementation === 'direct' || result.implementation === 'envoy';
     const forwardingProxy = comparesWithForwarding
       ? results.find(
           (candidate) =>
@@ -707,10 +696,7 @@ async function runScenarios(
 
   for (let round = 0; round < options.rounds; round += 1) {
     const offset = round % scenarios.length;
-    const ordered = [
-      ...scenarios.slice(offset),
-      ...scenarios.slice(0, offset),
-    ];
+    const ordered = [...scenarios.slice(offset), ...scenarios.slice(0, offset)];
     for (const scenario of ordered) {
       process.stderr.write(
         `round ${round + 1}/${options.rounds}: ${scenario.workload} / ${scenario.implementation} / ${scenario.name}\n`,
@@ -859,8 +845,6 @@ function proxyClientTargets(
   ];
 }
 
-
-
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   const payload = 'x'.repeat(options.payloadBytes);
@@ -877,9 +861,7 @@ async function main(): Promise<void> {
     forwardingProxy = await startNodeService('./project_proxy_process.ts', {
       ...process.env,
       GRPC_BACKEND_ADDRESS: backend.endpoint,
-      ...(profilePath
-        ? { PROJECT_PROXY_CPU_PROFILE_PATH: profilePath }
-        : {}),
+      ...(profilePath ? { PROJECT_PROXY_CPU_PROFILE_PATH: profilePath } : {}),
     });
     if (options.envoy) {
       envoy = await startEnvoy(options.envoyBin, backend.endpoint);

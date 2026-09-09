@@ -8,7 +8,6 @@ import {
 const BINARY_STRING_CHUNK_SIZE = 0x4000;
 const NO_BINARY_CHUNKS: readonly Uint8Array[] = [];
 
-
 function decodeBase64Segment(encoded: string): Uint8Array {
   const binary = atob(encoded);
   const out = new Uint8Array(binary.length);
@@ -68,9 +67,7 @@ export class GrpcWebBase64Codec implements Codec<Uint8Array, string> {
     return btoa(chunks.join(''));
   }
 
-  async *decode(
-    encoded: CodecInput<string>,
-  ): AsyncIterable<Uint8Array> {
+  async *decode(encoded: CodecInput<string>): AsyncIterable<Uint8Array> {
     const decoder = new TextDecoder();
     for await (const chunk of codecChunks(encoded)) {
       yield* decoder.push(chunk);
@@ -78,4 +75,3 @@ export class GrpcWebBase64Codec implements Codec<Uint8Array, string> {
     yield* decoder.finish();
   }
 }
-

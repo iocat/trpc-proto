@@ -180,7 +180,6 @@ function lookupRootRpc(
   return method ? { service, method } : undefined;
 }
 
-
 function isWrapper(message: ProtoMessage) {
   return message.fields.length === 1 && message.fields[0]?.name === 'value';
 }

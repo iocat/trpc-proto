@@ -1,4 +1,5 @@
 import { serveGrpcWeb } from '@trpc-proto/runtime';
+import { protoSchema } from '../generated/schema.js';
 import * as esbuild from 'esbuild';
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
@@ -23,6 +24,7 @@ const spaJs = esbuild.buildSync({
 
 const grpcWebServer = await serveGrpcWeb({
   mode: 'forward',
+  schema: protoSchema,
   backend: { address: GRPC_ADDRESS },
   address: `${HOST}:${GRPC_WEB_PORT}`,
   cors: {

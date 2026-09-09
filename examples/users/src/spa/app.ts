@@ -198,11 +198,7 @@ function issueRow(issue: IssueRecord, index: number): string {
   </article>`;
 }
 
-function filtered(
-  view: string,
-  status = '',
-  teamId?: string,
-): IssueRecord[] {
+function filtered(view: string, status = '', teamId?: string): IssueRecord[] {
   let list = issues.slice();
   if (view === 'inbox') {
     list = list.filter((issue) => issueStatus(issue) !== 'done');
@@ -210,14 +206,10 @@ function filtered(
   if (status) list = list.filter((issue) => issueStatus(issue) === status);
   if (teamId) list = list.filter((issue) => issue.teamId === teamId);
   if (issuePriorityFilter) {
-    list = list.filter(
-      (issue) => issuePriority(issue) === issuePriorityFilter,
-    );
+    list = list.filter((issue) => issuePriority(issue) === issuePriorityFilter);
   }
   if (issueAssigneeFilter) {
-    list = list.filter(
-      (issue) => issue.assigneeId === issueAssigneeFilter,
-    );
+    list = list.filter((issue) => issue.assigneeId === issueAssigneeFilter);
   }
   const query = issueQuery.trim().toLowerCase();
   if (query) {
@@ -231,7 +223,11 @@ function filtered(
         assignee,
         team?.key,
         team?.name,
-      ].some((value) => String(value || '').toLowerCase().includes(query));
+      ].some((value) =>
+        String(value || '')
+          .toLowerCase()
+          .includes(query),
+      );
     });
   }
   return list;
@@ -280,7 +276,9 @@ function issueBoard(list: IssueRecord[]): string {
 }
 
 function issueMetrics(list: IssueRecord[]): string {
-  const completed = list.filter((issue) => issueStatus(issue) === 'done').length;
+  const completed = list.filter(
+    (issue) => issueStatus(issue) === 'done',
+  ).length;
   const completion = list.length
     ? Math.round((completed / list.length) * 100)
     : 0;
@@ -363,10 +361,8 @@ function listView(view: string, teamId?: string): string {
 
 function bindIssueTools(root: HTMLElement): void {
   const search = root.querySelector<HTMLInputElement>('#issue-search');
-  const priority =
-    root.querySelector<HTMLSelectElement>('#filter-priority');
-  const assignee =
-    root.querySelector<HTMLSelectElement>('#filter-assignee');
+  const priority = root.querySelector<HTMLSelectElement>('#filter-priority');
+  const assignee = root.querySelector<HTMLSelectElement>('#filter-assignee');
   const clear = root.querySelector<HTMLButtonElement>('#clear-filters');
 
   if (search) {
@@ -400,15 +396,15 @@ function bindIssueTools(root: HTMLElement): void {
       void render(false);
     };
   }
-  root.querySelectorAll<HTMLButtonElement>('.view-switch button').forEach(
-    (button) => {
+  root
+    .querySelectorAll<HTMLButtonElement>('.view-switch button')
+    .forEach((button) => {
       button.onclick = () => {
         issueViewMode = button.dataset.mode === 'board' ? 'board' : 'list';
         localStorage.setItem('issue-view', issueViewMode);
         void render(false);
       };
-    },
-  );
+    });
   root.querySelectorAll<HTMLElement>('.issue-card').forEach((card) => {
     card.ondragstart = (event) => {
       if (!card.dataset.id) return;
@@ -556,10 +552,7 @@ function peopleView(): string {
     </table>`;
 }
 
-async function loadStep<T>(
-  name: string,
-  call: () => Promise<T>,
-): Promise<T> {
+async function loadStep<T>(name: string, call: () => Promise<T>): Promise<T> {
   try {
     return await call();
   } catch (err) {
@@ -590,9 +583,7 @@ function teamPage(team: TeamRecord | null | undefined): string {
   const members = team.memberIds
     .map((id) => userById(id))
     .filter((user): user is UserRecord => user !== undefined);
-  const outsiders = users.filter(
-    (user) => !team.memberIds.includes(user.id),
-  );
+  const outsiders = users.filter((user) => !team.memberIds.includes(user.id));
   const chips = members
     .map(
       (user) => `<span class="member">
@@ -684,27 +675,30 @@ function paintRail(): void {
 
 function listen(): void {
   if (sub) return;
-  sub = api().issue.onChange.subscribe({}, {
-    onData(issue) {
-      const index = issues.findIndex((row) => row.id === issue.id);
-      if (index >= 0) issues[index] = issue;
-      else issues.unshift(issue);
-      flashId = issue.id;
-      paintRail();
-      const { name, id } = parseRoute();
-      if (
-        (name === 'inbox' || name === 'issues' || name === 'teams') &&
-        !(name === 'issues' && id)
-      ) {
-        void render(false);
-      }
-      ok('live update');
+  sub = api().issue.onChange.subscribe(
+    {},
+    {
+      onData(issue) {
+        const index = issues.findIndex((row) => row.id === issue.id);
+        if (index >= 0) issues[index] = issue;
+        else issues.unshift(issue);
+        flashId = issue.id;
+        paintRail();
+        const { name, id } = parseRoute();
+        if (
+          (name === 'inbox' || name === 'issues' || name === 'teams') &&
+          !(name === 'issues' && id)
+        ) {
+          void render(false);
+        }
+        ok('live update');
+      },
+      onError(err) {
+        $('live').classList.remove('on');
+        fail(err);
+      },
     },
-    onError(err) {
-      $('live').classList.remove('on');
-      fail(err);
-    },
-  });
+  );
   $('live').classList.add('on');
 }
 
@@ -961,39 +955,45 @@ async function render(reload = true): Promise<void> {
       setCrumb('People');
       view.innerHTML = peopleView();
       $('invite-open').onclick = openInvite;
-      view.querySelectorAll<HTMLButtonElement>('.edit-user').forEach((button) => {
-        button.onclick = () => openUserEditor(userById(button.dataset.id));
-      });
-      view.querySelectorAll<HTMLButtonElement>('.toggle-user').forEach((button) => {
-        button.onclick = async () => {
-          const user = userById(button.dataset.id);
-          if (!user) return;
-          try {
-            await api().user.update.mutate({
-              id: user.id,
-              active: user.active === false,
-            });
-            await render(true);
-          } catch (err) {
-            fail(err);
-          }
-        };
-      });
-      view.querySelectorAll<HTMLSelectElement>('.role-sel').forEach((select) => {
-        select.onchange = async () => {
-          const userId = select.dataset.id;
-          if (!userId) return;
-          try {
-            await api().user.update.mutate({
-              id: userId,
-              role: protoRole(select.value),
-            });
-            ok('role updated');
-          } catch (err) {
-            fail(err);
-          }
-        };
-      });
+      view
+        .querySelectorAll<HTMLButtonElement>('.edit-user')
+        .forEach((button) => {
+          button.onclick = () => openUserEditor(userById(button.dataset.id));
+        });
+      view
+        .querySelectorAll<HTMLButtonElement>('.toggle-user')
+        .forEach((button) => {
+          button.onclick = async () => {
+            const user = userById(button.dataset.id);
+            if (!user) return;
+            try {
+              await api().user.update.mutate({
+                id: user.id,
+                active: user.active === false,
+              });
+              await render(true);
+            } catch (err) {
+              fail(err);
+            }
+          };
+        });
+      view
+        .querySelectorAll<HTMLSelectElement>('.role-sel')
+        .forEach((select) => {
+          select.onchange = async () => {
+            const userId = select.dataset.id;
+            if (!userId) return;
+            try {
+              await api().user.update.mutate({
+                id: userId,
+                role: protoRole(select.value),
+              });
+              ok('role updated');
+            } catch (err) {
+              fail(err);
+            }
+          };
+        });
       return;
     }
     if (name === 'teams') {
@@ -1021,23 +1021,25 @@ async function render(reload = true): Promise<void> {
           }
         };
       }
-      view.querySelectorAll<HTMLButtonElement>('.drop-member').forEach((button) => {
-        button.onclick = async (event) => {
-          event.stopPropagation();
-          const userId = button.dataset.id;
-          if (!userId) return;
-          try {
-            await api().team.removeMember.mutate({
-              teamId: team.id,
-              userId,
-            });
-            await render(true);
-            ok('removed');
-          } catch (err) {
-            fail(err);
-          }
-        };
-      });
+      view
+        .querySelectorAll<HTMLButtonElement>('.drop-member')
+        .forEach((button) => {
+          button.onclick = async (event) => {
+            event.stopPropagation();
+            const userId = button.dataset.id;
+            if (!userId) return;
+            try {
+              await api().team.removeMember.mutate({
+                teamId: team.id,
+                userId,
+              });
+              await render(true);
+              ok('removed');
+            } catch (err) {
+              fail(err);
+            }
+          };
+        });
       return;
     }
     if (name === 'workspace') {
@@ -1095,10 +1097,7 @@ async function render(reload = true): Promise<void> {
         void save({ id, assigneeId: assignee.value || '' });
       team.onchange = () => void save({ id, teamId: team.value || '' });
       title.onkeydown = (event) => {
-        if (
-          event.key === 'Enter' &&
-          (event.metaKey || event.ctrlKey)
-        ) {
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
           event.preventDefault();
           $('save-issue').click();
         }
