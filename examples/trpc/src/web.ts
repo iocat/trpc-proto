@@ -25,7 +25,9 @@ const grpcWebServer = await serveGrpcWeb({
   router: appRouter,
   schema: protoSchema,
   address: `${HOST}:${GRPC_WEB_PORT}`,
-  cors: { allowedOrigins: [`http://${HOST}:${PORT}`] },
+  cors: {
+    allowedOrigins: [`http://${HOST}:${PORT}`, `http://localhost:${PORT}`],
+  },
 });
 
 function send(

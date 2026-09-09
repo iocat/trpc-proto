@@ -34,7 +34,9 @@ const grpcWebServer = await serveGrpcWeb({
   mode: 'forward',
   backend: { address: GRPC_ADDRESS },
   address: `${HOST}:${GRPC_WEB_PORT}`,
-  cors: { allowedOrigins: [`http://${HOST}:${PORT}`] },
+  cors: {
+    allowedOrigins: [`http://${HOST}:${PORT}`, `http://localhost:${PORT}`],
+  },
 });
 
 function send(
