@@ -2,10 +2,10 @@ import * as http from 'node:http';
 import type { AnyRouter } from '@trpc/server';
 import type { ProtoSchema } from '@trpc-proto/schema_ir';
 import {
-  createGrpcWebHttpHandler,
-  createGrpcWebRouterHttpHandler,
+  createForwardingGrpcWebHttpHandler,
+  createDirectGrpcWebHttpHandler,
   type GrpcWebCorsOptions,
-  type GrpcWebHttpHandlerOptions,
+  type ForwardingGrpcWebHttpHandlerOptions,
 } from './http_handler.js';
 
 const DEFAULT_ADDRESS = '127.0.0.1:50052';
@@ -29,7 +29,7 @@ export interface ServeGrpcWebDirectOptions
 export interface ServeGrpcWebForwardOptions
   extends ServeGrpcWebBaseOptions {
   mode: 'forward';
-  backend: Omit<GrpcWebHttpHandlerOptions, 'cors'>;
+  backend: Omit<ForwardingGrpcWebHttpHandlerOptions, 'cors'>;
 }
 
 /** Direct router dispatch or forwarding gRPC-Web server configuration. */
@@ -67,12 +67,12 @@ export async function serveGrpcWeb(
   const target = listenTarget(options.address ?? DEFAULT_ADDRESS);
   const handleGrpcWeb =
     options.mode === 'direct'
-      ? createGrpcWebRouterHttpHandler(options.router, {
+      ? createDirectGrpcWebHttpHandler(options.router, {
           schema: options.schema,
           createContext: options.createContext,
           cors: options.cors,
         })
-      : createGrpcWebHttpHandler({
+      : createForwardingGrpcWebHttpHandler({
           ...options.backend,
           cors: options.cors,
         });

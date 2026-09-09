@@ -6,7 +6,7 @@ import * as grpc from '@grpc/grpc-js';
 import { createTRPCClient } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
-import { createGrpcWebHttpHandler } from './http_handler.js';
+import { createForwardingGrpcWebHttpHandler } from './http_handler.js';
 import { grpcWebLink } from './link.js';
 import { GrpcWebFrameCodec } from './codec/frame_codec.js';
 import {
@@ -35,7 +35,7 @@ async function decodeProtocol(
 
 
 
-describe('createGrpcWebHttpHandler', () => {
+describe('createForwardingGrpcWebHttpHandler', () => {
   it('round-trips through a gRPC-Web HTTP handler to serveGrpc', async () => {
     const t = initTRPC.meta<ProtoMeta>().create({
       defaultMeta: { proto: { package: 'demo.v1' } },
@@ -52,7 +52,7 @@ describe('createGrpcWebHttpHandler', () => {
       schema,
       address: '127.0.0.1:0',
     });
-    const handleGrpcWeb = createGrpcWebHttpHandler({
+    const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
       address: `127.0.0.1:${grpcServer.port}`,
     });
     let requestContentType = '';
@@ -91,7 +91,7 @@ describe('createGrpcWebHttpHandler', () => {
   });
 
   it('validates CORS preflight origin, method, and headers', async () => {
-    const handleGrpcWeb = createGrpcWebHttpHandler({
+    const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
       cors: {
         allowedOrigins: ['https://app.example'],
         additionalAllowedHeaders: ['x-trace'],
@@ -205,7 +205,7 @@ describe('createGrpcWebHttpHandler', () => {
         (err, bound) => (err ? reject(err) : resolve(bound)),
       );
     });
-    const handleGrpcWeb = createGrpcWebHttpHandler({
+    const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
       address: `127.0.0.1:${port}`,
     });
     let requestContentType = '';
@@ -277,7 +277,7 @@ describe('createGrpcWebHttpHandler', () => {
       },
     );
     const backendPort = await bound.promise;
-    const handleGrpcWeb = createGrpcWebHttpHandler({
+    const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
       address: `127.0.0.1:${backendPort}`,
     });
     const server = http.createServer(async (req, res) => {
@@ -364,7 +364,7 @@ describe('createGrpcWebHttpHandler', () => {
         (err, bound) => (err ? reject(err) : resolve(bound)),
       );
     });
-    const handleGrpcWeb = createGrpcWebHttpHandler({
+    const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
       address: `127.0.0.1:${port}`,
       cors: {
         allowedOrigins: ['https://app.example'],
@@ -446,7 +446,7 @@ describe('createGrpcWebHttpHandler', () => {
   });
 
   it('rejects malformed requests and negotiates base64 errors', async () => {
-    const handleGrpcWeb = createGrpcWebHttpHandler();
+    const handleGrpcWeb = createForwardingGrpcWebHttpHandler();
     const server = http.createServer(async (req, res) => {
       if (!(await handleGrpcWeb(req, res))) {
         res.writeHead(404);

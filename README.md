@@ -239,7 +239,7 @@ trpc-proto generate \
 # Run your language's protobuf/stub generator, then start that gRPC server.
 ```
 
-The external server listens on the address configured in `grpcLink` or `createGrpcWebHttpHandler`. It does not execute the tRPC router and does not need `schema.ts` at runtime; clients still import it for protobuf encoding. The [`users`](examples/users) and [`todo`](examples/todo) examples use Go backends.
+The external server listens on the address configured in `grpcLink` or `createForwardingGrpcWebHttpHandler`. It does not execute the tRPC router and does not need `schema.ts` at runtime; clients still import it for protobuf encoding. The [`users`](examples/users) and [`todo`](examples/todo) examples use Go backends.
 
 With either approach, nested routers become gRPC service names (`user.getById` → `UserService.GetById`).
 
@@ -279,7 +279,7 @@ await serveGrpcWeb({
 });
 ```
 
-Use `createGrpcWebHttpHandler({ address: '127.0.0.1:50051' })` instead when an
+Use `createForwardingGrpcWebHttpHandler({ address: '127.0.0.1:50051' })` instead when an
 existing Node HTTP server must own routing. Both server APIs answer valid
 preflight requests, reject disallowed origins, methods, and headers, and add
 matching CORS headers to gRPC-Web responses. Omit `cors` for same-origin

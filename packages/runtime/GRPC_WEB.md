@@ -7,7 +7,7 @@ sequenceDiagram
     participant App as Browser tRPC client
     participant WebLink as grpcWebLink
     participant Fetch as Browser Fetch
-    participant Handler as createGrpcWebHttpHandler
+    participant Handler as createForwardingGrpcWebHttpHandler
     participant Client as grpc-js client
     participant Backend as Native gRPC backend
 
@@ -51,7 +51,7 @@ or production deployment readiness.
 | Compression codec | `src/web/codec/compression.ts` | Encodes and decodes message-local gzip streams. |
 | Base64 codec | `src/web/codec/base64_codec.ts` | Encodes and incrementally decodes base64 body chunks. |
 | Protocol codec | `src/web/codec/protocol_codec.ts` | Composes frame, compression, and body codecs through `encode` and `decode`. |
-| `createGrpcWebHttpHandler` | `src/web/http_handler.ts` | Validates the Node HTTP boundary and forwards requests to grpc-js. |
+| `createForwardingGrpcWebHttpHandler` | `src/web/http_handler.ts` | Validates the Node HTTP boundary and forwards requests to grpc-js. |
 | `serveGrpcWeb` | `src/web/server.ts` | Owns gRPC-Web HTTP ingress in direct-router or forwarding mode. |
 
 The browser link and forwarding handler keep protobuf payloads opaque. Direct
@@ -152,9 +152,9 @@ below to integrate forwarding mode with an HTTP server that owns other routes.
 
 ```ts
 import http from 'node:http';
-import { createGrpcWebHttpHandler } from '@trpc-proto/runtime';
+import { createForwardingGrpcWebHttpHandler } from '@trpc-proto/runtime';
 
-const handleGrpcWeb = createGrpcWebHttpHandler({
+const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
   address: '127.0.0.1:50051',
 });
 
@@ -370,7 +370,7 @@ CORS is disabled when `cors` is omitted. Enable it with an exact serialized
 origin allowlist:
 
 ```ts
-const handleGrpcWeb = createGrpcWebHttpHandler({
+const handleGrpcWeb = createForwardingGrpcWebHttpHandler({
   address: '127.0.0.1:50051',
   cors: {
     allowedOrigins: ['https://app.example.com'],
@@ -474,7 +474,7 @@ Current limitations:
 
 ## Connection and cancellation behavior
 
-One `grpc.Client` is created when `createGrpcWebHttpHandler` is called and is
+One `grpc.Client` is created when `createForwardingGrpcWebHttpHandler` is called and is
 reused for every request handled by that function. grpc-js owns the persistent
 HTTP/2 channel to the configured gRPC backend and multiplexes calls on it.
 

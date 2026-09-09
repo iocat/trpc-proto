@@ -44,8 +44,8 @@ export interface GrpcWebCorsOptions {
   readonly maxAgeSeconds?: number;
 }
 
-/** Configuration for the browser-to-gRPC HTTP handler. */
-export interface GrpcWebHttpHandlerOptions {
+/** Configuration for forwarding browser gRPC-Web calls to a gRPC backend. */
+export interface ForwardingGrpcWebHttpHandlerOptions {
   /** Native gRPC backend address. Defaults to `127.0.0.1:50051`. */
   address?: string;
   /** Channel credentials for the native gRPC backend. Defaults to insecure. */
@@ -355,8 +355,8 @@ function createGrpcWebRequestHandler(
  * native gRPC backend. The default channel is insecure and CORS is disabled
  * unless configured.
  */
-export function createGrpcWebHttpHandler(
-  options: GrpcWebHttpHandlerOptions = {},
+export function createForwardingGrpcWebHttpHandler(
+  options: ForwardingGrpcWebHttpHandlerOptions = {},
 ) {
   const {
     address = DEFAULT_ADDRESS,
@@ -370,17 +370,17 @@ export function createGrpcWebHttpHandler(
   );
 }
 
-/** Direct router and protocol options for gRPC-Web handling. */
-export interface GrpcWebRouterHttpHandlerOptions {
+/** Configuration for dispatching gRPC-Web calls directly to a tRPC router. */
+export interface DirectGrpcWebHttpHandlerOptions {
   schema: ProtoSchema;
   createContext?: () => unknown | Promise<unknown>;
   cors?: GrpcWebCorsOptions;
 }
 
 /** Creates a gRPC-Web handler that dispatches directly to a tRPC router. */
-export function createGrpcWebRouterHttpHandler(
+export function createDirectGrpcWebHttpHandler(
   router: AnyRouter,
-  options: GrpcWebRouterHttpHandlerOptions,
+  options: DirectGrpcWebHttpHandlerOptions,
 ) {
   return createGrpcWebRequestHandler(
     options.cors ? createCorsPolicy(options.cors) : undefined,

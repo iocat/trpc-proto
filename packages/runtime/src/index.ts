@@ -7,10 +7,14 @@ export type {
   ServeGrpcOptions,
   StubHandlers,
 } from './grpc/server.js';
-export { createGrpcWebHttpHandler } from './web/http_handler.js';
+export {
+  createDirectGrpcWebHttpHandler,
+  createForwardingGrpcWebHttpHandler,
+} from './web/http_handler.js';
 export type {
   GrpcWebCorsOptions,
-  GrpcWebHttpHandlerOptions,
+  DirectGrpcWebHttpHandlerOptions,
+  ForwardingGrpcWebHttpHandlerOptions,
 } from './web/http_handler.js';
 export { serveGrpcWeb } from './web/server.js';
 export type {
