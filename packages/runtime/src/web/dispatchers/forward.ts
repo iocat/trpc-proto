@@ -1,5 +1,6 @@
 import * as grpc from '@grpc/grpc-js';
 import type { ProtoSchema } from '@trpc-proto/schema_ir';
+import { createForwardingBatchDispatcher } from '../../batch/grpcweb/forwarding_dispatcher.js';
 import type { GrpcWebDispatcher } from './types.js';
 
 function trailerRecord(metadata?: grpc.Metadata): Record<string, string> {
@@ -72,18 +73,15 @@ function completionForCall({
   return completed.promise;
 }
 
-/**
- * Options for forwarding clients.
- */
-export type ForwardingDispatcherOptions = {};
-
 export function createForwardingDispatcher(
   client: grpc.Client,
   schema: ProtoSchema,
-  opts: ForwardingDispatcherOptions = {},
 ): GrpcWebDispatcher {
   const routes = forwardingRoutes(schema);
-  return ({ grpcPath, message, metadata, signal }, emit) => {
+  const dispatch: GrpcWebDispatcher = (
+    { grpcPath, message, metadata, signal },
+    emit,
+  ) => {
     const route = routes.get(grpcPath);
     if (!route) {
       return Promise.resolve({
@@ -138,4 +136,5 @@ export function createForwardingDispatcher(
     });
     return completionForCall({ call, signal, writes: () => writes });
   };
+  return createForwardingBatchDispatcher(dispatch, schema);
 }

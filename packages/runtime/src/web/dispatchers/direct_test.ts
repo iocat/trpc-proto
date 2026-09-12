@@ -11,9 +11,12 @@ import {
 import { ProtoCodec } from '../../proto_codec/proto_codec.js';
 import { createDirectDispatcher } from './direct.js';
 
-const t = initTRPC.meta<ProtoMeta>().create({
-  defaultMeta: { proto: { package: 'direct.v1' } },
-});
+const t = initTRPC
+  .context<{ source?: string }>()
+  .meta<ProtoMeta>()
+  .create({
+    defaultMeta: { proto: { package: 'direct.v1' } },
+  });
 const appRouter = t.router({
   echo: t.procedure
     .input(z.object({ text: z.string() }))
@@ -22,6 +25,10 @@ const appRouter = t.router({
       message: `echo ${input.text}`,
       length: input.text.length,
     })),
+  context: t.procedure
+    .input(z.object({}))
+    .output(z.object({ source: z.string() }))
+    .query(({ ctx }) => ({ source: ctx.source ?? 'missing' })),
   count: t.procedure
     .input(z.object({ end: z.int() }))
     .output(
@@ -86,6 +93,38 @@ describe('createDirectDispatcher', () => {
     assert.deepEqual(
       messages.map((message) => codec.decode(route.responseType, message)),
       [{ message: 'echo Ada', length: 3 }],
+    );
+  });
+  it('uses dispatchOptions.directContext without creating another context', async () => {
+    let contextCalls = 0;
+    const contextualDispatch = createDirectDispatcher(appRouter, {
+      schema,
+      createContext: () => {
+        contextCalls += 1;
+        return { source: 'created' };
+      },
+    });
+    const route = routeFor('context');
+    const messages: Uint8Array[] = [];
+
+    const status = await contextualDispatch(
+      {
+        grpcPath: route.grpcPath,
+        message: codec.encode(route.requestType, {}),
+        metadata: new Map(),
+        signal: new AbortController().signal,
+      },
+      async (message) => {
+        messages.push(message);
+      },
+      { directContext: { source: 'provided' } },
+    );
+
+    assert.deepEqual(status, { code: grpc.status.OK, message: '' });
+    assert.equal(contextCalls, 0);
+    assert.deepEqual(
+      messages.map((message) => codec.decode(route.responseType, message)),
+      [{ source: 'provided' }],
     );
   });
 

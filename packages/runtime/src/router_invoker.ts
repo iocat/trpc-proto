@@ -5,6 +5,7 @@ export type RouterInvoker = (request: {
   path: string;
   input?: unknown;
   signal?: AbortSignal;
+  context?: unknown;
 }) => Promise<unknown>;
 
 type Procedure = {
@@ -35,7 +36,12 @@ export function createRouterInvoker(
         message: `No procedure on path "${request.path}"`,
       });
     }
-    const ctx = opts?.createContext ? await opts.createContext() : {};
+    const ctx =
+      'context' in request
+        ? request.context
+        : opts?.createContext
+          ? await opts.createContext()
+          : {};
     return procedure({
       path: request.path,
       getRawInput: async () => request.input,

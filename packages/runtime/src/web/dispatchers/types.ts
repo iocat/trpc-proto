@@ -14,8 +14,14 @@ export interface GrpcWebDispatchStatus {
 }
 
 export type EmitGrpcWebMessage = (message: Uint8Array) => Promise<void>;
+/** Per-invocation state consumed by dispatcher implementations. */
+export interface GrpcWebDispatchOptions {
+  /** Pre-created tRPC context used only by direct dispatchers. */
+  directContext?: unknown;
+}
 
 export type GrpcWebDispatcher = (
   request: GrpcWebDispatchRequest,
   emit: EmitGrpcWebMessage,
+  dispatchOptions?: GrpcWebDispatchOptions,
 ) => Promise<GrpcWebDispatchStatus>;

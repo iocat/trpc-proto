@@ -201,6 +201,43 @@ const client = createTRPCClient<AppRouter>({
 await client.user.getById.query({ id: '1' });
 ```
 
+### Browser batching
+
+`grpcWebLink({ batch: true })` coalesces queries and mutations queued in the
+same microtask into one unary `trpc.batch.v1.BatchService/Execute` call while
+leaving subscriptions on their streaming transport. Direct and forwarding
+gRPC-Web servers recognize that built-in endpoint automatically:
+
+```ts
+import { createTRPCClient } from '@trpc/client';
+import { grpcWebLink } from '@trpc-proto/runtime/web';
+
+const client = createTRPCClient<AppRouter>({
+  links: [
+    grpcWebLink({
+      schema: protoSchema,
+      url: 'https://api.example.com',
+      batch: { maxItems: 100 },
+    }),
+  ],
+});
+
+await serveGrpcWeb({
+  mode: 'direct',
+  router: appRouter,
+  schema: protoSchema,
+});
+```
+
+The batch envelope is declared as a tRPC router in
+`packages/runtime/src/batch/proto/batch_router.ts`. The normal generator writes its
+checked-in runtime schema and `trpc_batch_v1.proto`. Forwarding mode fans each
+item out as an ordinary backend RPC, so the backend needs no batch service or
+batch configuration. `batch.maxItems` is client-only and controls request
+splitting. Queries and mutations use separate client batches; procedures within
+each batch execute concurrently, matching tRPC batch semantics. Subscriptions
+remain individual streaming calls.
+
 ## 4. Server
 
 Choose one backend approach. Both expose the same generated protobuf contract, so clients do not change when the implementation language changes.

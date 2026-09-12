@@ -228,6 +228,9 @@ importers:
       '@grpc/grpc-js':
         specifier: ^1.13.4
         version: 1.14.4
+      '@trpc-proto/plugin':
+        specifier: workspace:*
+        version: link:../plugin
       '@trpc/client':
         specifier: ^11.18.0
         version: 11.18.0(@trpc/server@11.18.0(typescript@5.9.3))(typescript@5.9.3)

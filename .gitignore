@@ -2,7 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
-generated/
+examples/**/generated/
 !examples/streaming/generated/
 !examples/streaming/generated/**
 examples/streaming/backend/target/

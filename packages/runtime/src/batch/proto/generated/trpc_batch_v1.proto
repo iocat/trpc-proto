@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package trpc.batch.v1;
+
+message BatchCall {
+  optional int32 id = 1;
+  optional string path = 2;
+  optional bytes input = 3;
+}
+
+message BatchRequest {
+  repeated BatchCall calls = 1;
+}
+
+message BatchResult {
+  message Success {
+    optional int32 id = 1;
+    optional bytes output = 2;
+  }
+
+  message Error {
+    optional int32 id = 1;
+    optional int32 code = 2;
+    optional string message = 3;
+  }
+
+  oneof result {
+    Success success = 1;
+    Error error = 2;
+  }
+}
+
+message BatchResponse {
+  repeated BatchResult results = 1;
+}
+
+service BatchService {
+  // tRPC mutation batch.execute
+  rpc Execute (BatchRequest) returns (BatchResponse);
+}

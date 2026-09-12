@@ -1,6 +1,7 @@
 import * as grpc from '@grpc/grpc-js';
 import { TRPCError, type AnyRouter } from '@trpc/server';
 import type { ProtoSchema } from '@trpc-proto/schema_ir';
+import { createDirectBatchDispatcher } from '../../batch/grpcweb/direct_dispatcher.js';
 import { grpcStatus } from '../../grpc/status.js';
 import { ProtoCodec } from '../../proto_codec/proto_codec.js';
 import { createRouterInvoker, toAsyncIterable } from '../../router_invoker.js';
@@ -44,7 +45,11 @@ export function createDirectDispatcher(
     createContext: options.createContext,
   });
 
-  return async ({ grpcPath, message, signal }, emit) => {
+  const dispatch: GrpcWebDispatcher = async (
+    { grpcPath, message, signal },
+    emit,
+    dispatchOptions,
+  ) => {
     const route = routes.get(grpcPath);
     if (!route) {
       return {
@@ -58,6 +63,9 @@ export function createDirectDispatcher(
         path: route.procedurePath,
         input,
         signal,
+        ...(dispatchOptions && 'directContext' in dispatchOptions
+          ? { context: dispatchOptions.directContext }
+          : {}),
       });
       if (route.responseStream) {
         for await (const item of toAsyncIterable(result)) {
@@ -79,4 +87,8 @@ export function createDirectDispatcher(
       };
     }
   };
+  return createDirectBatchDispatcher(dispatch, {
+    schema: options.schema,
+    createContext: options.createContext,
+  });
 }
