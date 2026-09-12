@@ -78,8 +78,8 @@ const server = http.createServer((request, response) => {
 });
 
 process.stdout.write(
-  `gRPC-Web forwarding http://${HOST}:${GRPC_WEB_PORT} to ${GRPC_ADDRESS}\n`,
+  `Incident gRPC-Web gateway http://${HOST}:${GRPC_WEB_PORT} → ${GRPC_ADDRESS}\n`,
 );
 server.listen(PORT, HOST, () => {
-  process.stdout.write(`React SPA listening on http://${HOST}:${PORT}\n`);
+  process.stdout.write(`Pulseboard listening on http://${HOST}:${PORT}\n`);
 });

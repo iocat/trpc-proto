@@ -314,10 +314,13 @@ pnpm --filter @trpc-proto/example-trpc generate
 pnpm --filter @trpc-proto/example-trpc web      # UI :3002; direct gRPC-Web :3102
 ```
 
-Streaming AI chat with a Rust backend:
+Live incident operations with a Rust backend, editable drag-and-drop board,
+response checklists, typed CRUD, rich protobuf messages, and resumable
+server-streaming events:
 
 ```bash
 pnpm --filter @trpc-proto/example-streaming generate
-pnpm --filter @trpc-proto/example-streaming server  # Rust gRPC :50054
-pnpm --filter @trpc-proto/example-streaming web     # React UI :3003; forwarded gRPC-Web :3103
+pnpm --filter @trpc-proto/example-streaming test:rust # Rust CRUD + stream tests
+pnpm --filter @trpc-proto/example-streaming server    # Rust gRPC :50054
+pnpm --filter @trpc-proto/example-streaming web       # React UI :3003; gRPC-Web :3103
 ```

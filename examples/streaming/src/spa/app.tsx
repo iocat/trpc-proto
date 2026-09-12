@@ -1,399 +1,383 @@
-import { createTRPCClient } from '@trpc/client';
-import type { inferRouterOutputs } from '@trpc/server';
-import { grpcWebLink } from '@trpc-proto/runtime/web';
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
-  type CSSProperties,
+  type FormEvent,
 } from 'react';
 import { createRoot } from 'react-dom/client';
-import { protoSchema } from '../../generated/schema.js';
-import type { AppRouter } from '../router.js';
-
-const client = createTRPCClient<AppRouter>({
-  links: [
-    grpcWebLink<AppRouter>({
-      schema: protoSchema,
-      url: `${location.protocol}//${location.hostname}:3103`,
-      encoding: 'raw',
-      compress: false,
-    }),
-  ],
-});
-
-type RespondOutput = inferRouterOutputs<AppRouter>['chat']['respond'];
-type ChatEvent =
-  RespondOutput extends AsyncIterable<infer Event> ? Event : never;
-type GenerationState = 'idle' | 'connecting' | 'live' | 'complete' | 'error';
-
-const PRESETS = [
-  'Design a cancellation-safe streaming API.',
-  'Explain why backpressure matters in gRPC.',
-  'Review a Rust service for production risks.',
-] as const;
+import { client } from './api.js';
+import { ActivityStrip } from './components/ActivityStrip.js';
+import { CreateIncident } from './components/CreateIncident.js';
+import { IncidentDetail } from './components/IncidentDetail.js';
+import { IncidentExplorer } from './components/IncidentExplorer.js';
+import { Metrics } from './components/Metrics.js';
+import { Sidebar } from './components/Sidebar.js';
+import {
+  eventKind,
+  incidentSeverity,
+  incidentStatus,
+  timeAgo,
+  upsertIncident,
+  type ConnectionState,
+  type Incident,
+  type IncidentEvent,
+  type Responder,
+  type RouterInputs,
+  type Status,
+  type TimelineEntry,
+  type ViewMode,
+} from './model.js';
 
 function App() {
-  const [prompt, setPrompt] = useState<string>(PRESETS[0]);
-  const [submittedPrompt, setSubmittedPrompt] = useState('');
-  const [response, setResponse] = useState('');
-  const [events, setEvents] = useState<ChatEvent[]>([]);
-  const [tokensPerSecond, setTokensPerSecond] = useState(80);
-  const [maxTokens, setMaxTokens] = useState(260);
-  const [tokenCount, setTokenCount] = useState(0);
-  const [latencyMs, setLatencyMs] = useState(0);
-  const [state, setState] = useState<GenerationState>('idle');
-  const [phase, setPhase] = useState('Waiting for a prompt');
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [responders, setResponders] = useState<Responder[]>([]);
+  const [services, setServices] = useState<string[]>([]);
+  const [events, setEvents] = useState<IncidentEvent[]>([]);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('open');
+  const [severityFilter, setSeverityFilter] = useState('all');
+  const [serviceFilter, setServiceFilter] = useState('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [connection, setConnection] = useState<ConnectionState>('connecting');
+  const [lastSignalAt, setLastSignalAt] = useState<Date>();
   const [error, setError] = useState('');
-  const subscription = useRef<{ unsubscribe(): void } | undefined>(undefined);
-  const responseBuffer = useRef('');
-  const eventBuffer = useRef<ChatEvent[]>([]);
-  const receivedTokens = useRef(0);
-  const totalLatency = useRef(0);
-  const lastPaint = useRef(0);
+  const [busy, setBusy] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [note, setNote] = useState('');
+  const [streamAttempt, setStreamAttempt] = useState(0);
+  const revision = useRef(0);
+  const selectedIdRef = useRef('');
 
-  const publish = useCallback(() => {
-    setResponse(responseBuffer.current);
-    setEvents([...eventBuffer.current]);
-    setTokenCount(receivedTokens.current);
-    setLatencyMs(
-      receivedTokens.current
-        ? totalLatency.current / receivedTokens.current
-        : 0,
+  const selected = incidents.find((incident) => incident.id === selectedId);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  const loadSnapshot = useCallback(async () => {
+    const snapshot = await client.operations.snapshot.query({});
+    const nextIncidents = snapshot.incidents ?? [];
+    revision.current = Math.max(revision.current, snapshot.revision);
+    setIncidents(nextIncidents);
+    setResponders(snapshot.responders ?? []);
+    setServices(snapshot.services ?? []);
+    setSelectedId((current) =>
+      nextIncidents.some((incident) => incident.id === current)
+        ? current
+        : nextIncidents[0]?.id || '',
     );
   }, []);
 
-  const stop = useCallback(() => {
-    subscription.current?.unsubscribe();
-    subscription.current = undefined;
-    publish();
-    setState('idle');
-    setPhase('Generation stopped');
-  }, [publish]);
+  useEffect(() => {
+    loadSnapshot().catch((cause) => {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      setConnection('error');
+    });
+  }, [loadSnapshot]);
 
-  const generate = useCallback(() => {
-    const cleanPrompt = prompt.trim();
-    if (!cleanPrompt) return;
-
-    subscription.current?.unsubscribe();
-    responseBuffer.current = '';
-    eventBuffer.current = [];
-    receivedTokens.current = 0;
-    totalLatency.current = 0;
-    lastPaint.current = 0;
-    setSubmittedPrompt(cleanPrompt);
-    setResponse('');
-    setEvents([]);
-    setTokenCount(0);
-    setLatencyMs(0);
-    setError('');
-    setPhase('Opening stream');
-    setState('connecting');
-
-    subscription.current = client.chat.respond.subscribe(
-      { prompt: cleanPrompt, tokensPerSecond, maxTokens },
+  useEffect(() => {
+    setConnection('connecting');
+    const subscription = client.incident.watch.subscribe(
+      { afterRevision: revision.current, heartbeatSeconds: 4 },
       {
         onStarted() {
-          setState('live');
-          setPhase('Rust model simulator connected');
+          setConnection('live');
+          setError('');
         },
         onData(event) {
-          eventBuffer.current.push(event);
-          if (eventBuffer.current.length > 7) eventBuffer.current.shift();
-
-          if (event.kind === 'token') {
-            responseBuffer.current += event.content;
-            receivedTokens.current += 1;
-            totalLatency.current += Math.max(
-              0,
-              Date.now() - event.sentAtUnixMs,
+          revision.current = Math.max(revision.current, event.revision);
+          setConnection('live');
+          setLastSignalAt(new Date());
+          const kind = eventKind(event);
+          if (kind === 'heartbeat') return;
+          setEvents((current) => [event, ...current].slice(0, 24));
+          if (kind === 'incident_deleted') {
+            setIncidents((current) =>
+              current.filter((incident) => incident.id !== event.incidentId),
             );
-          } else if (event.kind === 'thinking') {
-            setPhase(event.content);
-          } else if (event.kind === 'tool') {
-            setPhase(event.content);
-          } else if (event.kind === 'done') {
-            setPhase('Response complete');
+            setSelectedId((current) =>
+              current === event.incidentId ? '' : current,
+            );
+            return;
           }
-
-          const now = performance.now();
-          if (now - lastPaint.current >= 45 || event.kind !== 'token') {
-            lastPaint.current = now;
-            publish();
+          if (event.incident) {
+            setIncidents((current) => upsertIncident(current, event.incident!));
+          }
+          if (event.entry && event.incidentId === selectedIdRef.current) {
+            setTimeline((current) =>
+              current.some((entry) => entry.id === event.entry?.id)
+                ? current
+                : [...current, event.entry!],
+            );
           }
         },
         onError(cause) {
-          publish();
+          setConnection('error');
           setError(cause.message);
-          setPhase('Stream failed');
-          setState('error');
-          subscription.current = undefined;
-        },
-        onComplete() {
-          publish();
-          setPhase('Response complete');
-          setState('complete');
-          subscription.current = undefined;
         },
       },
     );
-  }, [maxTokens, prompt, publish, tokensPerSecond]);
+    return () => subscription.unsubscribe();
+  }, [streamAttempt]);
 
-  useEffect(() => () => subscription.current?.unsubscribe(), []);
+  useEffect(() => {
+    if (!selectedId) {
+      setTimeline([]);
+      return;
+    }
+    client.incident.timeline
+      .query({ incidentId: selectedId })
+      .then((result) => setTimeline(result.items ?? []))
+      .catch((cause) => setError(cause.message));
+  }, [selectedId]);
 
-  const active = state === 'connecting' || state === 'live';
-  const progress = Math.min(100, (tokenCount / maxTokens) * 100);
-  const statusLabel = {
-    idle: 'Ready',
-    connecting: 'Connecting',
-    live: 'Generating',
-    complete: 'Complete',
-    error: 'Error',
-  }[state];
+  const refresh = async () => {
+    setRefreshing(true);
+    setError('');
+    try {
+      await loadSnapshot();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const filtered = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return incidents.filter((incident) => {
+      const status = incidentStatus(incident);
+      const severity = incidentSeverity(incident);
+      if (statusFilter === 'open' && status === 'resolved') return false;
+      if (
+        statusFilter !== 'all' &&
+        statusFilter !== 'open' &&
+        status !== statusFilter
+      ) {
+        return false;
+      }
+      if (severityFilter !== 'all' && severity !== severityFilter) return false;
+      if (serviceFilter !== 'all' && incident.service !== serviceFilter) {
+        return false;
+      }
+      if (!normalizedQuery) return true;
+      return [incident.id, incident.title, incident.summary, incident.service]
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedQuery);
+    });
+  }, [incidents, query, serviceFilter, severityFilter, statusFilter]);
+
+  const openIncidents = incidents.filter(
+    (incident) => incidentStatus(incident) !== 'resolved',
+  );
+  const activeResponders = responders.filter((responder) => responder.online);
+  const criticalCount = openIncidents.filter(
+    (incident) => incidentSeverity(incident) === 'sev1',
+  ).length;
+
+  const updateIncident = async (
+    input: RouterInputs['incident']['update'],
+  ): Promise<boolean> => {
+    setBusy('update');
+    setError('');
+    try {
+      const updated = await client.incident.update.mutate(input);
+      setIncidents((current) => upsertIncident(current, updated));
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      return false;
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const toggleChecklist = async (itemId: string, completed: boolean) => {
+    if (!selected) return;
+    setBusy(`checklist:${itemId}`);
+    setError('');
+    try {
+      const updated = await client.incident.toggleChecklist.mutate({
+        incidentId: selected.id,
+        itemId,
+        completed,
+      });
+      setIncidents((current) => upsertIncident(current, updated));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const deleteIncident = async () => {
+    if (!selected || !window.confirm(`Delete ${selected.id}?`)) return;
+    setBusy('delete');
+    try {
+      await client.incident.delete.mutate({ id: selected.id });
+      setIncidents((current) =>
+        current.filter((incident) => incident.id !== selected.id),
+      );
+      setSelectedId('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const addNote = async (formEvent: FormEvent) => {
+    formEvent.preventDefault();
+    const author = activeResponders[0] ?? responders[0];
+    if (!selected || !author || !note.trim()) return;
+    setBusy('note');
+    try {
+      const entry = await client.incident.addNote.mutate({
+        incidentId: selected.id,
+        authorId: author.id,
+        message: note.trim(),
+      });
+      setTimeline((current) =>
+        current.some((item) => item.id === entry.id)
+          ? current
+          : [...current, entry],
+      );
+      setNote('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy('');
+    }
+  };
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand" href="#chat" aria-label="Relay chat home">
-          <span className="brand-glyph">R/</span>
-          <span>
-            <strong>Relay</strong>
-            <small>stream lab</small>
-          </span>
-        </a>
+    <div className="shell">
+      <Sidebar
+        responders={responders}
+        openCount={openIncidents.length}
+        totalCount={incidents.length}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+      />
 
-        <button
-          className="new-chat"
-          type="button"
-          onClick={() => {
-            stop();
-            setSubmittedPrompt('');
-            setResponse('');
-            setEvents([]);
-            setTokenCount(0);
-            setLatencyMs(0);
-            setError('');
-            responseBuffer.current = '';
-            eventBuffer.current = [];
-            receivedTokens.current = 0;
-            totalLatency.current = 0;
-            setPhase('Waiting for a prompt');
-          }}
-        >
-          <span>＋</span> New thread
-        </button>
-
-        <p className="side-label">Try a prompt</p>
-        <nav className="presets" aria-label="Prompt presets">
-          {PRESETS.map((preset, index) => (
-            <button
-              type="button"
-              key={preset}
-              onClick={() => setPrompt(preset)}
-            >
-              <span>0{index + 1}</span>
-              {preset}
-            </button>
-          ))}
-        </nav>
-
-        <div className="architecture">
-          <p className="side-label">Live route</p>
-          <div>
-            <i className="react-dot" />
-            <span>React</span>
-            <b>browser</b>
-          </div>
-          <em />
-          <div>
-            <i className="proxy-dot" />
-            <span>Forwarder</span>
-            <b>:3103</b>
-          </div>
-          <em />
-          <div>
-            <i className="rust-dot" />
-            <span>Rust tonic</span>
-            <b>:50054</b>
-          </div>
-        </div>
-      </aside>
-
-      <main id="chat">
+      <main>
         <header className="topbar">
           <div>
-            <p>stream.v1.ChatService</p>
-            <strong>Respond</strong>
+            <p className="eyebrow">Production workspace</p>
+            <h1>Incident command</h1>
           </div>
-          <div className="top-stats">
-            <span>
-              <small>Chunks</small>
-              {tokenCount}
-            </span>
-            <span>
-              <small>Mean latency</small>
-              {latencyMs.toFixed(1)} ms
-            </span>
-            <span className={`connection connection-${state}`}>
+          <div className="top-actions">
+            <button
+              className="refresh-button"
+              onClick={refresh}
+              disabled={refreshing}
+            >
+              <span>↻</span> {refreshing ? 'Refreshing' : 'Refresh'}
+            </button>
+            <button
+              className={`connection ${connection}`}
+              onClick={() => setStreamAttempt((attempt) => attempt + 1)}
+            >
               <i />
-              {statusLabel}
-            </span>
+              {connection === 'live'
+                ? `Live${lastSignalAt ? ` · ${timeAgo(lastSignalAt)}` : ''}`
+                : connection === 'connecting'
+                  ? 'Connecting'
+                  : 'Reconnect stream'}
+            </button>
+            <button className="primary" onClick={() => setShowCreate(true)}>
+              <span>＋</span> Declare incident
+            </button>
           </div>
         </header>
 
-        <section className="conversation">
-          {!submittedPrompt ? (
-            <div className="welcome">
-              <span className="welcome-mark">R/</span>
-              <p className="eyebrow">Rust-powered response streaming</p>
-              <h1>
-                Ask once.
-                <br />
-                <em>Watch every chunk arrive.</em>
-              </h1>
-              <p>
-                This local AI simulator streams typed protobuf events through
-                the forwarding gRPC-Web path. No cloud model or hidden HTTP
-                endpoint.
-              </p>
-              <div className="contract-strip">
-                <span>React 19</span>
-                <b>→</b>
-                <span>gRPC-Web</span>
-                <b>→</b>
-                <span>Rust</span>
-                <b>→</b>
-                <span>server stream</span>
-              </div>
-            </div>
-          ) : (
-            <div className="thread">
-              <article className="message user-message">
-                <div className="avatar user-avatar">TN</div>
-                <div>
-                  <header>
-                    <strong>You</strong>
-                    <span>just now</span>
-                  </header>
-                  <p>{submittedPrompt}</p>
-                </div>
-              </article>
-              <article className="message assistant-message">
-                <div className="avatar assistant-avatar">R/</div>
-                <div className="message-body">
-                  <header>
-                    <strong>Relay</strong>
-                    <span>Rust simulator</span>
-                  </header>
-                  <div className="phase">
-                    <i />
-                    {phase}
-                  </div>
-                  <p className="answer">
-                    {response}
-                    <span className={active ? 'cursor' : 'cursor hidden'} />
-                  </p>
-                  {response ? (
-                    <footer>
-                      <span>{tokenCount} protobuf chunks</span>
-                      <span>{tokensPerSecond} target chunks/s</span>
-                    </footer>
-                  ) : null}
-                </div>
-              </article>
-
-              <section className="trace">
-                <header>
-                  <span>Stream trace</span>
-                  <small>most recent frames</small>
-                </header>
-                <div>
-                  {events.map((event) => (
-                    <p key={event.sequence}>
-                      <span>#{event.sequence.toString().padStart(4, '0')}</span>
-                      <b className={`kind kind-${event.kind}`}>{event.kind}</b>
-                      <em>
-                        {event.kind === 'token'
-                          ? JSON.stringify(event.content)
-                          : event.content}
-                      </em>
-                    </p>
-                  ))}
-                </div>
-              </section>
-            </div>
-          )}
-        </section>
-
-        {error ? (
-          <div className="error" role="alert">
-            {error}
+        {error && (
+          <div className="error-banner">
+            <strong>Request failed</strong>
+            <span>{error}</span>
+            <button onClick={() => setError('')}>×</button>
           </div>
-        ) : null}
+        )}
 
-        <section className="composer">
-          <textarea
-            aria-label="Message"
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            onKeyDown={(event) => {
-              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                event.preventDefault();
-                generate();
-              }
-            }}
-            disabled={active}
-            rows={3}
-            placeholder="Message the Rust simulator…"
+        <Metrics
+          criticalCount={criticalCount}
+          openCount={openIncidents.length}
+          totalCount={incidents.length}
+          onlineCount={activeResponders.length}
+          responderCount={responders.length}
+          revision={revision.current}
+        />
+
+        <div className="workspace">
+          <IncidentExplorer
+            incidents={filtered}
+            services={services}
+            selectedId={selectedId}
+            query={query}
+            statusFilter={statusFilter}
+            severityFilter={severityFilter}
+            serviceFilter={serviceFilter}
+            viewMode={viewMode}
+            select={setSelectedId}
+            setQuery={setQuery}
+            setStatusFilter={setStatusFilter}
+            setSeverityFilter={setSeverityFilter}
+            setServiceFilter={setServiceFilter}
+            setViewMode={setViewMode}
+            move={(id, status) =>
+              void updateIncident({ id, status: status as Status })
+            }
           />
-          <div className="composer-bar">
-            <div className="settings">
-              <label>
-                Speed
-                <select
-                  aria-label="Generation speed"
-                  value={tokensPerSecond}
-                  onChange={(event) =>
-                    setTokensPerSecond(Number(event.target.value))
-                  }
-                  disabled={active}
-                >
-                  <option value="40">40 chunks/s</option>
-                  <option value="80">80 chunks/s</option>
-                  <option value="160">160 chunks/s</option>
-                  <option value="320">320 chunks/s</option>
-                </select>
-              </label>
-              <label>
-                Length
-                <select
-                  aria-label="Response length"
-                  value={maxTokens}
-                  onChange={(event) => setMaxTokens(Number(event.target.value))}
-                  disabled={active}
-                >
-                  <option value="120">120 chunks</option>
-                  <option value="260">260 chunks</option>
-                  <option value="600">600 chunks</option>
-                  <option value="1200">1,200 chunks</option>
-                </select>
-              </label>
-            </div>
-            <button
-              className={active ? 'send stop' : 'send'}
-              type="button"
-              onClick={active ? stop : generate}
-            >
-              {active ? 'Stop' : 'Generate'}
-              <kbd>{active ? '■' : '⌘↵'}</kbd>
-            </button>
-          </div>
-          <div className="progress">
-            <i style={{ '--progress': `${progress}%` } as CSSProperties} />
-          </div>
-        </section>
+
+          <aside className="detail-panel">
+            {selected ? (
+              <IncidentDetail
+                incident={selected}
+                responders={responders}
+                timeline={timeline}
+                busy={busy}
+                note={note}
+                setNote={setNote}
+                update={updateIncident}
+                toggleChecklist={toggleChecklist}
+                addNote={addNote}
+                remove={deleteIncident}
+              />
+            ) : (
+              <div className="detail-empty">
+                <span>↖</span>
+                <h3>Select an incident</h3>
+                <p>Inspect state, update ownership, and add timeline notes.</p>
+              </div>
+            )}
+          </aside>
+        </div>
+
+        <ActivityStrip
+          events={events}
+          connection={connection}
+          revision={revision.current}
+          select={setSelectedId}
+        />
       </main>
+
+      {showCreate && (
+        <CreateIncident
+          responders={responders}
+          close={() => setShowCreate(false)}
+          created={(incident) => {
+            setIncidents((current) => upsertIncident(current, incident));
+            setSelectedId(incident.id);
+            setShowCreate(false);
+          }}
+          fail={setError}
+        />
+      )}
     </div>
   );
 }

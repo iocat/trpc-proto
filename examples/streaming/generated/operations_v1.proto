@@ -1,0 +1,212 @@
+syntax = "proto3";
+
+package operations.v1;
+
+import "google/protobuf/timestamp.proto";
+
+enum IncidentStatus {
+  INCIDENT_STATUS_INVESTIGATING = 0;
+  INCIDENT_STATUS_IDENTIFIED = 1;
+  INCIDENT_STATUS_MONITORING = 2;
+  INCIDENT_STATUS_RESOLVED = 3;
+}
+
+enum IncidentSeverity {
+  INCIDENT_SEVERITY_SEV1 = 0;
+  INCIDENT_SEVERITY_SEV2 = 1;
+  INCIDENT_SEVERITY_SEV3 = 2;
+  INCIDENT_SEVERITY_SEV4 = 3;
+}
+
+enum ActivityKind {
+  ACTIVITY_KIND_INCIDENT_CREATED = 0;
+  ACTIVITY_KIND_INCIDENT_UPDATED = 1;
+  ACTIVITY_KIND_NOTE_ADDED = 2;
+  ACTIVITY_KIND_RESPONDER_JOINED = 3;
+  ACTIVITY_KIND_INCIDENT_DELETED = 4;
+  ACTIVITY_KIND_HEARTBEAT = 5;
+}
+
+message OperationsSnapshotRequest {
+}
+
+// A responder available to command or assist an incident.
+message Responder {
+  optional string id = 1;
+  optional string name = 2;
+  optional string role = 3;
+  optional string avatar_color = 4;
+  optional bool online = 5;
+}
+
+message ChecklistItem {
+  optional string id = 1;
+  optional string label = 2;
+  optional bool completed = 3;
+}
+
+// The current materialized state of an operational incident.
+message Incident {
+  optional string id = 1;
+  optional string title = 2;
+  optional string summary = 3;
+  optional string service = 4;
+  optional IncidentStatus status = 5;
+  optional IncidentSeverity severity = 6;
+  // A responder available to command or assist an incident.
+  optional Responder commander = 7;
+  repeated string tags = 8;
+  map<string, string> labels = 9;
+  repeated ChecklistItem checklist = 10;
+  optional google.protobuf.Timestamp created_at = 11;
+  optional google.protobuf.Timestamp updated_at = 12;
+  optional int32 revision = 13;
+}
+
+message OperationsSnapshot {
+  // The current materialized state of an operational incident.
+  repeated Incident incidents = 1;
+  // A responder available to command or assist an incident.
+  repeated Responder responders = 2;
+  map<string, int32> open_by_severity = 3;
+  repeated string services = 4;
+  optional int32 revision = 5;
+}
+
+message OperationsRespondersRequest {
+  optional bool online_only = 1;
+}
+
+message OperationsRespondersResponse {
+  // A responder available to command or assist an incident.
+  repeated Responder items = 1;
+}
+
+message IncidentListRequest {
+  optional string query = 1;
+  optional IncidentStatus status = 2;
+  optional IncidentSeverity severity = 3;
+  optional string service = 4;
+  optional int32 page_size = 5;
+}
+
+message IncidentListResponse {
+  // The current materialized state of an operational incident.
+  repeated Incident items = 1;
+  optional int32 total = 2;
+  optional int32 revision = 3;
+}
+
+message IncidentGetRequest {
+  optional string id = 1;
+}
+
+message IncidentCreateRequest {
+  optional string title = 1;
+  optional string summary = 2;
+  optional string service = 3;
+  optional IncidentSeverity severity = 4;
+  optional string commander_id = 5;
+  repeated string tags = 6;
+  map<string, string> labels = 7;
+}
+
+message IncidentUpdateRequest {
+  optional string id = 1;
+  optional string title = 2;
+  optional string summary = 3;
+  optional string service = 4;
+  optional IncidentStatus status = 5;
+  optional IncidentSeverity severity = 6;
+  optional string commander_id = 7;
+  optional bool clear_commander = 10;
+  repeated string tags = 8;
+  optional bool replace_tags = 11;
+  map<string, string> labels = 9;
+  optional bool replace_labels = 12;
+}
+
+message IncidentToggleChecklistRequest {
+  optional string incident_id = 1;
+  optional string item_id = 2;
+  optional bool completed = 3;
+}
+
+message IncidentDeleteRequest {
+  optional string id = 1;
+}
+
+message IncidentDeleteResponse {
+  optional string id = 1;
+  optional bool deleted = 2;
+  optional int32 revision = 3;
+}
+
+message IncidentAddNoteRequest {
+  optional string incident_id = 1;
+  optional string author_id = 2;
+  optional string message = 3;
+}
+
+message TimelineEntry {
+  optional string id = 1;
+  optional string incident_id = 2;
+  optional ActivityKind kind = 3;
+  // A responder available to command or assist an incident.
+  optional Responder actor = 4;
+  optional string message = 5;
+  optional google.protobuf.Timestamp created_at = 6;
+  optional int32 revision = 7;
+}
+
+message IncidentTimelineRequest {
+  optional string incident_id = 1;
+}
+
+message IncidentTimelineResponse {
+  repeated TimelineEntry items = 1;
+}
+
+message IncidentWatchRequest {
+  optional int32 after_revision = 1;
+  optional int32 heartbeat_seconds = 2;
+}
+
+// A resumable event emitted when incident state changes.
+message IncidentEvent {
+  optional int32 revision = 1;
+  optional ActivityKind kind = 2;
+  // The current materialized state of an operational incident.
+  optional Incident incident = 3;
+  optional TimelineEntry entry = 4;
+  optional string incident_id = 5;
+  optional google.protobuf.Timestamp emitted_at = 6;
+}
+
+service OperationsService {
+  // tRPC query operations.snapshot
+  rpc Snapshot (OperationsSnapshotRequest) returns (OperationsSnapshot);
+  // tRPC query operations.responders
+  rpc Responders (OperationsRespondersRequest) returns (OperationsRespondersResponse);
+}
+
+service IncidentService {
+  // tRPC query incident.list
+  rpc List (IncidentListRequest) returns (IncidentListResponse);
+  // tRPC query incident.get
+  rpc Get (IncidentGetRequest) returns (Incident);
+  // tRPC mutation incident.create
+  rpc Create (IncidentCreateRequest) returns (Incident);
+  // tRPC mutation incident.update
+  rpc Update (IncidentUpdateRequest) returns (Incident);
+  // tRPC mutation incident.toggleChecklist
+  rpc ToggleChecklist (IncidentToggleChecklistRequest) returns (Incident);
+  // tRPC mutation incident.delete
+  rpc Delete (IncidentDeleteRequest) returns (IncidentDeleteResponse);
+  // tRPC mutation incident.addNote
+  rpc AddNote (IncidentAddNoteRequest) returns (TimelineEntry);
+  // tRPC query incident.timeline
+  rpc Timeline (IncidentTimelineRequest) returns (IncidentTimelineResponse);
+  // tRPC subscription incident.watch
+  rpc Watch (IncidentWatchRequest) returns (stream IncidentEvent);
+}

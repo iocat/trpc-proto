@@ -7,6 +7,7 @@
     "generate": "trpc-proto generate --router src/router.ts --export appRouter --out generated",
     "server": "cargo run --manifest-path backend/Cargo.toml",
     "build:rust": "cargo build --manifest-path backend/Cargo.toml",
+    "test:rust": "cargo test --manifest-path backend/Cargo.toml",
     "web": "tsx src/web.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
