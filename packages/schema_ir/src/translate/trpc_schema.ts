@@ -188,7 +188,8 @@ class TrpcSchemaTranslator {
       const tag = tagField ? stringLiteral(unwrap(tagField).inner) : undefined;
       if (!tag) {
         throw new Error(
-          `discriminatedUnion "${discriminator}" needs a string literal at ${messageName}`,
+          `discriminatedUnion "${discriminator}" requires every arm to define "${discriminator}" as a unique string literal at ${messageName}. ` +
+            `Example: z.object({ ${JSON.stringify(discriminator)}: z.literal('success'), value: z.string() })`,
         );
       }
       const nestedName = toPascalCase(tag);

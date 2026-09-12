@@ -613,6 +613,24 @@ describe('translate', () => {
     );
   });
 
+  it('shows how to declare a discriminated union arm', () => {
+    assert.throws(
+      () =>
+        translate([
+          proc('batch', {
+            output: z.discriminatedUnion('result', [
+              z.object({ result: z.string(), output: z.string() }),
+              z.object({
+                result: z.literal('error'),
+                message: z.string(),
+              }),
+            ]),
+          }),
+        ]),
+      /requires every arm to define "result" as a unique string literal.*Example: z\.object\(\{ "result": z\.literal\('success'\)/,
+    );
+  });
+
   it('throws when literal numbers mix integers and floats', () => {
     assert.throws(
       () =>
