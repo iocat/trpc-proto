@@ -2,6 +2,26 @@
   "name": "trpc-proto",
   "private": true,
   "type": "module",
+  "description": "Generate Protocol Buffers and gRPC transports from tRPC 11 and Zod 4 routers",
+  "keywords": [
+    "trpc",
+    "protobuf",
+    "grpc",
+    "grpc-web",
+    "typescript",
+    "zod",
+    "code-generation"
+  ],
+  "homepage": "https://github.com/iocat/trpc-proto#readme",
+  "bugs": {
+    "url": "https://github.com/iocat/trpc-proto/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iocat/trpc-proto.git"
+  },
+  "license": "MIT",
+  "author": "Thanh Ngo <nokotavi@gmail.com>",
   "packageManager": "pnpm@10.25.0",
   "scripts": {
     "build": "pnpm -r build",

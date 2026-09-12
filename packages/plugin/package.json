@@ -3,6 +3,24 @@
   "version": "0.0.0",
   "type": "module",
   "description": "Build-time TypeScript plugin: extract tRPC routers and emit protobuf service declarations",
+  "keywords": [
+    "trpc",
+    "protobuf",
+    "code-generation",
+    "typescript",
+    "zod"
+  ],
+  "homepage": "https://github.com/iocat/trpc-proto#readme",
+  "bugs": {
+    "url": "https://github.com/iocat/trpc-proto/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iocat/trpc-proto.git",
+    "directory": "packages/plugin"
+  },
+  "license": "MIT",
+  "author": "Thanh Ngo <nokotavi@gmail.com>",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

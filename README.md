@@ -1,85 +1,94 @@
 # trpc-proto
 
-Generate protobuf from a tRPC 11 + Zod 4 router. The TypeScript client keeps talking tRPC; the wire is gRPC.
+Generate Protocol Buffers from a tRPC 11 + Zod 4 router, then use the same typed tRPC client over native gRPC or gRPC-Web.
 
-This is **opinionated**. Only a subset of `appRouter` is a proto contract. That subset is **enforced during generation**. Anything outside it is rejected, not approximated.
+`trpc-proto` is intentionally strict: only the app-router schema subset that can be represented faithfully in protobuf is accepted. Unsupported contracts fail during generation instead of being approximated.
 
-```
-packages/plugin      @trpc-proto/plugin          evaluate appRouter → .proto + schema.ts
-packages/runtime     @trpc-proto/runtime         grpcLink, serveGrpc, gRPC-Web
+> Please file an issue when a useful schema construct is missing from the
+> supported subset.
 
-packages/schema_ir   @trpc-proto/schema_ir       ProtoSchema IR, prevalidate, proto text
-examples/users       @trpc-proto/example-users   users/org API + Go gRPC backend
-examples/todo        @trpc-proto/example-todo    todo API + Go gRPC backend
-examples/trpc        @trpc-proto/example-trpc    TypeScript tRPC backend + protobuf gRPC
-```
+## Choose a deployment mode
 
-Requires **tRPC 11** and **Zod 4**. The runtime can serve a TypeScript router over gRPC or connect clients and a gRPC-Web gateway to an external gRPC backend.
+Every browser deployment includes the Node.js gRPC-Web wrapper provided by
+`@trpc-proto/runtime`. It owns the HTTP endpoint, gRPC-Web framing, CORS,
+compression, and batching. The only choice is what runs behind that wrapper:
 
-## Enforced subset
+| Mode                                                         | Wrapper behavior                               | Where procedures run                              |
+| ------------------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------- |
+| [Provide your own backend](#mode-1-provide-your-own-backend) | `mode: 'forward'` sends normal native gRPC     | Your Go, Rust, Java, or other native gRPC service |
+| [Direct gRPC-Web server](#mode-2-direct-grpc-web-server)     | `mode: 'direct'` invokes the router in-process | The TypeScript `appRouter` process                |
 
-Prevalidate collects every issue, then aborts on errors (no stack). Generate prints the router file path.
+### Generate the shared contract
 
-### Router
+```mermaid
+flowchart LR
+  Router["appRouter<br/>Zod contract"]
+  Generate["trpc-proto generate"]
+  Proto["generated/example_v1.proto"]
+  Schema["generated/schema.ts"]
 
-|                                                               |                                                              |
-| ------------------------------------------------------------- | ------------------------------------------------------------ |
-| `initTRPC.meta<ProtoMeta>()` with `defaultMeta.proto.package` | required                                                     |
-| `proto.syntax`                                                | optional; proto3 only (omitted → proto3)                     |
-| `proto.cache`                                                 | optional; stable field numbers; dropped tags emit `reserved` |
-| `proto.options`                                               | optional (`go_package`, …)                                   |
-| `proto` on a procedure `.meta()`                              | forbidden (file header is router-global)                     |
-| procedure `.output()`                                         | required                                                     |
-| procedure `.input()`                                          | optional (omitted → `google.protobuf.Empty`)                 |
-| chained `.input()`                                            | forbidden (merge into one Zod schema)                        |
-| procedure type                                                | query/mutation (unary) or subscription (server-streaming)    |
-| validators                                                    | Zod 4 only                                                   |
-
-### Zod → proto
-
-| Zod                                                        | Proto                                 |
-| ---------------------------------------------------------- | ------------------------------------- |
-| `z.object`, nested objects                                 | `message`                             |
-| `.meta({ protoMessageName: 'User' })`                      | named message; **must be PascalCase** |
-| `.meta({ protoUseKnownType: 'google.protobuf.Duration' })` | encode as that well-known type        |
-| `.meta({ protoEnumName: 'UserRole' })`                     | named enum; **must be PascalCase**    |
-
-| unnamed nested object | nested message named from the field |
-| `z.string`, template literal | `string` (`email` is still `string`) |
-| `z.boolean` | `bool` |
-| `z.number` / `z.int` | `double` / `int32` (int formats: int32, int64, …) |
-| `z.bigint` | `int64` |
-| `z.date` | `google.protobuf.Timestamp` |
-| `z.enum`, same-type literal union | `enum` |
-| `z.discriminatedUnion` | `oneof` of variant messages |
-| `z.array` / `z.set` | `repeated` |
-| `z.record` / `z.map` | `map<key, value>` (scalar keys) |
-| `z.any` / `z.unknown` | `google.protobuf.Value` |
-| `z.record` of any/unknown | `google.protobuf.Struct` |
-| void / undefined / never / null input or output | `google.protobuf.Empty` |
-| `z.optional` / `z.nullable` | `optional` field |
-| `zAsyncIterable({ yield: schema })` | server stream; protobuf response uses `schema` |
-
-Rejected (translate throws): open unions, mixed-type literals, mixed int/float literals, non-PascalCase `protoMessageName` / `protoEnumName`, non-scalar map keys, anything else `Unsupported Zod type`.
-
-Do not expect tRPC-only features (middleware-only procedures, output inference without `.output()`, superjson-only types) to round-trip through protobuf.
-
-```
-src/router.ts
-error: procedure ping missing required output
-  ping: t.procedure
-    .output(z.object({ ok: z.boolean() }))
-    .query(...)
+  Router --> Generate
+  Generate --> Proto
+  Generate --> Schema
 ```
 
-## Install
+The browser client and generated contract are identical in both modes.
+
+### Mode 1: provide your own backend
+
+```mermaid
+flowchart LR
+  Browser["Browser tRPC client"]
+  Wrapper["Node gRPC-Web wrapper<br/>mode: forward"]
+  Backend["Your native gRPC backend"]
+  Proto["generated .proto"]
+  Schema["generated schema.ts"]
+
+  Browser -->|"gRPC-Web"| Wrapper
+  Wrapper -->|"native gRPC"| Backend
+  Proto -. "implemented by" .-> Backend
+  Schema -. "configures" .-> Wrapper
+```
+
+You provide a normal native gRPC backend, not a gRPC-Web endpoint. The included
+Node wrapper serves gRPC-Web to browsers and forwards each call to your backend.
+The TypeScript router is the schema source; generate its `.proto` and implement
+that contract in your backend language.
+
+### Mode 2: direct gRPC-Web server
+
+```mermaid
+flowchart LR
+  Browser["Browser tRPC client"]
+  Wrapper["Node gRPC-Web wrapper<br/>mode: direct"]
+  Router["appRouter<br/>real resolvers"]
+  Schema["generated schema.ts"]
+
+  Browser -->|"gRPC-Web"| Wrapper
+  Wrapper -->|"in-process dispatch"| Router
+  Schema -. "configures" .-> Wrapper
+```
+
+The same Node wrapper serves gRPC-Web, but invokes real router resolvers
+in-process instead of forwarding over native gRPC. No separate backend service
+is required.
+
+## Requirements and repository setup
+
+- tRPC 11
+- Zod 4
+- TypeScript 5.9+
+- pnpm 10 for this workspace
 
 ```bash
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 pnpm build
 ```
 
-## 1. Router
+## Define the protobuf contract
+
+Every generated router needs `defaultMeta.proto.package`. Add a cache path to keep protobuf field numbers stable across generations.
 
 ```ts
 import { initTRPC } from '@trpc/server';
@@ -95,7 +104,7 @@ const t = initTRPC.meta<ProtoMeta>().create({
     proto: {
       package: 'example.v1',
       cache: 'generated/schema.ts',
-      options: { go_package: 'users/backend/gen/examplev1' },
+      options: { go_package: 'backend/gen/examplev1' },
     },
   },
 });
@@ -108,11 +117,6 @@ const User = z
   .meta({ protoMessageName: 'User' });
 
 export const appRouter = t.router({
-  hello: t.procedure
-    .input(z.object({ name: z.string() }))
-    .output(z.object({ message: z.string() }))
-    .query(noopForNonTsBackend),
-
   user: t.router({
     getById: t.procedure
       .input(z.object({ id: z.string() }))
@@ -128,11 +132,11 @@ export const appRouter = t.router({
 export type AppRouter = typeof appRouter;
 ```
 
-`noopForNonTsBackend` is a schema-only resolver for queries, mutations, and subscriptions. Use it when another service implements the generated proto. For a TypeScript subscription, pass an async-generator resolver as documented by tRPC; `zAsyncIterable` validates each yield and exposes its item schema to protobuf generation.
+`noopForNonTsBackend` marks schema-only procedures when another service implements the generated RPC. For direct mode, replace it with the real query, mutation, or subscription resolver.
 
-The plugin evaluates `export const appRouter` (the runtime value, not the type) so it can read the Zod parsers.
+The generator evaluates the exported router value so it can inspect the Zod parsers. Browser code should import `AppRouter` with `import type` and use the generated data-only schema; importing the router value into a browser bundle can pull in database clients and Node-only modules.
 
-## 2. Generate
+## Generate
 
 ```bash
 trpc-proto generate \
@@ -141,23 +145,12 @@ trpc-proto generate \
   --out generated
 ```
 
-This command writes the `.proto` and an importable `schema.ts` under `--out`.
-`schema.ts` is both the runtime protobuf schema and the persisted field-number
-cache. Override its path with `--cache` or `defaultMeta.proto.cache`.
+This writes:
 
-With the options above, it writes:
+- `generated/example_v1.proto` — the contract for normal protobuf stub generation.
+- `generated/schema.ts` — runtime schema data used by the TypeScript transports and as the stable field-number cache.
 
-- `generated/example_v1.proto` — feed this to **your** stub codegen (`protoc`, connect-es, …)
-- `generated/schema.ts` — complete runtime IR + `generateCache` for stable field numbers
-
-Deleted fields stay in the cache. Their numbers are emitted as `reserved` so they are not reused:
-
-```
-message User {
-  optional string id = 1;
-  reserved 2, 4;
-}
-```
+The same operation is available programmatically:
 
 ```ts
 import { generate } from '@trpc-proto/plugin';
@@ -169,24 +162,168 @@ await generate({
 });
 ```
 
-## 3. Client
+Deleted fields remain in the cache and are emitted as `reserved`, preventing accidental field-number reuse:
 
-Ideally, `grpcLink` and `grpcWebLink` could accept `appRouter` and derive both the
-tRPC types and protobuf schema from one value. Client code should import
-`AppRouter` with `import type`, however, and TypeScript erases that import before
-runtime. Importing the `appRouter` value instead would make the client bundler
-traverse resolver modules and could pull database clients, Node built-ins, and
-other backend-only dependencies into the client.
+```proto
+message User {
+  optional string id = 1;
+  reserved 2, 4;
+}
+```
 
-The generated `protoSchema` is the data-only runtime boundary: it retains the
-cache-assigned protobuf field numbers without importing server code.
-`grpcLink` uses it to dial gRPC directly (default `127.0.0.1:50051`).
+## Mode 1: provide your own backend
+
+Use this mode when Go, Rust, Java, or another service owns the native gRPC
+implementation. Browsers still connect to the Node gRPC-Web wrapper supplied by
+`@trpc-proto/runtime`.
+
+### 1. Implement the generated protobuf service
+
+Feed `generated/example_v1.proto` into the normal generator for your backend language, implement the generated service interface, and start a native gRPC server. The backend does not import the TypeScript router or `generated/schema.ts`.
+
+The [`users`](examples/users) and [`todo`](examples/todo) examples use Go backends. The [`streaming`](examples/streaming) example uses Rust.
+
+### 2. Run the provided Node gRPC-Web wrapper
+
+```ts
+import { serveGrpcWeb } from '@trpc-proto/runtime';
+import { protoSchema } from './generated/schema.js';
+
+const server = await serveGrpcWeb({
+  mode: 'forward',
+  schema: protoSchema,
+  address: '127.0.0.1:50052',
+  backend: {
+    address: '127.0.0.1:50051',
+    credentials: { type: 'insecure' },
+  },
+  cors: {
+    allowedOrigins: ['https://app.example.com'],
+  },
+});
+
+// During shutdown:
+await server.close();
+```
+
+`serveGrpcWeb({ mode: 'forward' })` is the provided Node wrapper. It serves the
+browser-facing gRPC-Web endpoint and translates each call to native gRPC. When
+browser batching is enabled, the wrapper unwraps the batch and forwards ordinary
+application RPCs concurrently. Your backend does not implement
+`trpc.batch.v1.BatchService` and has no gRPC-Web or batch configuration.
+
+Use `createForwardingGrpcWebHttpHandler` instead when an existing Node HTTP server owns the listener. Call the returned handler's `close()` method during shutdown.
+
+## Mode 2: direct gRPC-Web server
+
+Use this mode when the TypeScript router owns the real procedure implementations.
+The provided Node wrapper serves the same browser-facing gRPC-Web endpoint as
+forwarding mode.
+
+```ts
+import { initTRPC } from '@trpc/server';
+import { serveGrpcWeb, type ProtoMeta } from '@trpc-proto/runtime';
+import { z } from 'zod';
+import { protoSchema } from './generated/schema.js';
+
+const t = initTRPC
+  .context<{ userId: string }>()
+  .meta<ProtoMeta>()
+  .create({
+    defaultMeta: { proto: { package: 'example.v1' } },
+  });
+
+const appRouter = t.router({
+  user: t.router({
+    getById: t.procedure
+      .input(z.object({ id: z.string() }))
+      .output(z.object({ id: z.string(), name: z.string() }))
+      .query(async ({ input, ctx }) => {
+        return loadUser(input.id, ctx.userId);
+      }),
+  }),
+});
+
+const server = await serveGrpcWeb({
+  mode: 'direct',
+  router: appRouter,
+  schema: protoSchema,
+  address: '127.0.0.1:50052',
+  createContext: async () => ({ userId: await authenticate() }),
+  cors: {
+    allowedOrigins: ['https://app.example.com'],
+  },
+});
+
+// During shutdown:
+await server.close();
+```
+
+`createContext` supplies the normal tRPC `ctx`. A non-batched call gets one
+context; procedures in one direct batch share one context and execute
+concurrently, matching tRPC batch semantics. The wrapper always recognizes the
+built-in batch endpoint, so neither mode has a server-side `batch` option.
+
+### Optional native gRPC server
+
+A TypeScript router can also serve native gRPC clients:
+
+```ts
+import { serveGrpc } from '@trpc-proto/runtime';
+
+await serveGrpc(appRouter, {
+  schema: protoSchema,
+  address: '127.0.0.1:50051',
+  createContext: () => ({ userId: 'service-account' }),
+});
+```
+
+Use `bindRouter` instead when an existing grpc-js server owns service registration.
+
+## Browser client for either mode
+
+The browser configuration does not change between direct and forwarding deployments:
+
+```ts
+import { createTRPCClient } from '@trpc/client';
+import { grpcWebLink } from '@trpc-proto/runtime/web';
+import { protoSchema } from './generated/schema.js';
+import type { AppRouter } from './router.js';
+
+const client = createTRPCClient<AppRouter>({
+  links: [
+    grpcWebLink<AppRouter>({
+      schema: protoSchema,
+      url: 'https://api.example.com',
+      encoding: 'raw',
+      batch: { maxItems: 100 },
+    }),
+  ],
+});
+
+const user = await client.user.getById.query({ id: '1' });
+```
+
+With `batch: true` or `batch: { maxItems }`:
+
+- Queries and mutations queued in the same microtask are coalesced.
+- Queries and mutations use separate batches.
+- Procedures within a batch execute concurrently.
+- Subscriptions continue through the normal server-streaming transport.
+- `maxItems` only controls client request splitting; servers have no matching limit.
+
+The standalone `grpcWebBatchLink` remains available for manual link composition,
+but it rejects subscriptions. During development, put tRPC's `loggerLink()`
+before `grpcWebLink` to inspect decoded inputs and results when protobuf payloads
+are opaque in the browser Network panel.
+
+## Native Node client
+
+Use `grpcLink` when a Node client should call a native gRPC server directly:
 
 ```ts
 import { createTRPCClient } from '@trpc/client';
 import { grpcLink } from '@trpc-proto/runtime';
-import { protoSchema } from './generated/schema.js';
-import type { AppRouter } from './router.js';
 
 const client = createTRPCClient<AppRouter>({
   links: [
@@ -197,167 +334,159 @@ const client = createTRPCClient<AppRouter>({
     }),
   ],
 });
-
-await client.user.getById.query({ id: '1' });
 ```
 
-### Browser batching
+## Supported router contract
 
-`grpcWebLink({ batch: true })` coalesces queries and mutations queued in the
-same microtask into one unary `trpc.batch.v1.BatchService/Execute` call while
-leaving subscriptions on their streaming transport. Direct and forwarding
-gRPC-Web servers recognize that built-in endpoint automatically:
+### Router rules
+
+| Contract                                                      | Requirement                                                                 |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `initTRPC.meta<ProtoMeta>()` with `defaultMeta.proto.package` | Required                                                                    |
+| `proto.syntax`                                                | Optional; only proto3 is supported                                          |
+| `proto.cache`                                                 | Optional stable field-number cache                                          |
+| `proto.options`                                               | Optional protobuf options such as `go_package`                              |
+| Procedure `.output()`                                         | Required                                                                    |
+| Procedure `.input()`                                          | Optional; omitted input becomes `google.protobuf.Empty`                     |
+| Chained `.input()`                                            | Rejected; merge it into one Zod schema                                      |
+| Procedure types                                               | Query and mutation become unary RPCs; subscription becomes server streaming |
+| Validators                                                    | Zod 4 only                                                                  |
+| Procedure-level `proto` metadata                              | Rejected; the protobuf file header is router-global                         |
+
+### Zod to protobuf
+
+| Zod                                                        | Protobuf                                              |
+| ---------------------------------------------------------- | ----------------------------------------------------- |
+| `z.object`, including nested objects                       | `message`                                             |
+| `.meta({ protoMessageName: 'User' })`                      | Named message; name must be PascalCase                |
+| `.meta({ protoUseKnownType: 'google.protobuf.Duration' })` | Selected well-known type                              |
+| `.meta({ protoEnumName: 'UserRole' })`                     | Named enum; name must be PascalCase                   |
+| Unnamed nested object                                      | Nested message named from the field                   |
+| `z.string`, template literal                               | `string`; formats such as email remain strings        |
+| `z.boolean`                                                | `bool`                                                |
+| `z.number`, `z.int`                                        | `double`, `int32`, `int64`, and other integer formats |
+| `z.bigint`                                                 | `int64`                                               |
+| `z.date`                                                   | `google.protobuf.Timestamp`                           |
+| `z.enum`, same-type literal union                          | `enum`                                                |
+| `z.discriminatedUnion`                                     | `oneof` of variant messages                           |
+| `z.array`, `z.set`                                         | `repeated`                                            |
+| `z.record`, `z.map`                                        | `map<key, value>` with scalar keys                    |
+| `z.any`, `z.unknown`                                       | `google.protobuf.Value`                               |
+| Record of `any` or `unknown`                               | `google.protobuf.Struct`                              |
+| Void, undefined, never, or null input/output               | `google.protobuf.Empty`                               |
+| `z.optional`, `z.nullable`                                 | Optional field                                        |
+| `zAsyncIterable({ yield: schema })`                        | Server stream using `schema` as the response item     |
+
+Generation rejects open unions, mixed-type literals, mixed integer/float literals, invalid protobuf names, non-scalar map keys, and unsupported Zod types. Prevalidation collects all issues before aborting.
+
+Do not expect tRPC-only behavior that has no protobuf representation—such as output inference without `.output()` or superjson-only values—to round-trip through the generated contract.
+
+### Unsupported examples
+
+The following contracts are intentionally rejected rather than translated
+approximately:
 
 ```ts
-import { createTRPCClient } from '@trpc/client';
-import { grpcWebLink } from '@trpc-proto/runtime/web';
+const unsupportedRouter = t.router({
+  // Every procedure needs an explicit output schema.
+  missingOutput: t.procedure
+    .input(z.object({ id: z.string() }))
+    .query(noopForNonTsBackend),
 
-const client = createTRPCClient<AppRouter>({
-  links: [
-    grpcWebLink({
-      schema: protoSchema,
-      url: 'https://api.example.com',
-      batch: { maxItems: 100 },
-    }),
-  ],
-});
+  // Merge this into one object instead of chaining input parsers.
+  chainedInput: t.procedure
+    .input(z.object({ id: z.string() }))
+    .input(z.object({ revision: z.int() }))
+    .output(z.object({ ok: z.boolean() }))
+    .query(noopForNonTsBackend),
 
-await serveGrpcWeb({
-  mode: 'direct',
-  router: appRouter,
-  schema: protoSchema,
-});
-```
+  // Object unions need a literal discriminator and z.discriminatedUnion().
+  openObjectUnion: t.procedure
+    .input(
+      z.union([
+        z.object({ email: z.string() }),
+        z.object({ phone: z.string() }),
+      ]),
+    )
+    .output(z.object({ ok: z.boolean() }))
+    .query(noopForNonTsBackend),
 
-The batch envelope is declared as a tRPC router in
-`packages/runtime/src/batch/proto/batch_router.ts`. The normal generator writes its
-checked-in runtime schema and `trpc_batch_v1.proto`. Forwarding mode fans each
-item out as an ordinary backend RPC, so the backend needs no batch service or
-batch configuration. `batch.maxItems` is client-only and controls request
-splitting. Queries and mutations use separate client batches; procedures within
-each batch execute concurrently, matching tRPC batch semantics. Subscriptions
-remain individual streaming calls.
+  // Protobuf enums cannot mix literal value types.
+  mixedLiteralTypes: t.procedure
+    .input(z.object({ state: z.literal(['active', 1]) }))
+    .output(z.object({ ok: z.boolean() }))
+    .query(noopForNonTsBackend),
 
-## 4. Server
+  // A numeric literal enum cannot mix integer and floating-point values.
+  mixedNumberKinds: t.procedure
+    .input(z.object({ value: z.literal([1, 1.5]) }))
+    .output(z.object({ ok: z.boolean() }))
+    .query(noopForNonTsBackend),
 
-Choose one backend approach. Both expose the same generated protobuf contract, so clients do not change when the implementation language changes.
+  // Protobuf map keys must map to a supported scalar key type.
+  objectMapKey: t.procedure
+    .input(
+      z.object({
+        values: z.map(z.object({ id: z.string() }), z.string()),
+      }),
+    )
+    .output(z.object({ ok: z.boolean() }))
+    .query(noopForNonTsBackend),
 
-### Approach A: TypeScript tRPC backend
-
-Implement the router procedures with real resolvers, then expose that router as a gRPC server with `serveGrpc`:
-
-```ts
-import { serveGrpc } from '@trpc-proto/runtime';
-import { protoSchema } from './generated/schema.js';
-import { appRouter } from './router.js';
-
-await serveGrpc(appRouter, {
-  schema: protoSchema,
-  address: '127.0.0.1:50051',
-  createContext: () => ({}),
-});
-```
-
-`serveGrpc` owns the grpc-js server lifecycle and is the direct server-side counterpart of `grpcLink`. If an existing TypeScript server already owns generated grpc-js service registration, use `bindRouter(appRouter, { schema: protoSchema })` instead; it returns proto-shaped handlers that delegate to the router.
-
-### Approach B: External gRPC backend
-
-Keep schema-only router procedures on the TypeScript side with `noopForNonTsBackend`, generate the `.proto`, then implement that contract in Go or another gRPC-supported language:
-
-```bash
-trpc-proto generate \
-  --router src/router.ts \
-  --export appRouter \
-  --out generated
-
-# Run your language's protobuf/stub generator, then start that gRPC server.
-```
-
-The external server does not execute the tRPC router and does not need
-`schema.ts`; browser clients and the forwarding handler import it for protobuf
-encoding and RPC cardinality. The [`users`](examples/users) and
-[`todo`](examples/todo) examples use Go backends.
-
-With either approach, nested routers become gRPC service names (`user.getById` → `UserService.GetById`).
-
-### Browser gRPC-Web ingress
-
-`serveGrpcWeb` supports direct router dispatch and forwarding to a separately
-hosted native gRPC server.
-
-Direct mode decodes protobuf and invokes the tRPC router in-process:
-
-```ts
-import { serveGrpcWeb } from '@trpc-proto/runtime';
-
-await serveGrpcWeb({
-  mode: 'direct',
-  router: appRouter,
-  schema: protoSchema,
-  address: '127.0.0.1:50052',
-  cors: {
-    allowedOrigins: ['https://app.example.com'],
-    additionalAllowedHeaders: ['x-trace-id'],
-  },
+  // Explicit protobuf message and enum names must be PascalCase.
+  invalidMessageName: t.procedure
+    .input(
+      z.object({ id: z.string() }).meta({ protoMessageName: 'user_record' }),
+    )
+    .output(z.object({ ok: z.boolean() }))
+    .query(noopForNonTsBackend),
 });
 ```
 
-Successful CORS preflights are browser-cached for 600 seconds by default.
-Configure `cors.maxAgeSeconds` to change the cache lifetime.
+Generation reports the procedure path and reason for each violation. Fix the
+contract at the router boundary; the generator does not insert lossy fallback
+types.
 
-Forward mode owns the same HTTP listener but sends calls to an existing gRPC
-backend:
+See [packages/runtime/GRPC_WEB.md](packages/runtime/GRPC_WEB.md) for framing, compression, CORS, status, and forwarding details.
 
-```ts
-await serveGrpcWeb({
-  mode: 'forward',
-  schema: protoSchema,
-  backend: { address: '127.0.0.1:50051' },
-  address: '127.0.0.1:50052',
-});
+## Workspace
+
+```text
+packages/plugin      @trpc-proto/plugin          router evaluation and protobuf generation
+packages/runtime     @trpc-proto/runtime         native gRPC and gRPC-Web transports
+packages/schema_ir   @trpc-proto/schema_ir       schema IR, validation, and protobuf rendering
+packages/utility     @trpc-proto/utility          shared internal helpers
+
+examples/users       Go backend with forwarded gRPC-Web
+examples/todo        Go backend with forwarded gRPC-Web
+examples/trpc        direct TypeScript gRPC-Web server
+examples/streaming   Rust backend, batching, CRUD, and server streaming
 ```
-
-Use
-`createForwardingGrpcWebHttpHandler({ schema: protoSchema, address: '127.0.0.1:50051' })`
-instead when an existing Node HTTP server must own routing, and call the
-handler's `close()` method during shutdown. Omitted `credentials` default to
-`{ type: 'insecure' }`. Provide `{ type: 'mtls', ... }` for verified TLS and
-optional client identity; grpc-js watches those certificate files for rotation.
-Both server APIs answer valid preflight requests, reject disallowed origins,
-methods, and headers, and add matching CORS headers to gRPC-Web responses.
-Omit `cors` for same-origin deployments.
-
-See the [gRPC-Web runtime protocol](packages/runtime/GRPC_WEB.md) for the
-implemented wire behavior, CORS semantics, and security boundary.
-
-Planned transport, Connect RPC, and forwarding-proxy work is tracked in the
-[project backlog](BACKLOG.md).
 
 ## Examples
 
 ```bash
+# Go backend and forwarded gRPC-Web
 pnpm --filter @trpc-proto/example-users generate
 pnpm --filter @trpc-proto/example-users generate:go
-pnpm --filter @trpc-proto/example-users server   # Go gRPC on :50051
-pnpm --filter @trpc-proto/example-users web      # UI :3000; forwarded gRPC-Web :3100
-```
+pnpm --filter @trpc-proto/example-users server
+pnpm --filter @trpc-proto/example-users web
 
-Todo: `pnpm --filter @trpc-proto/example-todo generate` then `server` and `web` (UI `:3001`; forwarded gRPC-Web `:3101`).
-
-TypeScript router:
-
-```bash
+# Direct TypeScript gRPC-Web
 pnpm --filter @trpc-proto/example-trpc generate
-pnpm --filter @trpc-proto/example-trpc web      # UI :3002; direct gRPC-Web :3102
-```
+pnpm --filter @trpc-proto/example-trpc web
 
-Live incident operations with a Rust backend, editable drag-and-drop board,
-response checklists, typed CRUD, rich protobuf messages, and resumable
-server-streaming events:
-
-```bash
+# Rust backend, browser batching, and server streaming
 pnpm --filter @trpc-proto/example-streaming generate
-pnpm --filter @trpc-proto/example-streaming test:rust # Rust CRUD + stream tests
-pnpm --filter @trpc-proto/example-streaming server    # Rust gRPC :50054
-pnpm --filter @trpc-proto/example-streaming web       # React UI :3003; gRPC-Web :3103
+pnpm --filter @trpc-proto/example-streaming test:rust
+pnpm --filter @trpc-proto/example-streaming server
+pnpm --filter @trpc-proto/example-streaming web
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and pull request guidance. Report vulnerabilities according to [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE) © Thanh Ngo
