@@ -128,6 +128,15 @@ describe('ProtoCodec', () => {
     assert.equal(Number(decoded.nanos), 0);
   });
 
+  it('decodes omitted protobuf collections as empty collections', () => {
+    const decoded = codec.decode(
+      'User',
+      codec.encode('User', {}),
+    ) as Record<string, unknown>;
+    assert.deepEqual(decoded.tags, []);
+    assert.deepEqual(decoded.labels, {});
+  });
+
   it('roundtrips enum, repeated, timestamp, int64, map, camelCase', () => {
     const createdAt = new Date('1815-12-10T00:00:00.000Z');
     const user = {

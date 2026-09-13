@@ -412,6 +412,8 @@ export class ProtoCodec {
     const type = lookupType(this.#root, this.schema, messageName);
     const raw = type.toObject(type.decode(bytes), {
       defaults: false,
+      arrays: true,
+      objects: true,
       enums: String,
       longs: String,
       bytes: Uint8Array,
