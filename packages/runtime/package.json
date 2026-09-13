@@ -1,6 +1,6 @@
 {
   "name": "@trpc-proto/runtime",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "tRPC protobuf transformer and gRPC client transport",
   "keywords": [
@@ -22,6 +22,12 @@
   },
   "license": "MIT",
   "author": "Thanh Ngo <nokotavi@gmail.com>",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -52,6 +58,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
+    "prepack": "pnpm clean && pnpm build",
     "generate:batch": "trpc-proto generate --router src/batch/proto/batch_router.ts --export batchRouter --out src/batch/proto/generated",
     "test": "tsx --test \"src/**/*_test.ts\""
   },

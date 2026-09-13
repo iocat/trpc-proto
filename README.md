@@ -212,8 +212,6 @@ browser batching is enabled, the wrapper unwraps the batch and forwards ordinary
 application RPCs concurrently. Your backend does not implement
 `trpc.batch.v1.BatchService` and has no gRPC-Web or batch configuration.
 
-Use `createForwardingGrpcWebHttpHandler` instead when an existing Node HTTP server owns the listener. Call the returned handler's `close()` method during shutdown.
-
 ## Mode 2: direct gRPC-Web server
 
 Use this mode when the TypeScript router owns the real procedure implementations.

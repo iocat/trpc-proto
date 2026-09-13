@@ -1,6 +1,6 @@
 {
   "name": "@trpc-proto/utility",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "Shared exhaustiveness, case, and byte helpers",
   "keywords": [
@@ -18,6 +18,12 @@
   },
   "license": "MIT",
   "author": "Thanh Ngo <nokotavi@gmail.com>",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -30,6 +36,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
+    "prepack": "pnpm clean && pnpm build",
     "test": "tsx --test src/**/*_test.ts"
   },
   "devDependencies": {
