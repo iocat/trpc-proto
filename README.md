@@ -39,15 +39,32 @@ The browser client and generated contract are identical in both modes.
 ```mermaid
 flowchart LR
   Browser["Browser tRPC client"]
-  Wrapper["Node gRPC-Web wrapper<br/>mode: forward"]
-  Backend["Your native gRPC backend"]
   Proto["generated .proto"]
   Schema["generated schema.ts"]
+
+  subgraph WrapperProcess["Node.js wrapper process"]
+    Wrapper["gRPC-Web wrapper<br/>mode: forward"]
+  end
+
+  subgraph BackendProcess["Separate native service"]
+    Backend["Your gRPC backend"]
+  end
 
   Browser -->|"gRPC-Web"| Wrapper
   Wrapper -->|"native gRPC"| Backend
   Proto -. "implemented by" .-> Backend
   Schema -. "configures" .-> Wrapper
+
+  class Browser client
+  class Wrapper wrapper
+  class Backend backend
+  class Proto,Schema artifact
+  classDef client fill:#dbeafe,stroke:#2563eb,color:#172554
+  classDef wrapper fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+  classDef backend fill:#ffedd5,stroke:#ea580c,color:#431407
+  classDef artifact fill:#f3f4f6,stroke:#6b7280,color:#111827
+  style WrapperProcess fill:#faf5ff,stroke:#7c3aed,stroke-width:2px
+  style BackendProcess fill:#fff7ed,stroke:#ea580c,stroke-width:2px
 ```
 
 You provide a normal native gRPC backend, not a gRPC-Web endpoint. The included
@@ -60,13 +77,27 @@ that contract in your backend language.
 ```mermaid
 flowchart LR
   Browser["Browser tRPC client"]
-  Wrapper["Node gRPC-Web wrapper<br/>mode: direct"]
-  Router["appRouter<br/>real resolvers"]
   Schema["generated schema.ts"]
 
+  subgraph NodeProcess["Single Node.js process"]
+    direction LR
+    Wrapper["gRPC-Web wrapper<br/>mode: direct"]
+    Router["appRouter<br/>real resolvers"]
+    Wrapper -->|"in-process dispatch"| Router
+  end
+
   Browser -->|"gRPC-Web"| Wrapper
-  Wrapper -->|"in-process dispatch"| Router
   Schema -. "configures" .-> Wrapper
+
+  class Browser client
+  class Wrapper wrapper
+  class Router router
+  class Schema artifact
+  classDef client fill:#dbeafe,stroke:#2563eb,color:#172554
+  classDef wrapper fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+  classDef router fill:#dcfce7,stroke:#16a34a,color:#052e16
+  classDef artifact fill:#f3f4f6,stroke:#6b7280,color:#111827
+  style NodeProcess fill:#f0fdf4,stroke:#16a34a,stroke-width:2px
 ```
 
 The same Node wrapper serves gRPC-Web, but invokes real router resolvers
