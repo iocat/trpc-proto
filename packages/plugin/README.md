@@ -10,23 +10,11 @@ npm install --save-dev @trpc-proto/plugin
 
 ## CLI
 
-After this package is installed in the current project, `npx` resolves its local
-`trpc-proto` binary. The npm package name is scoped; only the executable name is
-unscoped. Without that local install, `npx trpc-proto` asks npm for the unscoped
-`trpc-proto` package, which this project does not publish. pnpm is not required.
+This package installs the local `trpc-proto` executable. Generate the contract
+with one `npx` command:
 
 ```bash
 npx trpc-proto generate \
-  --router src/router.ts \
-  --export appRouter \
-  --out generated
-```
-
-To select this scoped package explicitly—for example, for a one-off run without
-a local plugin install—use:
-
-```bash
-npx --package=@trpc-proto/plugin -- trpc-proto generate \
   --router src/router.ts \
   --export appRouter \
   --out generated

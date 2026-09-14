@@ -125,24 +125,11 @@ exported router to inspect its Zod schemas, so keep browser imports type-only:
 
 ### 3. Generate the contract
 
-After `@trpc-proto/plugin` is installed in the current project, `npx` resolves
-its local `trpc-proto` binary. The npm package name is scoped; only the
-executable name is unscoped. Without that local install, `npx trpc-proto` asks
-npm for the unscoped `trpc-proto` package, which this project does not publish.
-pnpm is not required.
+`@trpc-proto/plugin` installs the local `trpc-proto` executable, so generate the
+contract with one `npx` command:
 
 ```bash
 npx trpc-proto generate \
-  --router src/router.ts \
-  --export appRouter \
-  --out generated
-```
-
-To select the scoped package explicitly—for example, for a one-off run without
-a local plugin install—use:
-
-```bash
-npx --package=@trpc-proto/plugin -- trpc-proto generate \
   --router src/router.ts \
   --export appRouter \
   --out generated
