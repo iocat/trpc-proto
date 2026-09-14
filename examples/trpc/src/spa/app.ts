@@ -16,7 +16,7 @@ const client = createTRPCClient<AppRouter>({
       schema: protoSchema,
       url: `${location.protocol}//${location.hostname}:3102`,
       encoding: 'raw',
-      compress: false,
+      compress: true,
     }),
   ],
 });
