@@ -118,19 +118,21 @@ export interface ProtoFileOptions {
   [option: string]: string | boolean | number | undefined;
 }
 
-/** Package, syntax, cache, and file options read from router metadata. */
+/** Package, syntax, generated schema path, and file options read from router metadata. */
 export interface ProtoFileHeader {
   package?: string;
   /** Defaults to proto3 when omitted. */
   syntax?: ProtoSyntax;
   /** Path to the generated runtime schema and field-assignment cache module. */
+  schemaPath?: string;
+  /** @deprecated Use `schemaPath`. */
   cache?: string;
   options?: ProtoFileOptions;
 }
 
 /**
  * tRPC meta fragment. `proto.package` is required. Omitted `syntax` is proto3.
- * `cache` is optional. Merge with other global meta:
+ * `schemaPath` is optional. Merge with other global meta:
  * `initTRPC.meta<ProtoMeta & OtherMeta>().create({ defaultMeta: { proto: {...}, ... } })`
  */
 export interface ProtoMeta {

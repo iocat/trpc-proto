@@ -48,7 +48,11 @@ export async function generate(
     fromRouter?.package ??
     DEFAULT_PACKAGE;
   const schemaPath = path.resolve(
-    fromOpts.cache ?? fromRouter?.cache ?? path.join(outDir, 'schema.ts'),
+    fromOpts.schemaPath ??
+      fromOpts.cache ??
+      fromRouter?.schemaPath ??
+      fromRouter?.cache ??
+      path.join(outDir, 'schema.ts'),
   );
   const schema = translate(procedures, {
     ...options,
@@ -57,7 +61,7 @@ export async function generate(
     proto: {
       syntax: fromOpts.syntax ?? fromRouter?.syntax ?? 'proto3',
       package: packageName,
-      cache: schemaPath,
+      schemaPath,
       options: fromOpts.options ?? fromRouter?.options,
     },
   });

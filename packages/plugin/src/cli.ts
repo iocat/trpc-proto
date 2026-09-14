@@ -10,9 +10,10 @@ function flag(name: string) {
 
 if (process.argv.includes('-h') || process.argv.includes('--help')) {
   process.stdout.write(
-    'trpc-proto generate --router src/router.ts [--export appRouter] [--out generated] [--package pkg] [--cache generated/schema.ts]\n' +
-      'writes <out>/<package>.proto and <cache> (default <out>/schema.ts)\n' +
-      'package/syntax/cache/options default from defaultMeta.proto\n',
+    'trpc-proto generate --router src/router.ts [--export appRouter] [--out generated] [--package pkg] [--schema-path generated/schema.ts]\n' +
+      'writes <out>/<package>.proto and <schema-path> (default <out>/schema.ts)\n' +
+      'package/syntax/schemaPath/options default from defaultMeta.proto\n' +
+      '--cache is a deprecated alias for --schema-path\n',
   );
   process.exit(0);
 }
@@ -23,13 +24,18 @@ if (command && command !== 'generate' && !command.startsWith('-')) {
   process.exit(1);
 }
 
-const cache = flag('--cache');
+const configuredSchemaPath = flag('--schema-path');
+const legacyCachePath = flag('--cache');
+const schemaPath = configuredSchemaPath ?? legacyCachePath;
+if (legacyCachePath && !configuredSchemaPath) {
+  process.stderr.write('--cache is deprecated; use --schema-path\n');
+}
 const options: GenerateOptions = {
   outDir: flag('--out') ?? 'generated',
   routerFile: flag('--router'),
   routerExport: flag('--export'),
   packageName: flag('--package'),
-  proto: cache ? { cache } : undefined,
+  proto: schemaPath ? { schemaPath } : undefined,
 };
 
 try {

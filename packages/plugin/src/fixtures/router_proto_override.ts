@@ -7,7 +7,7 @@ const t = initTRPC.meta<ProtoMeta>().create({
     proto: {
       package: 'demo.v1',
       syntax: 'proto3',
-      cache: 'generated/schema.ts',
+      schemaPath: 'generated/schema.ts',
     },
   },
 });

@@ -7,7 +7,7 @@ const t = initTRPC.meta<ProtoMeta>().create({
   defaultMeta: {
     proto: {
       package: 'trpc.batch.v1',
-      cache: 'src/batch/proto/generated/schema.ts',
+      schemaPath: 'src/batch/proto/generated/schema.ts',
       syntax: 'proto3',
     },
   },

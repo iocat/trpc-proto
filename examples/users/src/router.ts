@@ -9,7 +9,7 @@ const t = initTRPC.meta<ProtoMeta>().create({
   defaultMeta: {
     proto: {
       package: 'example.v1',
-      cache: 'generated/schema.ts',
+      schemaPath: 'generated/schema.ts',
       options: {
         go_package: 'users/backend/gen/examplev1',
       },

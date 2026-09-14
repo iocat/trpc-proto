@@ -21,8 +21,8 @@ import {
   type BatchWireResponse,
 } from '../proto/wire.js';
 
-/** Configuration for batching tRPC operations over gRPC-Web. */
-export interface GrpcWebBatchLinkOptions extends ProtoLinkOptions {
+/** Internal configuration for batching through `grpcWebLink`. */
+interface GrpcWebBatchLinkOptions extends ProtoLinkOptions {
   /** Origin for gRPC-Web POSTs. Default `''` (same origin). */
   url?: string;
   /** HTTP body representation. Defaults to base64 gRPC-Web. */
@@ -61,7 +61,7 @@ function compose(
   return next;
 }
 
-class GrpcWebBatchLink<TRouter extends AnyRouter> {
+export class GrpcWebBatchLink<TRouter extends AnyRouter> {
   readonly #appCodec: ProtoCodec;
   readonly #batchCodec: ProtoCodec;
   readonly #batchRpc: RuntimeProtoRpc;
@@ -102,7 +102,7 @@ class GrpcWebBatchLink<TRouter extends AnyRouter> {
             observer.error(
               TRPCClientError.from(
                 new Error(
-                  'Subscriptions are unsupported by grpcWebBatchLink; use grpcWebLink',
+                  'subscriptions cannot be included in a gRPC-Web batch',
                 ),
               ),
             );
@@ -291,11 +291,4 @@ class GrpcWebBatchLink<TRouter extends AnyRouter> {
       for (const item of byId.values()) item.abortBatch = undefined;
     }
   }
-}
-
-/** Batches query and mutation operations into the built-in unary batch RPC. */
-export function grpcWebBatchLink<TRouter extends AnyRouter>(
-  options: GrpcWebBatchLinkOptions,
-): TRPCLink<TRouter> {
-  return new GrpcWebBatchLink<TRouter>(options).link();
 }

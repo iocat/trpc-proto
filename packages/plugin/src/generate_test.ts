@@ -86,4 +86,38 @@ describe('generate', () => {
     ]);
     assert.equal(existsSync(path.join(outDir, 'schema.json')), false);
   });
+
+  it('prefers schemaPath and keeps the deprecated cache field compatible', async () => {
+    const routerFile = fileURLToPath(
+      new URL('./fixtures/router_valid.ts', import.meta.url),
+    );
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'trpc-proto-'));
+    const schemaPath = path.join(outDir, 'schema', 'contract.ts');
+    const ignoredCachePath = path.join(outDir, 'legacy', 'schema.ts');
+    const result = await generate({
+      routerFile,
+      outDir,
+      proto: {
+        schemaPath,
+        cache: ignoredCachePath,
+      },
+    });
+
+    assert.equal(result.files[1], schemaPath);
+    assert.equal(existsSync(schemaPath), true);
+    assert.equal(existsSync(ignoredCachePath), false);
+
+    const legacyOutDir = await mkdtemp(
+      path.join(os.tmpdir(), 'trpc-proto-legacy-'),
+    );
+    const legacySchemaPath = path.join(legacyOutDir, 'legacy', 'schema.ts');
+    const legacyResult = await generate({
+      routerFile,
+      outDir: legacyOutDir,
+      proto: { cache: legacySchemaPath },
+    });
+
+    assert.equal(legacyResult.files[1], legacySchemaPath);
+    assert.equal(existsSync(legacySchemaPath), true);
+  });
 });

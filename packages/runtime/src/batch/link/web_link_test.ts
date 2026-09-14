@@ -9,7 +9,6 @@ import { serveGrpc } from '../../grpc/server.js';
 import { serveGrpcWeb } from '../../web/server.js';
 import { grpcWebLink } from '../../web/link.js';
 import { protoSchema as batchProtoSchema } from '../proto/generated/schema.js';
-import { grpcWebBatchLink } from './web_link.js';
 
 const t = initTRPC.meta<ProtoMeta>().create({
   defaultMeta: { proto: { package: 'batch.test.v1' } },
@@ -151,10 +150,11 @@ describe('gRPC-Web batching', () => {
     try {
       const client = createTRPCClient<AppRouter>({
         links: [
-          grpcWebBatchLink<AppRouter>({
+          grpcWebLink<AppRouter>({
             schema: appSchema,
             url: `http://127.0.0.1:${server.port}`,
             encoding: 'base64',
+            batch: true,
           }),
         ],
       });
@@ -195,10 +195,11 @@ describe('gRPC-Web batching', () => {
     try {
       const client = createTRPCClient<AppRouter>({
         links: [
-          grpcWebBatchLink<AppRouter>({
+          grpcWebLink<AppRouter>({
             schema: appSchema,
             url: `http://127.0.0.1:${gateway.port}`,
             encoding: 'raw',
+            batch: true,
           }),
         ],
       });

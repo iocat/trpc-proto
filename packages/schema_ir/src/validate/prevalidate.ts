@@ -3,7 +3,10 @@ import type { ProtoFileHeader } from '../ir/types.js';
 export type ProtoIssueLevel = 'error' | 'warning';
 
 export type ProtoIssueCode =
-  'missing_output' | 'proto_override' | 'bad_syntax' | 'missing_package';
+  | 'missing_output'
+  | 'proto_override'
+  | 'bad_syntax'
+  | 'missing_package';
 
 /** Actionable validation issue found before protobuf generation. */
 export interface ProtoIssue {
@@ -35,7 +38,7 @@ function sameProto(
 
 /**
  * Approved tRPC→proto subset. Collects every issue; `error` is fatal.
- * `proto.package` is required. `syntax` defaults to proto3. `cache` is optional.
+ * `proto.package` is required. `syntax` defaults to proto3. `schemaPath` is optional.
  */
 export function prevalidate(input: ProtoPrevalidateInput): ProtoIssue[] {
   const issues: ProtoIssue[] = [];

@@ -23,7 +23,7 @@ describe('prevalidate', () => {
     );
   });
 
-  it('accepts package-only proto meta (syntax proto3, cache optional)', () => {
+  it('accepts package-only proto meta (syntax proto3, schemaPath optional)', () => {
     assert.deepEqual(
       prevalidate({
         defaultProto: proto,

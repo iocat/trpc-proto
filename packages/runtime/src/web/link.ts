@@ -3,7 +3,7 @@ import type { AnyRouter } from '@trpc/server';
 import { createGrpcWebFetchCall } from './fetch_call.js';
 import { createProtoLink, type ProtoLinkOptions } from '../grpc/proto_link.js';
 import type { GrpcWebEncoding } from './content_type.js';
-import { grpcWebBatchLink } from '../batch/link/web_link.js';
+import { GrpcWebBatchLink } from '../batch/link/web_link.js';
 
 /** Client-side batching configuration for unary gRPC-Web operations. */
 export interface GrpcWebLinkBatchOptions {
@@ -41,10 +41,10 @@ export function grpcWebLink<TRouter extends AnyRouter>(
   );
   if (!batch) return directLink;
 
-  const batchLink = grpcWebBatchLink<TRouter>({
+  const batchLink = new GrpcWebBatchLink<TRouter>({
     ...linkOptions,
     maxItems: typeof batch === 'object' ? batch.maxItems : undefined,
-  });
+  }).link();
   return (runtime) => {
     const direct = directLink(runtime);
     const batched = batchLink(runtime);
