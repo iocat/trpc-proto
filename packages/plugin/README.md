@@ -5,13 +5,16 @@ Generate `.proto` files and runtime schema data from a tRPC 11 router using Zod 
 ## Install
 
 ```bash
-pnpm add -D @trpc-proto/plugin
+npm install --save-dev @trpc-proto/plugin
 ```
 
 ## CLI
 
+`npx` resolves the local `trpc-proto` binary installed by this package; pnpm is
+not required.
+
 ```bash
-trpc-proto generate \
+npx trpc-proto generate \
   --router src/router.ts \
   --export appRouter \
   --out generated

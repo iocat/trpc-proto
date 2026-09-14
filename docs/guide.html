@@ -1,0 +1,1490 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Detailed trpc-proto guide: generate protobuf from tRPC, configure gRPC-Web, choose a deployment mode, and understand the supported schema contract."
+    />
+    <title>Documentation · trpc-proto</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      document.documentElement.classList.add('js');
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./script.js" defer></script>
+  </head>
+  <body class="docs-page">
+    <a class="skip-link" href="#main">Skip to documentation</a>
+    <div class="reading-progress" aria-hidden="true"><span></span></div>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="trpc-proto home">
+        <span class="brand-mark" aria-hidden="true">tP</span>
+        <span>trpc-proto</span>
+      </a>
+      <button
+        class="menu-button"
+        type="button"
+        aria-expanded="false"
+        aria-controls="site-nav"
+      >
+        <span class="sr-only menu-label">Open navigation</span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+      <nav id="site-nav" aria-label="Main navigation">
+        <a href="./index.html">Overview</a>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#deployment-modes">Deployment</a>
+        <a href="#schema-contract">Schema contract</a>
+      </nav>
+      <a
+        class="github-link"
+        href="https://github.com/iocat/trpc-proto"
+        aria-label="View trpc-proto on GitHub"
+      >
+        GitHub <span aria-hidden="true">↗</span>
+      </a>
+    </header>
+
+    <main id="main" class="docs-main">
+      <aside class="docs-sidebar" aria-label="Documentation categories">
+        <p class="docs-sidebar-title">Documentation</p>
+        <div
+          class="docs-tabs"
+          role="tablist"
+          aria-label="Documentation categories"
+          aria-orientation="vertical"
+        >
+          <button
+            id="start-tab"
+            class="docs-tab"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="start-panel"
+          >
+            <span>01</span> Getting started
+          </button>
+          <button
+            id="deployment-tab"
+            class="docs-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="deployment-panel"
+            tabindex="-1"
+          >
+            <span>02</span> Deployment
+          </button>
+          <button
+            id="client-tab"
+            class="docs-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="client-panel"
+            tabindex="-1"
+          >
+            <span>03</span> Client and transport
+          </button>
+          <button
+            id="schema-tab"
+            class="docs-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="schema-panel"
+            tabindex="-1"
+          >
+            <span>04</span> Schema contract
+          </button>
+          <button
+            id="operations-tab"
+            class="docs-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="operations-panel"
+            tabindex="-1"
+          >
+            <span>05</span> Operations
+          </button>
+        </div>
+        <nav
+          class="docs-subnav"
+          aria-label="Sections in the selected documentation category"
+        ></nav>
+      </aside>
+
+      <article class="docs-content">
+        <div
+          id="start-panel"
+          class="doc-tab-panel"
+          role="tabpanel"
+          aria-labelledby="start-tab"
+          tabindex="0"
+        >
+          <header class="docs-intro">
+            <p class="eyebrow">Documentation</p>
+            <h1>Protocol Buffers from your tRPC router.</h1>
+            <p class="docs-lede">
+              Use one Zod contract to keep tRPC's TypeScript ergonomics,
+              generate a real
+              <code>.proto</code>, and serve browser clients through gRPC-Web.
+            </p>
+            <div class="docs-intro-actions">
+              <a class="button primary" href="#quickstart"
+                >Start the quickstart</a
+              >
+              <a
+                class="button secondary"
+                href="https://github.com/iocat/trpc-proto"
+              >
+                View source <span aria-hidden="true">↗</span>
+              </a>
+            </div>
+          </header>
+          <section id="mental-model" class="doc-section">
+            <p class="doc-kicker">Concepts</p>
+            <h2>Start with the mental model</h2>
+            <p>
+              <code>trpc-proto</code> treats the exported tRPC router as the
+              source of truth. The generator evaluates that router, inspects its
+              Zod input and output schemas, validates that every shape has a
+              faithful protobuf representation, and writes two generated files.
+            </p>
+            <div class="concept-flow" aria-label="Generation and runtime flow">
+              <div>
+                <small>SOURCE</small><strong>appRouter</strong
+                ><span>Zod schemas</span>
+              </div>
+              <span aria-hidden="true">→</span>
+              <div class="accent">
+                <small>GENERATE</small><strong>trpc-proto</strong
+                ><span>validate first</span>
+              </div>
+              <span aria-hidden="true">→</span>
+              <div>
+                <small>CONTRACT</small><strong>.proto + schema.ts</strong
+                ><span>stable field IDs</span>
+              </div>
+            </div>
+            <p>
+              The <code>.proto</code> is the language-neutral contract. The
+              generated <code>schema.ts</code> is data used by the TypeScript
+              transports to encode and route calls without importing the server
+              router into a browser bundle.
+            </p>
+            <div class="callout important">
+              <strong>Strict by design.</strong>
+              <p>
+                Unsupported schemas fail generation with procedure paths and
+                reasons. The generator does not silently replace them with lossy
+                fallback types.
+              </p>
+            </div>
+          </section>
+
+          <section id="quickstart" class="doc-section">
+            <p class="doc-kicker">Direct mode</p>
+            <h2>Complete quickstart</h2>
+            <p>
+              Direct mode is the recommended starting point. The included Node
+              server receives gRPC-Web and invokes your real tRPC resolvers
+              in-process. You do not need a second backend service.
+            </p>
+
+            <h3>Requirements and installation</h3>
+            <ul class="check-list">
+              <li>Node.js 22 or newer</li>
+              <li>tRPC 11</li>
+              <li>Zod 4</li>
+              <li>TypeScript 5.9 or newer</li>
+            </ul>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>Terminal</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="install-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="install-code"
+                data-highlight-lines="1-2"
+              ><code data-language="bash">npm install @trpc/client @trpc/server @trpc-proto/runtime @grpc/grpc-js zod
+npm install --save-dev @trpc-proto/plugin typescript tsx</code></pre>
+            </div>
+
+            <h3>1. Define an explicit contract</h3>
+            <p>
+              Give the router a protobuf package and add an explicit output
+              schema to every procedure. The generated schema keeps field
+              numbers stable across generations.
+            </p>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>src/router.ts</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="router-guide-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="router-guide-code"
+                data-highlight-lines="2,5,8-9,19,24"
+              ><code data-language="typescript">import { initTRPC } from '@trpc/server';
+import type { ProtoMeta } from '@trpc-proto/runtime';
+import { z } from 'zod';
+
+const t = initTRPC.meta&lt;ProtoMeta&gt;().create({
+  defaultMeta: {
+    proto: {
+      package: 'example.v1',
+      schemaPath: 'generated/schema.ts',
+    },
+  },
+});
+
+const User = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+  })
+  .meta({ protoMessageName: 'User' });
+
+export const appRouter = t.router({
+  getUser: t.procedure
+    .input(z.object({ id: z.string() }))
+    .output(User)
+    .query(async ({ input }) =&gt; {
+      return { id: input.id, name: 'Ada' };
+    }),
+});
+
+export type AppRouter = typeof appRouter;</code></pre>
+            </div>
+
+            <h3>2. Generate the protobuf contract</h3>
+            <p>
+              <code>npx</code> resolves the local <code>trpc-proto</code> binary
+              installed with <code>@trpc-proto/plugin</code>; pnpm is not
+              required.
+            </p>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>Terminal</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="generate-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="generate-code"
+                data-highlight-lines="1-4"
+              ><code data-language="bash">npx trpc-proto generate \
+  --router src/router.ts \
+  --export appRouter \
+  --out generated</code></pre>
+            </div>
+
+            <h3>3. Start the direct gRPC-Web server</h3>
+            <div
+              class="inline-tabs"
+              role="tablist"
+              aria-label="Direct server integration"
+            >
+              <button
+                id="managed-server-tab"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="managed-server-panel"
+              >
+                Managed server
+              </button>
+              <button
+                id="existing-http-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="existing-http-panel"
+                tabindex="-1"
+              >
+                Existing HTTP server
+              </button>
+            </div>
+            <div
+              id="managed-server-panel"
+              class="inline-tab-panel"
+              role="tabpanel"
+              aria-labelledby="managed-server-tab"
+            >
+              <p>
+                Use <code>serveGrpcWeb</code> when the runtime should own the
+                HTTP listener and its shutdown lifecycle.
+              </p>
+              <div class="code-window docs-code-window">
+                <div class="code-title">
+                  <span aria-hidden="true"><i></i><i></i><i></i></span>
+                  <b>src/server.ts</b>
+                  <button
+                    type="button"
+                    class="copy-button"
+                    data-copy-target="direct-server-code"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <pre
+                  id="direct-server-code"
+                  data-highlight-lines="6-12"
+                ><code data-language="typescript">import { serveGrpcWeb } from '@trpc-proto/runtime';
+import { protoSchema } from '../generated/schema.js';
+import { appRouter } from './router.js';
+
+const server = await serveGrpcWeb({
+  mode: 'direct',
+  router: appRouter,
+  schema: protoSchema,
+  address: '127.0.0.1:50052',
+  cors: {
+    allowedOrigins: ['http://localhost:5173'],
+  },
+});
+
+console.log(`gRPC-Web listening on http://${server.address}`);</code></pre>
+              </div>
+              <div class="terminal docs-terminal">
+                <span aria-hidden="true">$</span
+                ><code>npx tsx src/server.ts</code>
+                <button type="button" data-copy="npx tsx src/server.ts">
+                  Copy
+                </button>
+              </div>
+            </div>
+            <div
+              id="existing-http-panel"
+              class="inline-tab-panel"
+              role="tabpanel"
+              aria-labelledby="existing-http-tab"
+            >
+              <p>
+                Use <code>createDirectGrpcWebHttpHandler</code> when an existing
+                Node HTTP server already owns routing. The handler returns
+                <code>true</code> only when it writes the response.
+              </p>
+              <div class="code-window docs-code-window">
+                <div class="code-title">
+                  <span aria-hidden="true"><i></i><i></i><i></i></span>
+                  <b>src/http-server.ts</b>
+                  <button
+                    type="button"
+                    class="copy-button"
+                    data-copy-target="direct-handler-code"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <pre
+                  id="direct-handler-code"
+                  data-highlight-lines="6-11,14"
+                ><code data-language="typescript">import http from 'node:http';
+import { createDirectGrpcWebHttpHandler } from '@trpc-proto/runtime';
+import { protoSchema } from '../generated/schema.js';
+import { appRouter } from './router.js';
+
+const handleGrpcWeb = createDirectGrpcWebHttpHandler(appRouter, {
+  schema: protoSchema,
+  cors: {
+    allowedOrigins: ['http://localhost:5173'],
+  },
+});
+
+const server = http.createServer(async (request, response) =&gt; {
+  if (await handleGrpcWeb(request, response)) return;
+
+  // Continue with the application's existing routes.
+  response.writeHead(404);
+  response.end();
+});
+
+server.listen(50052, '127.0.0.1');</code></pre>
+              </div>
+            </div>
+
+            <h3 id="create-browser-client">4. Create the browser client</h3>
+            <p>
+              Import the router as a type only. Importing the router value makes
+              the bundler traverse resolver modules and can pull Node-only or
+              database code into the browser build.
+            </p>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>src/client.ts</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="client-guide-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="client-guide-code"
+                data-highlight-lines="4,10,13,16,19,22,25,27,29,31,33,37"
+              ><code data-language="typescript">import { createTRPCClient } from '@trpc/client';
+import { grpcWebLink } from '@trpc-proto/runtime/web';
+import { protoSchema } from '../generated/schema.js';
+import type { AppRouter } from './router.js';
+
+export const client = createTRPCClient&lt;AppRouter&gt;({
+  links: [
+    grpcWebLink&lt;AppRouter&gt;({
+      // Required: the generated runtime schema.
+      schema: protoSchema,
+
+      // Optional string. Default: '' (same origin).
+      url: 'http://127.0.0.1:50052',
+
+      // Optional: 'raw' | 'base64'. Default: 'base64'.
+      encoding: 'raw',
+
+      // Optional: true | false. Default: false.
+      compress: false,
+
+      // Optional: false | true | { maxItems?: number }. Default: false; maxItems: 100.
+      batch: { maxItems: 100 },
+
+      // Optional AuthConfig. Default: undefined.
+      auth: {
+        // Optional string or sync/async getter. Default: undefined.
+        token: () =&gt; localStorage.getItem('accessToken') ?? undefined,
+        // Optional metadata record or sync/async getter. Default: undefined.
+        metadata: {},
+        // Optional string. Default: 'authorization'.
+        header: 'authorization',
+        // Optional string. Default: 'Bearer'; use '' for a raw token.
+        scheme: 'Bearer',
+      },
+
+      // Optional CallInterceptor[]. Default: [].
+      interceptors: [],
+    }),
+  ],
+});
+
+const user = await client.getUser.query({ id: '1' });</code></pre>
+            </div>
+          </section>
+
+          <section id="generated-files" class="doc-section">
+            <p class="doc-kicker">Contract output</p>
+            <h2>Understand the generated files</h2>
+            <div
+              class="table-scroll"
+              tabindex="0"
+              aria-label="Generated file responsibilities"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Used by</th>
+                    <th>Responsibility</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>example_v1.proto</code></td>
+                    <td>Native tooling</td>
+                    <td>
+                      Service, message, enum, field, and stream declarations for
+                      normal protobuf code generators.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>schema.ts</code></td>
+                    <td>TypeScript runtime</td>
+                    <td>
+                      Data-only schema for protobuf encoding, decoding, routing,
+                      and stable field-number caching.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <h3>Keep the generated files in version control</h3>
+            <p>
+              Commit both <code>generated/schema.ts</code> and the generated
+              <code>.proto</code>. The schema file is runtime data and generator
+              state: when you delete a field, it preserves the old number so the
+              next <code>.proto</code> marks it as <code>reserved</code>.
+              Keeping both files prevents accidental wire-number reuse and makes
+              contract changes reviewable.
+            </p>
+            <div class="callout">
+              <strong>Regenerate after contract changes.</strong>
+              <p>
+                Inputs, outputs, procedure paths, package metadata, and explicit
+                protobuf names all affect generated output. Review and commit
+                both files together.
+              </p>
+            </div>
+          </section>
+        </div>
+        <div
+          id="deployment-panel"
+          class="doc-tab-panel"
+          role="tabpanel"
+          aria-labelledby="deployment-tab"
+          tabindex="0"
+        >
+          <section id="deployment-modes" class="doc-section">
+            <p class="doc-kicker">Runtime architecture</p>
+            <h2>Choose a deployment mode</h2>
+            <div class="mode-detail-grid">
+              <article>
+                <span class="mode-badge">Recommended</span>
+                <h3>Direct mode</h3>
+                <p>
+                  The Node gRPC-Web server and <code>appRouter</code> run in one
+                  process. Requests are protobuf-decoded and dispatched to the
+                  router without a native gRPC network hop.
+                </p>
+                <ul>
+                  <li>Requires <code>router</code> and <code>schema</code></li>
+                  <li>
+                    Supports tRPC middleware and <code>createContext</code>
+                  </li>
+                  <li>Best when TypeScript owns the implementation</li>
+                </ul>
+              </article>
+              <article>
+                <span class="mode-badge">Polyglot</span>
+                <h3>Forward mode</h3>
+                <p>
+                  The Node process terminates gRPC-Web and forwards normal
+                  native gRPC to a separately hosted backend that implements the
+                  generated
+                  <code>.proto</code>.
+                </p>
+                <ul>
+                  <li>Requires <code>schema</code> and <code>backend</code></li>
+                  <li>Works with Go, Rust, Java, and other gRPC stacks</li>
+                  <li>The backend needs no gRPC-Web or batch endpoint</li>
+                </ul>
+              </article>
+            </div>
+
+            <h3>Managed server options</h3>
+            <div
+              class="table-scroll"
+              tabindex="0"
+              aria-label="Managed server options"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Option</th>
+                    <th>Mode</th>
+                    <th>Meaning</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>mode</code></td>
+                    <td>Both</td>
+                    <td>
+                      Required discriminator: <code>'direct'</code> or
+                      <code>'forward'</code>.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>schema</code></td>
+                    <td>Both</td>
+                    <td>
+                      Generated <code>protoSchema</code> used to resolve methods
+                      and message types.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>address</code></td>
+                    <td>Both</td>
+                    <td>
+                      HTTP/1.1 listen address. Defaults to
+                      <code>127.0.0.1:50052</code>.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>cors</code></td>
+                    <td>Both</td>
+                    <td>
+                      Optional exact-origin browser policy. CORS is disabled
+                      when omitted.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>router</code></td>
+                    <td>Direct</td>
+                    <td>The real tRPC router value invoked in-process.</td>
+                  </tr>
+                  <tr>
+                    <td><code>createContext</code></td>
+                    <td>Direct</td>
+                    <td>Optional sync or async context factory.</td>
+                  </tr>
+                  <tr>
+                    <td><code>backend</code></td>
+                    <td>Forward</td>
+                    <td>
+                      Native gRPC address and optional TLS or mTLS credentials.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>Forward to a native backend</h3>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>src/gateway.ts</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="forward-server-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="forward-server-code"
+                data-highlight-lines="5-10"
+              ><code data-language="typescript">import { serveGrpcWeb } from '@trpc-proto/runtime';
+import { protoSchema } from '../generated/schema.js';
+
+const gateway = await serveGrpcWeb({
+  mode: 'forward',
+  schema: protoSchema,
+  address: '127.0.0.1:50052',
+  backend: {
+    address: '127.0.0.1:50051',
+    credentials: { type: 'insecure' },
+  },
+  cors: {
+    allowedOrigins: ['https://app.example.com'],
+  },
+});
+
+await gateway.close();</code></pre>
+            </div>
+            <p>
+              The browser client is identical in both modes. Changing where
+              procedures execute does not change the generated schema or client
+              call syntax.
+            </p>
+
+            <h3>Secure an upstream connection</h3>
+            <p>
+              Forward mode defaults to an insecure grpc-js channel. For verified
+              TLS or mTLS, provide certificate paths explicitly:
+            </p>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>backend credentials</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="mtls-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="mtls-code"
+                data-highlight-lines="3-11"
+              ><code data-language="typescript">backend: {
+  address: 'api.internal.example:50051',
+  credentials: {
+    type: 'mtls',
+    caCertPath: '/run/secrets/upstream-ca.pem',
+    serverNameOverride: 'api.internal.example',
+    clientIdentity: {
+      certPath: '/run/secrets/client-cert.pem',
+      keyPath: '/run/secrets/client-key.pem',
+    },
+  },
+}</code></pre>
+            </div>
+            <p>
+              Omit <code>clientIdentity</code> for one-way TLS. The runtime
+              checks the configured certificate files periodically and uses
+              valid replacements for new connections.
+            </p>
+          </section>
+        </div>
+        <div
+          id="client-panel"
+          class="doc-tab-panel"
+          role="tabpanel"
+          aria-labelledby="client-tab"
+          tabindex="0"
+        >
+          <section id="browser-client" class="doc-section">
+            <p class="doc-kicker">Client configuration</p>
+            <h2>Configure <code>grpcWebLink</code></h2>
+            <div
+              class="table-scroll"
+              tabindex="0"
+              aria-label="gRPC-Web client options"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Option</th>
+                    <th>Default</th>
+                    <th>Behavior</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>schema</code></td>
+                    <td>Required</td>
+                    <td>The generated runtime schema.</td>
+                  </tr>
+                  <tr>
+                    <td><code>url</code></td>
+                    <td><code>''</code></td>
+                    <td>
+                      Request origin. Empty means the current browser origin.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>encoding</code></td>
+                    <td><code>'base64'</code></td>
+                    <td>
+                      <code>'raw'</code> sends binary frames;
+                      <code>'base64'</code> uses gRPC-Web text bodies.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>compress</code></td>
+                    <td><code>false</code></td>
+                    <td>Gzip-compress each request message before framing.</td>
+                  </tr>
+                  <tr>
+                    <td><code>batch</code></td>
+                    <td><code>false</code></td>
+                    <td>
+                      <code>true</code> or <code>{ maxItems }</code> batches
+                      queries and mutations.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>auth</code></td>
+                    <td>None</td>
+                    <td>
+                      Bearer token and additional metadata, provided statically
+                      or by async getters.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>interceptors</code></td>
+                    <td><code>[]</code></td>
+                    <td>
+                      Client call interceptors around encoding and transport.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>Raw versus base64 bodies</h3>
+            <div
+              class="table-scroll"
+              tabindex="0"
+              aria-label="gRPC-Web body encodings"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Setting</th>
+                    <th>Content type</th>
+                    <th>HTTP body</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>'raw'</code></td>
+                    <td><code>application/grpc-web+proto</code></td>
+                    <td>Binary length-prefixed frames.</td>
+                  </tr>
+                  <tr>
+                    <td><code>'base64'</code></td>
+                    <td><code>application/grpc-web-text+proto</code></td>
+                    <td>Base64 representation of the same frames.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Base64 is the compatibility-oriented default. Raw mode avoids
+              base64 expansion when your browser, proxy, and deployment path
+              accept binary gRPC-Web bodies.
+            </p>
+
+            <h3>Authentication and metadata</h3>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>client auth</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="auth-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="auth-code"
+                data-highlight-lines="2-6"
+              ><code data-language="typescript">grpcWebLink&lt;AppRouter&gt;({
+  schema: protoSchema,
+  auth: {
+    token: async () =&gt; session.accessToken,
+    metadata: () =&gt; ({ 'x-trace-id': crypto.randomUUID() }),
+  },
+})</code></pre>
+            </div>
+            <p>
+              The default token header is <code>authorization</code> and the
+              default scheme is <code>Bearer</code>. Use
+              <code>scheme: ''</code> for a raw value. Custom browser headers
+              must also be permitted by the server's CORS policy.
+            </p>
+          </section>
+
+          <section id="batching-streaming" class="doc-section">
+            <p class="doc-kicker">Call behavior</p>
+            <h2>Batching, subscriptions, and cancellation</h2>
+            <h3>Batch queries and mutations</h3>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>browser client</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="batch-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="batch-code"
+                data-highlight-lines="4"
+              ><code data-language="typescript">grpcWebLink&lt;AppRouter&gt;({
+  schema: protoSchema,
+  encoding: 'raw',
+  batch: { maxItems: 100 },
+})</code></pre>
+            </div>
+            <ul>
+              <li>Calls queued in the same microtask are grouped.</li>
+              <li>Queries and mutations use separate batches.</li>
+              <li>Procedures inside a batch execute concurrently.</li>
+              <li>
+                Each item keeps its own encoded result or application error.
+              </li>
+              <li>
+                <code>maxItems</code> defaults to 100 and only controls
+                client-side request splitting.
+              </li>
+              <li>Batching is supported in both direct and forward modes.</li>
+            </ul>
+
+            <h3>Declare a server-streaming subscription</h3>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>router subscription</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="stream-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="stream-code"
+                data-highlight-lines="6-7"
+              ><code data-language="typescript">import { zAsyncIterable } from '@trpc-proto/runtime';
+
+const appRouter = t.router({
+  onUserChange: t.procedure
+    .input(z.object({}))
+    .output(zAsyncIterable({ yield: User }))
+    .subscription(async function* ({ signal }) {
+      for await (const user of userChanges({ signal })) {
+        yield user;
+      }
+    }),
+});</code></pre>
+            </div>
+            <p>
+              Subscriptions always use the normal streaming transport, even when
+              batching is enabled. Closing or aborting the browser request
+              cancels the corresponding forwarded backend call. A stream emits
+              zero or more data frames and must finish with a gRPC status
+              trailer.
+            </p>
+          </section>
+        </div>
+        <div
+          id="schema-panel"
+          class="doc-tab-panel"
+          role="tabpanel"
+          aria-labelledby="schema-tab"
+          tabindex="0"
+        >
+          <section id="schema-contract" class="doc-section">
+            <p class="doc-kicker">Protobuf mapping</p>
+            <h2>Supported router contract</h2>
+            <h3>Router-level rules</h3>
+            <div
+              class="table-scroll"
+              tabindex="0"
+              aria-label="Router contract rules"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Contract</th>
+                    <th>Rule</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>defaultMeta.proto.package</code></td>
+                    <td>
+                      Required through
+                      <code>initTRPC.meta&lt;ProtoMeta&gt;()</code>.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>proto.syntax</code></td>
+                    <td>Optional; only proto3 is supported.</td>
+                  </tr>
+                  <tr>
+                    <td><code>proto.schemaPath</code></td>
+                    <td>
+                      Optional but recommended for the generated schema and
+                      stable field numbers.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>proto.cache</code></td>
+                    <td>
+                      Deprecated compatibility alias for
+                      <code>proto.schemaPath</code>.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>proto.options</code></td>
+                    <td>
+                      Optional file options such as <code>go_package</code>.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Procedure <code>.output()</code></td>
+                    <td>Required for every procedure.</td>
+                  </tr>
+                  <tr>
+                    <td>Procedure <code>.input()</code></td>
+                    <td>
+                      Optional; omitted input becomes
+                      <code>google.protobuf.Empty</code>.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Chained <code>.input()</code></td>
+                    <td>Rejected; merge the parsers into one Zod schema.</td>
+                  </tr>
+                  <tr>
+                    <td>Query and mutation</td>
+                    <td>Generated as unary RPCs.</td>
+                  </tr>
+                  <tr>
+                    <td>Subscription</td>
+                    <td>Generated as a server-streaming RPC.</td>
+                  </tr>
+                  <tr>
+                    <td>Validators</td>
+                    <td>Zod 4 only.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>Zod to protobuf</h3>
+            <div
+              class="table-scroll"
+              tabindex="0"
+              aria-label="Zod to protobuf mappings"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Zod</th>
+                    <th>Protobuf</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>z.object</code></td>
+                    <td><code>message</code></td>
+                  </tr>
+                  <tr>
+                    <td><code>.meta({ protoMessageName: 'User' })</code></td>
+                    <td>Named message; explicit names must be PascalCase.</td>
+                  </tr>
+                  <tr>
+                    <td>Unnamed nested object</td>
+                    <td>Nested message named from the field.</td>
+                  </tr>
+                  <tr>
+                    <td><code>z.string</code>, template literal</td>
+                    <td>
+                      <code>string</code>; formats such as email remain strings.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>z.boolean</code></td>
+                    <td><code>bool</code></td>
+                  </tr>
+                  <tr>
+                    <td><code>z.number</code>, <code>z.int</code></td>
+                    <td>
+                      <code>double</code>, <code>int32</code>,
+                      <code>int64</code>, or another supported number format.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>z.bigint</code></td>
+                    <td><code>int64</code></td>
+                  </tr>
+                  <tr>
+                    <td><code>z.date</code></td>
+                    <td><code>google.protobuf.Timestamp</code></td>
+                  </tr>
+                  <tr>
+                    <td><code>z.enum</code>, same-type literal union</td>
+                    <td><code>enum</code></td>
+                  </tr>
+                  <tr>
+                    <td><code>z.discriminatedUnion</code></td>
+                    <td><code>oneof</code> of variant messages.</td>
+                  </tr>
+                  <tr>
+                    <td><code>z.array</code>, <code>z.set</code></td>
+                    <td><code>repeated</code></td>
+                  </tr>
+                  <tr>
+                    <td><code>z.record</code>, <code>z.map</code></td>
+                    <td>
+                      <code>map&lt;key, value&gt;</code> with scalar keys.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>z.any</code>, <code>z.unknown</code></td>
+                    <td><code>google.protobuf.Value</code></td>
+                  </tr>
+                  <tr>
+                    <td>Record of any or unknown</td>
+                    <td><code>google.protobuf.Struct</code></td>
+                  </tr>
+                  <tr>
+                    <td>Void, undefined, never, or null input/output</td>
+                    <td><code>google.protobuf.Empty</code></td>
+                  </tr>
+                  <tr>
+                    <td><code>z.optional</code>, <code>z.nullable</code></td>
+                    <td>Optional field.</td>
+                  </tr>
+                  <tr>
+                    <td><code>zAsyncIterable</code></td>
+                    <td>Server stream using the configured yield schema.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>Contracts that fail generation</h3>
+            <ul>
+              <li>A procedure without an explicit output schema</li>
+              <li>Chained input parsers</li>
+              <li>Open object unions instead of a discriminated union</li>
+              <li>Literal unions that mix value types</li>
+              <li>
+                Numeric literals that mix integer and floating-point values
+              </li>
+              <li>Maps with non-scalar key types</li>
+              <li>Invalid protobuf names</li>
+              <li>
+                Unsupported Zod types or tRPC-only values with no protobuf
+                representation
+              </li>
+            </ul>
+            <p>
+              Generation prevalidates the router and reports every discovered
+              issue with its procedure path. Fix the contract at the router
+              boundary rather than expecting a wire-format approximation.
+            </p>
+          </section>
+        </div>
+        <div
+          id="operations-panel"
+          class="doc-tab-panel"
+          role="tabpanel"
+          aria-labelledby="operations-tab"
+          tabindex="0"
+        >
+          <section id="cors-security" class="doc-section">
+            <p class="doc-kicker">Browser boundary</p>
+            <h2>CORS, metadata, and security</h2>
+            <p>
+              CORS is disabled when the <code>cors</code> option is omitted.
+              When enabled, origins are exact serialized strings—scheme, host,
+              and port must match.
+            </p>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>CORS options</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="cors-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="cors-code"
+                data-highlight-lines="1-5"
+              ><code data-language="typescript">cors: {
+  allowedOrigins: ['https://app.example.com'],
+  additionalAllowedHeaders: ['x-trace-id'],
+  maxAgeSeconds: 600,
+}</code></pre>
+            </div>
+            <p>
+              The default preflight allowlist includes <code>accept</code>,
+              <code>authorization</code>, <code>content-type</code>,
+              <code>grpc-timeout</code>, <code>x-grpc-web</code>, and
+              <code>x-user-agent</code>. Add only application-specific headers
+              through <code>additionalAllowedHeaders</code>.
+            </p>
+            <div class="callout warning">
+              <strong>CORS is not authorization.</strong>
+              <p>
+                Non-browser callers can omit or forge <code>Origin</code>.
+                Enforce authentication and authorization with tRPC middleware,
+                bearer metadata, mTLS, or another real credential boundary.
+              </p>
+            </div>
+            <p>
+              Forward mode filters HTTP transport and gRPC-Web control headers
+              before creating grpc-js metadata. Application headers, including
+              <code>authorization</code>, <code>grpc-timeout</code>, and allowed
+              custom headers, cross the gateway as string metadata.
+            </p>
+          </section>
+
+          <section id="errors" class="doc-section">
+            <p class="doc-kicker">Diagnostics</p>
+            <h2>Understand errors and trailers</h2>
+            <p>
+              Browsers cannot reliably read HTTP/2 trailing headers through
+              Fetch, so gRPC-Web puts the final gRPC status in a trailer frame
+              inside the response body. Successful unary and streaming responses
+              end with
+              <code>grpc-status: 0</code>.
+            </p>
+            <div
+              class="table-scroll"
+              tabindex="0"
+              aria-label="Transport outcomes"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Condition</th>
+                    <th>HTTP</th>
+                    <th>Client result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Successful call</td>
+                    <td><code>200</code></td>
+                    <td>Data frame(s), then status 0.</td>
+                  </tr>
+                  <tr>
+                    <td>Backend gRPC error</td>
+                    <td><code>200</code></td>
+                    <td>
+                      Final trailer carries the backend status and message.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Malformed framed request</td>
+                    <td><code>200</code></td>
+                    <td>Status 13, <code>INTERNAL</code>.</td>
+                  </tr>
+                  <tr>
+                    <td>Rejected CORS origin or header</td>
+                    <td><code>403</code></td>
+                    <td>The backend is not called.</td>
+                  </tr>
+                  <tr>
+                    <td>Rejected preflight method</td>
+                    <td><code>405</code></td>
+                    <td><code>POST</code> is reported as allowed.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              A final status is mandatory. Missing, malformed, or out-of-range
+              statuses become <code>GrpcWebError</code> with status
+              <code>UNKNOWN</code>. If an intermediary returns no gRPC status,
+              the client applies the standard HTTP-to-gRPC fallback mapping.
+            </p>
+            <h3>Make protobuf calls observable while developing</h3>
+            <p>
+              Browser Network panels show framed protobuf bytes rather than
+              friendly JSON. Put tRPC's <code>loggerLink()</code> before
+              <code>grpcWebLink</code> to log decoded inputs, results, and
+              failures at the client boundary.
+            </p>
+          </section>
+
+          <section id="native-grpc" class="doc-section">
+            <p class="doc-kicker">Beyond browsers</p>
+            <h2>Use native gRPC from Node</h2>
+            <p>
+              A Node tRPC client can call a native gRPC server directly with
+              <code>grpcLink</code>:
+            </p>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>native client</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="native-client-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="native-client-code"
+                data-highlight-lines="7-9"
+              ><code data-language="typescript">import { createTRPCClient } from '@trpc/client';
+import { grpcLink } from '@trpc-proto/runtime';
+
+const client = createTRPCClient&lt;AppRouter&gt;({
+  links: [
+    grpcLink&lt;AppRouter&gt;({
+      schema: protoSchema,
+      address: '127.0.0.1:50051',
+      auth: { token: process.env.AUTH_TOKEN },
+    }),
+  ],
+});</code></pre>
+            </div>
+            <p>
+              A TypeScript router can also serve native gRPC clients with
+              <code>serveGrpc</code>. Use <code>bindRouter</code> when an
+              existing grpc-js server owns service registration.
+            </p>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>native server</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="native-server-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="native-server-code"
+                data-highlight-lines="3-5"
+              ><code data-language="typescript">import { serveGrpc } from '@trpc-proto/runtime';
+
+const server = await serveGrpc(appRouter, {
+  schema: protoSchema,
+  address: '127.0.0.1:50051',
+});
+
+await server.close();</code></pre>
+            </div>
+          </section>
+
+          <section id="troubleshooting" class="doc-section">
+            <p class="doc-kicker">Common problems</p>
+            <h2>Troubleshooting</h2>
+            <div class="troubleshooting-list">
+              <details>
+                <summary>
+                  Generation says a procedure has no output schema
+                </summary>
+                <p>
+                  Add an explicit <code>.output(zodSchema)</code>. tRPC can
+                  infer an output from a resolver, but protobuf generation needs
+                  an inspectable wire contract.
+                </p>
+              </details>
+              <details>
+                <summary>
+                  Server-only dependencies appear in the browser bundle
+                </summary>
+                <p>
+                  Import <code>AppRouter</code> with
+                  <code>import type</code> and import
+                  <code>protoSchema</code> for runtime data. Do not import the
+                  <code>appRouter</code> value into browser code.
+                </p>
+              </details>
+              <details>
+                <summary>The browser receives a CORS 403</summary>
+                <p>
+                  Match the browser's exact serialized origin in
+                  <code>allowedOrigins</code>. If the request sends custom
+                  metadata headers, add their lower-case names to
+                  <code>additionalAllowedHeaders</code>.
+                </p>
+              </details>
+              <details>
+                <summary>A call returns UNIMPLEMENTED</summary>
+                <p>
+                  Regenerate both contract files and confirm that the browser,
+                  gateway, and backend use the same generated revision. Forward
+                  mode rejects paths absent from <code>protoSchema</code> before
+                  contacting the backend.
+                </p>
+              </details>
+              <details>
+                <summary>Field numbers changed unexpectedly</summary>
+                <p>
+                  Configure <code>defaultMeta.proto.schemaPath</code>, keep the
+                  generated <code>schema.ts</code> in version control, and do
+                  not delete it before regeneration.
+                </p>
+              </details>
+            </div>
+          </section>
+
+          <section id="reference" class="doc-section">
+            <p class="doc-kicker">Next steps</p>
+            <h2>Reference and examples</h2>
+            <div class="reference-grid">
+              <a href="https://github.com/iocat/trpc-proto/blob/main/README.md">
+                <strong>Repository README</strong
+                ><span>Concise setup and full compatibility table.</span>
+              </a>
+              <a
+                href="https://github.com/iocat/trpc-proto/blob/main/packages/runtime/GRPC_WEB.md"
+              >
+                <strong>gRPC-Web runtime reference</strong
+                ><span
+                  >Framing, compression, CORS, errors, and forwarding
+                  behavior.</span
+                >
+              </a>
+              <a
+                href="https://github.com/iocat/trpc-proto/tree/main/examples/trpc"
+              >
+                <strong>Direct TypeScript example</strong
+                ><span
+                  >Real resolvers and a browser client in one Node
+                  application.</span
+                >
+              </a>
+              <a
+                href="https://github.com/iocat/trpc-proto/tree/main/examples/users"
+              >
+                <strong>Go forwarding example</strong
+                ><span>A native backend behind the Node gRPC-Web gateway.</span>
+              </a>
+              <a
+                href="https://github.com/iocat/trpc-proto/tree/main/examples/streaming"
+              >
+                <strong>Rust streaming example</strong
+                ><span
+                  >CRUD, batching, and server-streaming subscriptions.</span
+                >
+              </a>
+              <a href="https://github.com/iocat/trpc-proto/issues">
+                <strong>Issues</strong
+                ><span>Report missing schema support or runtime problems.</span>
+              </a>
+            </div>
+          </section>
+        </div>
+      </article>
+    </main>
+
+    <footer>
+      <a class="brand" href="./index.html">
+        <span class="brand-mark" aria-hidden="true">tP</span
+        ><span>trpc-proto</span>
+      </a>
+      <p>Strict contracts. Familiar clients. Any backend.</p>
+      <div>
+        <a href="./index.html">Overview</a>
+        <a href="https://github.com/iocat/trpc-proto">GitHub</a>
+        <a href="https://github.com/iocat/trpc-proto/issues">Issues</a>
+        <a href="https://github.com/iocat/trpc-proto/blob/main/LICENSE"
+          >MIT License</a
+        >
+      </div>
+    </footer>
+    <div
+      class="toast"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+  </body>
+</html>

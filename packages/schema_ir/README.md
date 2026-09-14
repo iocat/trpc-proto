@@ -5,7 +5,7 @@ Shared protobuf schema intermediate representation, validation, Zod translation,
 ## Install
 
 ```bash
-pnpm add @trpc-proto/schema_ir
+npm install @trpc-proto/schema_ir
 ```
 
 Most applications should use `@trpc-proto/plugin` for generation and `@trpc-proto/runtime` for transport. Use this package directly when integrating the schema model into custom tooling.

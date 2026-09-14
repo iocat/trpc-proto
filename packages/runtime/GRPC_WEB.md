@@ -44,7 +44,6 @@ or production deployment readiness.
 | Component                            | File                              | Responsibility                                                              |
 | ------------------------------------ | --------------------------------- | --------------------------------------------------------------------------- |
 | `grpcWebLink`                        | `src/web/link.ts`                 | Routes protobuf calls through streaming or optional batched transport.      |
-| `grpcWebBatchLink`                   | `src/batch/link/web_link.ts`      | Implements the generated protobuf batch envelope for unary operations.      |
 | Fetch transport                      | `src/web/fetch_call.ts`           | Sends gRPC-Web requests and decodes unary or server-streaming responses.    |
 | Content negotiation                  | `src/web/content_type.ts`         | Maps content types to raw or base64 encoding and negotiates `Accept`.       |
 | Codec contract                       | `src/web/codec/codec.ts`          | Defines the shared `encode` and streaming `decode` interface.               |
@@ -71,10 +70,35 @@ import type { AppRouter } from './router.js';
 const client = createTRPCClient<AppRouter>({
   links: [
     grpcWebLink<AppRouter>({
+      // Required: the generated runtime schema.
       schema: protoSchema,
+
+      // Optional string. Default: '' (same origin).
       url: 'https://api.example.com',
+
+      // Optional: 'raw' | 'base64'. Default: 'base64'.
       encoding: 'base64',
-      compress: true,
+
+      // Optional: true | false. Default: false.
+      compress: false,
+
+      // Optional: false | true | { maxItems?: number }. Default: false; maxItems: 100.
+      batch: { maxItems: 100 },
+
+      // Optional AuthConfig. Default: undefined.
+      auth: {
+        // Optional string or sync/async getter. Default: undefined.
+        token: () => localStorage.getItem('accessToken') ?? undefined,
+        // Optional metadata record or sync/async getter. Default: undefined.
+        metadata: {},
+        // Optional string. Default: 'authorization'.
+        header: 'authorization',
+        // Optional string. Default: 'Bearer'; use '' for a raw token.
+        scheme: 'Bearer',
+      },
+
+      // Optional CallInterceptor[]. Default: [].
+      interceptors: [],
     }),
   ],
 });
@@ -143,11 +167,7 @@ Queries and mutations are kept in separate client batches. Procedures within
 each batch execute concurrently, matching tRPC's HTTP batch semantics. Each item
 has its own encoded success or error result, while transport failure uses the
 outer gRPC status. `batch.maxItems` only controls how the client splits
-requests; servers have no matching limit or batching switch. The standalone
-`grpcWebBatchLink` remains available for manual link composition and rejects
-subscriptions. Forwarding mode expands the envelope into ordinary native gRPC
-calls, so the upstream backend does not implement or know about
-`BatchService.Execute`.
+requests; servers have no matching limit or batching switch.
 
 ### Managed gRPC-Web server
 
