@@ -2,7 +2,7 @@ import { Status as grpcStatus } from '@grpc/grpc-js/build/src/constants.js';
 import { assumeExhaustive } from '@trpc-proto/utility';
 import type { GrpcWebEncoding } from '../content_type.js';
 import { codecChunks, type Codec, type CodecInput } from './codec.js';
-import { GRPC_GZIP_ENCODING, grpcWebCompressionCodec } from './compression.js';
+import { grpcWebCompressionCodec } from './compression.js';
 import { GrpcWebFrameCodec, type GrpcWebFrame } from './frame_codec.js';
 import { GrpcWebBase64Codec } from './base64_codec.js';
 
@@ -31,10 +31,10 @@ export interface GrpcWebProtocolTrailers {
 export type GrpcWebProtocolValue =
   GrpcWebProtocolMessage | GrpcWebProtocolTrailers;
 
-/** Wire choices applied by the protocol codec. */
+/** Body encoding and message compression applied symmetrically on encode/decode. */
 export interface GrpcWebProtocolCodecOptions {
   readonly encoding: GrpcWebEncoding;
-  readonly compress?: boolean;
+  /** Sender-selected algorithm when encoding; received grpc-encoding when decoding. */
   readonly compression?: string | null;
 }
 
@@ -144,9 +144,9 @@ export class GrpcWebProtocolCodec implements Codec<
   ): Promise<Uint8Array> {
     let frame: GrpcWebFrame;
     switch (value.kind) {
-      case 'message':
-        if (options.compress) {
-          const encoding = options.compression ?? GRPC_GZIP_ENCODING;
+      case 'message': {
+        const encoding = options.compression?.trim().toLowerCase();
+        if (encoding && encoding !== 'identity') {
           const compression = grpcWebCompressionCodec(encoding);
           if (!compression) {
             throw new GrpcWebError(
@@ -167,6 +167,7 @@ export class GrpcWebProtocolCodec implements Codec<
           };
         }
         break;
+      }
       case 'trailers':
         frame = trailerFrame(value);
         break;

@@ -129,7 +129,7 @@ describe('gRPC-Web protocol codec', () => {
     const payload = new TextEncoder().encode('response '.repeat(64));
     const encoded = await protocolCodec.encode(
       { kind: 'message', payload },
-      { encoding: 'base64', compress: true },
+      { encoding: 'base64', compression: 'gzip' },
     );
     async function* chunks() {
       for (let offset = 0; offset < encoded.length; offset += 3) {
@@ -147,7 +147,7 @@ describe('gRPC-Web protocol codec', () => {
     await assert.rejects(
       protocolCodec.encode(
         { kind: 'message', payload: new Uint8Array([1]) },
-        { encoding: 'raw', compress: true, compression: 'br' },
+        { encoding: 'raw', compression: 'br' },
       ),
       (error: unknown) =>
         error instanceof GrpcWebError &&
@@ -159,7 +159,7 @@ describe('gRPC-Web protocol codec', () => {
   it('rejects compressed messages without their encoding', async () => {
     const encoded = await protocolCodec.encode(
       { kind: 'message', payload: new Uint8Array([1]) },
-      { encoding: 'raw', compress: true },
+      { encoding: 'raw', compression: 'gzip' },
     );
     await assert.rejects(
       async () => decode(encoded, { encoding: 'raw' }),

@@ -354,7 +354,6 @@ function createGrpcWebRequestHandler(
               { kind: 'message', payload },
               {
                 encoding: responseBodyEncoding,
-                compress: responseCompression !== undefined,
                 compression: responseCompression,
               },
             );

@@ -91,13 +91,13 @@ export function createGrpcWebFetchCall(
     const path = request.grpcPath;
     if (!path) throw new Error('grpcPath required');
     const contentType = grpcWebContentType(encoding);
-    const compression = compress ? GRPC_GZIP_ENCODING : undefined;
+    const requestCompression = compress ? GRPC_GZIP_ENCODING : undefined;
     const body = await codec.encode(
       {
         kind: 'message',
         payload: request.bytes ?? new Uint8Array(),
       },
-      { encoding, compress, compression },
+      { encoding, compression: requestCompression },
     );
     const res = await fetch(`${baseUrl}${path}`, {
       method: 'POST',
@@ -106,7 +106,7 @@ export function createGrpcWebFetchCall(
         accept: contentType,
         'content-type': contentType,
         'grpc-accept-encoding': GRPC_GZIP_ENCODING,
-        ...(compression ? { 'grpc-encoding': compression } : {}),
+        ...(requestCompression ? { 'grpc-encoding': requestCompression } : {}),
         'x-grpc-web': '1',
         'x-user-agent': 'grpc-web-javascript/0.1',
       },
