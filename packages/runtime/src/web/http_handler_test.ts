@@ -10,6 +10,10 @@ import { createForwardingGrpcWebHttpHandler } from './http_handler.js';
 import { grpcWebLink } from './link.js';
 import { GrpcWebFrameCodec, type GrpcWebFrame } from './codec/frame_codec.js';
 import {
+  parseGrpcWebCompressionEncoding,
+  type GrpcWebCompressionEncoding,
+} from './codec/compression.js';
+import {
   GrpcWebProtocolCodec,
   type GrpcWebProtocolValue,
 } from './codec/protocol_codec.js';
@@ -29,7 +33,7 @@ const protocolCodec = new GrpcWebProtocolCodec();
 async function decodeProtocol(
   body: Uint8Array,
   encoding: 'raw' | 'base64',
-  compression?: string | null,
+  compression?: GrpcWebCompressionEncoding,
 ): Promise<GrpcWebProtocolValue[]> {
   const values: GrpcWebProtocolValue[] = [];
   for await (const value of protocolCodec.decode(body, {
@@ -258,7 +262,9 @@ describe('createForwardingGrpcWebHttpHandler', () => {
           body: requestBody,
         },
       );
-      const compression = response.headers.get('grpc-encoding');
+      const compression = parseGrpcWebCompressionEncoding(
+        response.headers.get('grpc-encoding'),
+      );
       const body = new Uint8Array(await response.arrayBuffer());
       const frames: GrpcWebFrame[] = [];
       for await (const frame of frameCodec.decode(body)) frames.push(frame);

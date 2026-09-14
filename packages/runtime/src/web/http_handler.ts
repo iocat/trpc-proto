@@ -5,7 +5,11 @@ import { once } from 'node:events';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ProtoSchema } from '@trpc-proto/schema_ir';
 import { GrpcWebProtocolCodec } from './codec/protocol_codec.js';
-import { GRPC_GZIP_ENCODING } from './codec/compression.js';
+import {
+  GRPC_GZIP_ENCODING,
+  parseGrpcWebCompressionEncoding,
+  type GrpcWebCompressionEncoding,
+} from './codec/compression.js';
 import {
   grpcWebContentType,
   grpcWebEncoding,
@@ -127,7 +131,7 @@ function requestEncoding(req: IncomingMessage): GrpcWebEncoding | undefined {
 
 function negotiatedResponseCompression(
   req: IncomingMessage,
-): typeof GRPC_GZIP_ENCODING | undefined {
+): GrpcWebCompressionEncoding | undefined {
   const accepted = requestHeader(req, 'grpc-accept-encoding');
   if (
     accepted
@@ -171,7 +175,7 @@ function corsHeaders(origin: string): Record<string, string> {
 
 function grpcWebHeaders(
   encoding: GrpcWebEncoding,
-  compression: string | undefined,
+  compression: GrpcWebCompressionEncoding | undefined,
   origin?: string,
 ): Record<string, string> {
   return {
@@ -297,7 +301,9 @@ function createGrpcWebRequestHandler(
       const encodedBody = await readBody(request);
       for await (const value of codec.decode(encodedBody, {
         encoding: requestBodyEncoding,
-        compression: requestHeader(request, 'grpc-encoding'),
+        compression: parseGrpcWebCompressionEncoding(
+          requestHeader(request, 'grpc-encoding'),
+        ),
       })) {
         switch (value.kind) {
           case 'message':

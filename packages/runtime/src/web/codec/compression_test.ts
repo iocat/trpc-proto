@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  GRPC_GZIP_ENCODING,
+  GRPC_IDENTITY_ENCODING,
   GzipCompressionCodec,
   grpcWebCompressionCodec,
+  parseGrpcWebCompressionEncoding,
 } from './compression.js';
 
 const gzipCodec = new GzipCompressionCodec();
@@ -21,11 +24,21 @@ describe('gRPC-Web message compression', () => {
     assert.deepEqual(await decode(compressed), [expected]);
   });
 
-  it('recognizes gzip and identity header values', () => {
-    assert(grpcWebCompressionCodec('gzip') instanceof GzipCompressionCodec);
-    assert(grpcWebCompressionCodec(' GZIP ') instanceof GzipCompressionCodec);
-    assert.equal(grpcWebCompressionCodec('identity'), undefined);
-    assert.equal(grpcWebCompressionCodec(undefined), undefined);
+  it('parses supported header values and rejects unknown algorithms', () => {
+    assert.equal(
+      parseGrpcWebCompressionEncoding(undefined),
+      GRPC_IDENTITY_ENCODING,
+    );
+    assert.equal(parseGrpcWebCompressionEncoding(' GZIP '), GRPC_GZIP_ENCODING);
+    assert.throws(
+      () => parseGrpcWebCompressionEncoding('br'),
+      /unsupported grpc-encoding: br/,
+    );
+    assert(
+      grpcWebCompressionCodec(GRPC_GZIP_ENCODING) instanceof
+        GzipCompressionCodec,
+    );
+    assert.equal(grpcWebCompressionCodec(GRPC_IDENTITY_ENCODING), undefined);
   });
 
   it('rejects corrupted gzip payloads', async () => {

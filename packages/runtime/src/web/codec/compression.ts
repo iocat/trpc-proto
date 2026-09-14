@@ -1,11 +1,17 @@
 import { codecChunks, type Codec, type CodecInput } from './codec.js';
 
+/** Standard identity grpc-encoding token. */
+export const GRPC_IDENTITY_ENCODING = 'identity';
 /** Standard gzip grpc-encoding token. */
 export const GRPC_GZIP_ENCODING = 'gzip';
 
+/** Message compression values supported by this gRPC-Web implementation. */
+export type GrpcWebCompressionEncoding =
+  typeof GRPC_IDENTITY_ENCODING | typeof GRPC_GZIP_ENCODING;
+
 /** Message compressor selected by a grpc-encoding token. */
 export interface GrpcWebCompressionCodec extends Codec<Uint8Array, Uint8Array> {
-  readonly name: string;
+  readonly name: GrpcWebCompressionEncoding;
 }
 
 async function transform(
@@ -37,17 +43,30 @@ export class GzipCompressionCodec implements GrpcWebCompressionCodec {
 }
 
 const COMPRESSION_CODEC_FACTORIES: Record<
-  string,
+  Exclude<GrpcWebCompressionEncoding, typeof GRPC_IDENTITY_ENCODING>,
   () => GrpcWebCompressionCodec
 > = {
   [GRPC_GZIP_ENCODING]: () => new GzipCompressionCodec(),
 };
 
-/** Finds a supported codec for a grpc-encoding header value. */
-export function grpcWebCompressionCodec(
+/** Parses an untrusted grpc-encoding header into a supported value. */
+export function parseGrpcWebCompressionEncoding(
   encoding: string | null | undefined,
+): GrpcWebCompressionEncoding {
+  const normalized = encoding?.trim().toLowerCase() || GRPC_IDENTITY_ENCODING;
+  if (
+    normalized === GRPC_IDENTITY_ENCODING ||
+    normalized === GRPC_GZIP_ENCODING
+  ) {
+    return normalized;
+  }
+  throw new Error(`unsupported grpc-encoding: ${normalized}`);
+}
+
+/** Finds the codec for a supported grpc-encoding value. */
+export function grpcWebCompressionCodec(
+  encoding: GrpcWebCompressionEncoding = GRPC_IDENTITY_ENCODING,
 ): GrpcWebCompressionCodec | undefined {
-  const name = encoding?.trim().toLowerCase();
-  if (!name || name === 'identity') return undefined;
-  return COMPRESSION_CODEC_FACTORIES[name]?.();
+  if (encoding === GRPC_IDENTITY_ENCODING) return undefined;
+  return COMPRESSION_CODEC_FACTORIES[encoding]();
 }

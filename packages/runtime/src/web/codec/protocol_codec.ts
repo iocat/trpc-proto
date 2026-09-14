@@ -2,7 +2,11 @@ import { Status as grpcStatus } from '@grpc/grpc-js/build/src/constants.js';
 import { assumeExhaustive } from '@trpc-proto/utility';
 import type { GrpcWebEncoding } from '../content_type.js';
 import { codecChunks, type Codec, type CodecInput } from './codec.js';
-import { grpcWebCompressionCodec } from './compression.js';
+import {
+  GRPC_IDENTITY_ENCODING,
+  grpcWebCompressionCodec,
+  type GrpcWebCompressionEncoding,
+} from './compression.js';
 import { GrpcWebFrameCodec, type GrpcWebFrame } from './frame_codec.js';
 import { GrpcWebBase64Codec } from './base64_codec.js';
 
@@ -34,8 +38,8 @@ export type GrpcWebProtocolValue =
 /** Body encoding and message compression applied symmetrically on encode/decode. */
 export interface GrpcWebProtocolCodecOptions {
   readonly encoding: GrpcWebEncoding;
-  /** Sender-selected algorithm when encoding; received grpc-encoding when decoding. */
-  readonly compression?: string | null;
+  /** Sender-selected algorithm when encoding; parsed grpc-encoding when decoding. */
+  readonly compression?: GrpcWebCompressionEncoding;
 }
 
 /** Error represented by a non-zero or malformed gRPC-Web status. */
@@ -111,7 +115,7 @@ async function* base64Chunks(
 
 async function decodeCompressedMessage(
   payload: Uint8Array,
-  encoding: string | null | undefined,
+  encoding: GrpcWebCompressionEncoding | undefined,
 ): Promise<Uint8Array> {
   const compression = grpcWebCompressionCodec(encoding);
   if (!compression) {
@@ -145,15 +149,9 @@ export class GrpcWebProtocolCodec implements Codec<
     let frame: GrpcWebFrame;
     switch (value.kind) {
       case 'message': {
-        const encoding = options.compression?.trim().toLowerCase();
-        if (encoding && encoding !== 'identity') {
-          const compression = grpcWebCompressionCodec(encoding);
-          if (!compression) {
-            throw new GrpcWebError(
-              12,
-              `unsupported grpc-encoding: ${encoding}`,
-            );
-          }
+        const encoding = options.compression ?? GRPC_IDENTITY_ENCODING;
+        const compression = grpcWebCompressionCodec(encoding);
+        if (compression) {
           frame = {
             kind: 'message',
             compressed: true,

@@ -1,7 +1,11 @@
 import { Status as grpcStatus } from '@grpc/grpc-js/build/src/constants.js';
 import { assumeExhaustive } from '@trpc-proto/utility';
 import type { StubCall } from '../grpc/proto_link.js';
-import { GRPC_GZIP_ENCODING } from './codec/compression.js';
+import {
+  GRPC_GZIP_ENCODING,
+  parseGrpcWebCompressionEncoding,
+  type GrpcWebCompressionEncoding,
+} from './codec/compression.js';
 import { GrpcWebError, GrpcWebProtocolCodec } from './codec/protocol_codec.js';
 import {
   grpcWebContentType,
@@ -56,11 +60,12 @@ async function* readResponseBody(res: Response): AsyncIterable<Uint8Array> {
 async function* readGrpcWebStream(
   res: Response,
   encoding: GrpcWebEncoding,
+  compression: GrpcWebCompressionEncoding,
   codec: GrpcWebProtocolCodec,
 ): AsyncIterable<Uint8Array> {
   for await (const value of codec.decode(readResponseBody(res), {
     encoding,
-    compression: res.headers.get('grpc-encoding'),
+    compression,
   })) {
     switch (value.kind) {
       case 'message':
@@ -115,9 +120,17 @@ export function createGrpcWebFetchCall(
     });
     if (res.status !== 200) throw missingGrpcStatus(res);
     const encodingFromResponse = responseEncoding(res, encoding);
+    const responseCompression = parseGrpcWebCompressionEncoding(
+      res.headers.get('grpc-encoding'),
+    );
     switch (request.type) {
       case 'subscription':
-        return readGrpcWebStream(res, encodingFromResponse, codec);
+        return readGrpcWebStream(
+          res,
+          encodingFromResponse,
+          responseCompression,
+          codec,
+        );
       case 'query':
       case 'mutation':
         break;
@@ -131,7 +144,7 @@ export function createGrpcWebFetchCall(
     let statusMessage = '';
     for await (const value of codec.decode(readResponseBody(res), {
       encoding: encodingFromResponse,
-      compression: res.headers.get('grpc-encoding'),
+      compression: responseCompression,
     })) {
       switch (value.kind) {
         case 'message':

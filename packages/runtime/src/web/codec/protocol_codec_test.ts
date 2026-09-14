@@ -143,19 +143,6 @@ describe('gRPC-Web protocol codec', () => {
     );
   });
 
-  it('rejects unsupported request compression', async () => {
-    await assert.rejects(
-      protocolCodec.encode(
-        { kind: 'message', payload: new Uint8Array([1]) },
-        { encoding: 'raw', compression: 'br' },
-      ),
-      (error: unknown) =>
-        error instanceof GrpcWebError &&
-        error.code === 12 &&
-        /unsupported grpc-encoding: br/.test(error.message),
-    );
-  });
-
   it('rejects compressed messages without their encoding', async () => {
     const encoded = await protocolCodec.encode(
       { kind: 'message', payload: new Uint8Array([1]) },
