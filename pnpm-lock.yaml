@@ -215,6 +215,9 @@ importers:
 
   packages/runtime:
     dependencies:
+      '@grpc/grpc-js':
+        specifier: ^1.13.4
+        version: 1.14.4
       '@trpc-proto/schema_ir':
         specifier: workspace:*
         version: link:../schema_ir
@@ -225,9 +228,6 @@ importers:
         specifier: ^7.5.4
         version: 7.6.6
     devDependencies:
-      '@grpc/grpc-js':
-        specifier: ^1.13.4
-        version: 1.14.4
       '@trpc-proto/plugin':
         specifier: workspace:*
         version: link:../plugin

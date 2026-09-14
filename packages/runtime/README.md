@@ -5,7 +5,7 @@ Runtime transports for protobuf contracts generated from tRPC 11 and Zod 4 route
 ## Install
 
 ```bash
-npm install @trpc-proto/runtime @trpc/client @trpc/server @grpc/grpc-js zod
+npm install @trpc-proto/runtime @trpc/client @trpc/server zod
 ```
 
 ## Exports

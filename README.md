@@ -71,7 +71,7 @@ contract, and connect the server and browser client.
 `trpc-proto` requires Node.js 22+, tRPC 11, Zod 4, and TypeScript 5.9+.
 
 ```bash
-npm install @trpc/client @trpc/server @trpc-proto/runtime @grpc/grpc-js zod
+npm install @trpc/client @trpc/server @trpc-proto/runtime zod
 npm install --save-dev @trpc-proto/plugin typescript tsx
 ```
 
