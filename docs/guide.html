@@ -283,9 +283,13 @@ export type AppRouter = typeof appRouter;</code></pre>
 
             <h3>2. Generate the protobuf contract</h3>
             <p>
-              <code>npx</code> resolves the local <code>trpc-proto</code> binary
-              installed with <code>@trpc-proto/plugin</code>; pnpm is not
-              required.
+              After <code>@trpc-proto/plugin</code> is installed in the current
+              project, <code>npx</code> resolves its local
+              <code>trpc-proto</code> binary. The npm package name is scoped;
+              only the executable name is unscoped. Without that local install,
+              <code>npx trpc-proto</code> asks npm for the unscoped
+              <code>trpc-proto</code> package, which this project does not
+              publish. pnpm is not required.
             </p>
             <div class="code-window docs-code-window">
               <div class="code-title">
@@ -303,6 +307,30 @@ export type AppRouter = typeof appRouter;</code></pre>
                 id="generate-code"
                 data-highlight-lines="1-4"
               ><code data-language="bash">npx trpc-proto generate \
+  --router src/router.ts \
+  --export appRouter \
+  --out generated</code></pre>
+            </div>
+            <p>
+              To select the scoped package explicitly—for example, for a one-off
+              run without a local plugin install—use:
+            </p>
+            <div class="code-window docs-code-window">
+              <div class="code-title">
+                <span aria-hidden="true"><i></i><i></i><i></i></span>
+                <b>Terminal · explicit package</b>
+                <button
+                  type="button"
+                  class="copy-button"
+                  data-copy-target="generate-explicit-package-code"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                id="generate-explicit-package-code"
+                data-highlight-lines="1-4"
+              ><code data-language="bash">npx --package=@trpc-proto/plugin -- trpc-proto generate \
   --router src/router.ts \
   --export appRouter \
   --out generated</code></pre>
