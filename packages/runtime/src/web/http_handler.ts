@@ -5,6 +5,7 @@ import { once } from 'node:events';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ProtoSchema } from '@trpc-proto/schema_ir';
 import { GrpcWebProtocolCodec } from './codec/protocol_codec.js';
+import { GRPC_GZIP_ENCODING } from './codec/compression.js';
 import {
   grpcWebContentType,
   grpcWebEncoding,
@@ -124,6 +125,20 @@ function requestEncoding(req: IncomingMessage): GrpcWebEncoding | undefined {
   return grpcWebEncoding(requestHeader(req, 'content-type'));
 }
 
+function negotiatedResponseCompression(
+  req: IncomingMessage,
+): typeof GRPC_GZIP_ENCODING | undefined {
+  const accepted = requestHeader(req, 'grpc-accept-encoding');
+  if (
+    accepted
+      ?.split(',')
+      .some((encoding) => encoding.trim().toLowerCase() === GRPC_GZIP_ENCODING)
+  ) {
+    return GRPC_GZIP_ENCODING;
+  }
+  return undefined;
+}
+
 async function readBody(req: IncomingMessage): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   for await (const chunk of req) {
@@ -156,11 +171,13 @@ function corsHeaders(origin: string): Record<string, string> {
 
 function grpcWebHeaders(
   encoding: GrpcWebEncoding,
+  compression: string | undefined,
   origin?: string,
 ): Record<string, string> {
   return {
     'content-type': grpcWebContentType(encoding),
-    'grpc-accept-encoding': 'gzip',
+    'grpc-accept-encoding': GRPC_GZIP_ENCODING,
+    ...(compression ? { 'grpc-encoding': compression } : {}),
     ...(origin ? corsHeaders(origin) : {}),
   };
 }
@@ -273,6 +290,7 @@ function createGrpcWebRequestHandler(
       requestHeader(request, 'accept'),
       requestBodyEncoding,
     );
+    const responseCompression = negotiatedResponseCompression(request);
 
     try {
       const messages: Uint8Array[] = [];
@@ -307,7 +325,11 @@ function createGrpcWebRequestHandler(
       response.once('close', cancelCall);
       response.writeHead(
         200,
-        grpcWebHeaders(responseBodyEncoding, responseOrigin),
+        grpcWebHeaders(
+          responseBodyEncoding,
+          responseCompression,
+          responseOrigin,
+        ),
       );
 
       let status: GrpcWebDispatchStatus;
@@ -330,7 +352,11 @@ function createGrpcWebRequestHandler(
             }
             const body = await codec.encode(
               { kind: 'message', payload },
-              { encoding: responseBodyEncoding },
+              {
+                encoding: responseBodyEncoding,
+                compress: responseCompression !== undefined,
+                compression: responseCompression,
+              },
             );
             await writeGrpcWebBody(response, body, abortController.signal);
           },
@@ -369,7 +395,11 @@ function createGrpcWebRequestHandler(
         );
         if (!response.headersSent) {
           response.writeHead(200, {
-            ...grpcWebHeaders(responseBodyEncoding, responseOrigin),
+            ...grpcWebHeaders(
+              responseBodyEncoding,
+              responseCompression,
+              responseOrigin,
+            ),
             'content-length': String(trailer.byteLength),
           });
         }

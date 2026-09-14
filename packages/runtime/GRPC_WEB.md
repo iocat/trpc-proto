@@ -24,7 +24,7 @@ sequenceDiagram
     loop Unary once; server stream zero or more times
         Backend-->>Client: Protobuf response message
         Client-->>Handler: grpc-js data event
-        Handler-->>Fetch: 0x00 gRPC-Web data frame
+        Handler-->>Fetch: Negotiated 0x00 or gzip 0x01 data frame
         Fetch-->>WebLink: Response body chunk
     end
     Backend-->>Client: Final gRPC status and metadata
@@ -331,17 +331,18 @@ The Fetch transport always advertises `grpc-accept-encoding: gzip`. With
 compressed flag, and sends `grpc-encoding: gzip`. The HTTP handler decompresses
 that message before forwarding its bytes through grpc-js.
 
-For responses, the Fetch transport checks the compressed flag on every data
-frame. Flagged messages are decompressed with the algorithm named by the
-response's `grpc-encoding`; unflagged messages remain unchanged, so one stream
-may mix compressed and uncompressed messages. Binary and text responses use
-the same message-compression path because base64 is removed before frames are
-decoded.
+For responses, the HTTP handler selects gzip when the request's
+`grpc-accept-encoding` list contains `gzip`. It gzip-compresses each protobuf
+message independently and in emission order, sets `grpc-encoding: gzip`, and
+uses a `0x01` frame. Without that negotiation, it emits uncompressed `0x00`
+frames and omits `grpc-encoding`.
 
-The built-in direct and forwarding HTTP handlers currently emit uncompressed
-`0x00` response frames even when the browser advertises gzip. Response
-decompression is receive-side compatibility for external gRPC-Web servers;
-server-side response negotiation and compression remain backlog work.
+The Fetch transport checks the compressed flag on every data frame. Flagged
+messages are decompressed with the algorithm named by the response's
+`grpc-encoding`; unflagged messages remain unchanged, so it can also consume
+external streams that mix compressed and uncompressed messages. Binary and text
+responses use the same message-compression path because base64 is removed before
+frames are decoded.
 
 The implementation supports gzip data messages through the Web Compression
 Streams API. Missing or unsupported `grpc-encoding` values and compressed
@@ -388,15 +389,14 @@ The HTTP handler:
 
 ## Response and streaming flow
 
-Direct mode protobuf-encodes each router result and emits it as a `0x00`
-gRPC-Web data frame. Forward mode converts each backend grpc-js `data` event
-into the same frame. Both modes emit a final `0x80` in-body status trailer and
-then end the HTTP response. Each frame is written raw for binary mode or
-independently base64-encoded for text mode.
-
-grpc-js removes native gRPC message compression before invoking the handler's
-`data` callback, so forwarded responses use uncompressed `0x00` Web response
-frames. The bundled example backends do not configure response compression.
+Direct mode protobuf-encodes each router result. Forward mode receives
+decompressed backend messages from grpc-js and reuses the same output path.
+When the browser advertises gzip, the handler compresses each message before
+emitting a `0x01` gRPC-Web data frame; otherwise it emits `0x00`. Message writes
+remain serialized for unary and server-streaming calls. Both modes emit a final
+uncompressed `0x80` in-body status trailer and then end the HTTP response. Each
+frame is written raw for binary mode or independently base64-encoded for text
+mode.
 
 The handler chooses the first supported media type in `Accept`; when `Accept`
 does not select one, it uses the request encoding. A unary RPC naturally
@@ -583,7 +583,7 @@ when their successful browser-facing HTTP response closes.
 | Request metadata and bearer authorization                 | Supported for string values  |
 | Exact-origin CORS preflight                               | Opt-in                       |
 | Gzip-compressed request messages                          | Opt-in with `compress: true` |
-| Gzip-compressed unary and streaming responses             | Decode-only                  |
+| Gzip-compressed unary and streaming responses             | Automatic when negotiated    |
 | Final-status presence and syntax validation               | Supported                    |
 | Browser connection cancellation reaches backend gRPC call | Supported                    |
 

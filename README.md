@@ -254,6 +254,11 @@ If your router uses context, pass `createContext` to `serveGrpcWeb`. One context
 is created for a normal call; all procedures in a direct batch share one context
 and execute concurrently.
 
+`grpcWebLink` advertises gzip response support. `serveGrpcWeb` automatically
+gzip-compresses each unary or streaming response message, in order, when the
+browser negotiates gzip; otherwise it emits uncompressed messages. The client's
+`compress` option controls request compression separately and remains opt-in.
+
 ## Browser client options
 
 With `batch: true` or `batch: { maxItems }`:

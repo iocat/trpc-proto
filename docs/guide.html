@@ -849,6 +849,13 @@ await gateway.close();</code></pre>
                 </tbody>
               </table>
             </div>
+            <p>
+              <code>compress</code> controls request messages only.
+              <code>grpcWebLink</code> always advertises gzip response support,
+              and the built-in handlers automatically gzip each unary or
+              streaming response message, in order, when negotiated. Clients
+              that do not advertise gzip receive uncompressed response frames.
+            </p>
 
             <h3>Raw versus base64 bodies</h3>
             <div

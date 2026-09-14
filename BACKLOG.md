@@ -27,7 +27,7 @@ Implemented today:
 - Direct router dispatch and single-backend native gRPC forwarding.
 - Exact-origin CORS handling.
 - String request metadata and bearer authorization forwarding.
-- Opt-in gzip request compression and gzip response decompression.
+- Opt-in gzip request compression, automatic negotiated gzip responses, and response decompression.
 - Browser cancellation propagation to direct resolvers and upstream calls.
 - Incremental response decoding across arbitrary Fetch chunks.
 - Required final in-body gRPC status trailers.
@@ -138,10 +138,10 @@ Acceptance: equivalent failures produce the same status in direct and forwarding
 
 ### 11. Response compression negotiation
 
-- [ ] Negotiate `identity` and `gzip` responses correctly.
+- [x] Negotiate `identity` and `gzip` responses correctly.
 - [ ] Add a configurable minimum response size for compression.
-- [ ] Compress direct unary and streaming messages independently.
-- [ ] Recompress grpc-js responses when the browser negotiated compression.
+- [x] Compress direct unary and streaming messages independently.
+- [x] Recompress grpc-js responses when the browser negotiated compression.
 - [ ] Reject unsupported request encodings with a stable status.
 
 Brotli is optional and should follow only if Connect protocol support requires it.

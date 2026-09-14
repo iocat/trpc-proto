@@ -8,7 +8,7 @@ import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
 import { createForwardingGrpcWebHttpHandler } from './http_handler.js';
 import { grpcWebLink } from './link.js';
-import { GrpcWebFrameCodec } from './codec/frame_codec.js';
+import { GrpcWebFrameCodec, type GrpcWebFrame } from './codec/frame_codec.js';
 import {
   GrpcWebProtocolCodec,
   type GrpcWebProtocolValue,
@@ -29,9 +29,13 @@ const protocolCodec = new GrpcWebProtocolCodec();
 async function decodeProtocol(
   body: Uint8Array,
   encoding: 'raw' | 'base64',
+  compression?: string | null,
 ): Promise<GrpcWebProtocolValue[]> {
   const values: GrpcWebProtocolValue[] = [];
-  for await (const value of protocolCodec.decode(body, { encoding })) {
+  for await (const value of protocolCodec.decode(body, {
+    encoding,
+    compression,
+  })) {
     values.push(value);
   }
   return values;
@@ -192,7 +196,7 @@ describe('createForwardingGrpcWebHttpHandler', () => {
     }
   });
 
-  it('streams response frames without a private request header', async () => {
+  it('negotiates gzip streaming responses without reordering messages', async () => {
     const backend = new grpc.Server();
     backend.addService(
       {
@@ -225,9 +229,7 @@ describe('createForwardingGrpcWebHttpHandler', () => {
       address: `127.0.0.1:${port}`,
       schema: forwardingSchema,
     });
-    let requestContentType = '';
     const server = http.createServer(async (req, res) => {
-      requestContentType = String(req.headers['content-type'] ?? '');
       if (!(await handleGrpcWeb(req, res))) {
         res.writeHead(404);
         res.end();
@@ -239,23 +241,67 @@ describe('createForwardingGrpcWebHttpHandler', () => {
     const { port: webPort } = server.address() as { port: number };
 
     try {
-      const call = createGrpcWebFetchCall({
-        baseUrl: `http://127.0.0.1:${webPort}`,
-        encoding: 'base64',
-      });
-      const response = await call({
-        path: 'watch',
-        type: 'subscription',
-        input: undefined,
-        bytes: new Uint8Array([0]),
-        grpcPath: '/demo.v1.AppService/Watch',
-      });
-      const messages: number[][] = [];
-      for await (const message of response as AsyncIterable<Uint8Array>) {
-        messages.push([...message]);
+      const requestBody = await protocolCodec.encode(
+        { kind: 'message', payload: new Uint8Array([0]) },
+        { encoding: 'raw' },
+      );
+      const response = await fetch(
+        `http://127.0.0.1:${webPort}/demo.v1.AppService/Watch`,
+        {
+          method: 'POST',
+          headers: {
+            accept: GRPC_WEB_CONTENT_TYPE,
+            'content-type': GRPC_WEB_CONTENT_TYPE,
+            'grpc-accept-encoding': 'identity, gzip',
+            'x-grpc-web': '1',
+          },
+          body: requestBody,
+        },
+      );
+      const compression = response.headers.get('grpc-encoding');
+      const body = new Uint8Array(await response.arrayBuffer());
+      const frames: GrpcWebFrame[] = [];
+      for await (const frame of frameCodec.decode(body)) frames.push(frame);
+      const messageFrames = frames.filter((frame) => frame.kind === 'message');
+
+      assert.equal(compression, 'gzip');
+      assert.deepEqual(
+        messageFrames.map((frame) => frame.compressed),
+        [true, true],
+      );
+      const values = await decodeProtocol(body, 'raw', compression);
+      assert.deepEqual(
+        values
+          .filter((value) => value.kind === 'message')
+          .map((value) => [...value.payload]),
+        [[1], [2, 3]],
+      );
+
+      const identityResponse = await fetch(
+        `http://127.0.0.1:${webPort}/demo.v1.AppService/Watch`,
+        {
+          method: 'POST',
+          headers: {
+            accept: GRPC_WEB_CONTENT_TYPE,
+            'content-type': GRPC_WEB_CONTENT_TYPE,
+            'x-grpc-web': '1',
+          },
+          body: requestBody,
+        },
+      );
+      assert.equal(identityResponse.headers.get('grpc-encoding'), null);
+      const identityFrames: GrpcWebFrame[] = [];
+      for await (const frame of frameCodec.decode(
+        new Uint8Array(await identityResponse.arrayBuffer()),
+      )) {
+        identityFrames.push(frame);
       }
-      assert.equal(requestContentType, GRPC_WEB_TEXT_CONTENT_TYPE);
-      assert.deepEqual(messages, [[1], [2, 3]]);
+      assert.deepEqual(
+        identityFrames
+          .filter((frame) => frame.kind === 'message')
+          .map((frame) => frame.compressed),
+        [false, false],
+      );
     } finally {
       server.close();
       backend.forceShutdown();
