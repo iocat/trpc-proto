@@ -150,48 +150,14 @@
               >
                 View source <span aria-hidden="true">↗</span>
               </a>
+              <a
+                class="button secondary"
+                href="https://github.com/iocat/trpc-proto/blob/main/README.md"
+              >
+                Read as Markdown <span aria-hidden="true">↗</span>
+              </a>
             </div>
           </header>
-          <section id="mental-model" class="doc-section">
-            <p class="doc-kicker">Concepts</p>
-            <h2>Start with the mental model</h2>
-            <p>
-              <code>trpc-proto</code> treats the exported tRPC router as the
-              source of truth. The generator evaluates that router, inspects its
-              Zod input and output schemas, validates that every shape has a
-              faithful protobuf representation, and writes two generated files.
-            </p>
-            <div class="concept-flow" aria-label="Generation and runtime flow">
-              <div>
-                <small>SOURCE</small><strong>appRouter</strong
-                ><span>Zod schemas</span>
-              </div>
-              <span aria-hidden="true">→</span>
-              <div class="accent">
-                <small>GENERATE</small><strong>trpc-proto</strong
-                ><span>validate first</span>
-              </div>
-              <span aria-hidden="true">→</span>
-              <div>
-                <small>CONTRACT</small><strong>.proto + schema.ts</strong
-                ><span>stable field IDs</span>
-              </div>
-            </div>
-            <p>
-              The <code>.proto</code> is the language-neutral contract. The
-              generated <code>schema.ts</code> is data used by the TypeScript
-              transports to encode and route calls without importing the server
-              router into a browser bundle.
-            </p>
-            <div class="callout important">
-              <strong>Strict by design.</strong>
-              <p>
-                Unsupported schemas fail generation with procedure paths and
-                reasons. The generator does not silently replace them with lossy
-                fallback types.
-              </p>
-            </div>
-          </section>
 
           <section id="quickstart" class="doc-section">
             <p class="doc-kicker">Direct mode</p>
@@ -524,6 +490,46 @@ export const client = createTRPCClient&lt;AppRouter&gt;({
 });
 
 const user = await client.getUser.query({ id: '1' });</code></pre>
+            </div>
+          </section>
+          <section id="mental-model" class="doc-section">
+            <p class="doc-kicker">Concepts</p>
+            <h2>Start with the mental model</h2>
+            <p>
+              <code>trpc-proto</code> treats the exported tRPC router as the
+              source of truth. The generator evaluates that router, inspects its
+              Zod input and output schemas, validates that every shape has a
+              faithful protobuf representation, and writes two generated files.
+            </p>
+            <div class="concept-flow" aria-label="Generation and runtime flow">
+              <div>
+                <small>SOURCE</small><strong>appRouter</strong
+                ><span>Zod schemas</span>
+              </div>
+              <span aria-hidden="true">→</span>
+              <div class="accent">
+                <small>GENERATE</small><strong>trpc-proto</strong
+                ><span>validate first</span>
+              </div>
+              <span aria-hidden="true">→</span>
+              <div>
+                <small>CONTRACT</small><strong>.proto + schema.ts</strong
+                ><span>stable field IDs</span>
+              </div>
+            </div>
+            <p>
+              The <code>.proto</code> is the language-neutral contract. The
+              generated <code>schema.ts</code> is data used by the TypeScript
+              transports to encode and route calls without importing the server
+              router into a browser bundle.
+            </p>
+            <div class="callout important">
+              <strong>Strict by design.</strong>
+              <p>
+                Unsupported schemas fail generation with procedure paths and
+                reasons. The generator does not silently replace them with lossy
+                fallback types.
+              </p>
             </div>
           </section>
 

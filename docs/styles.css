@@ -499,6 +499,13 @@ a {
 .terminal code {
   white-space: normal;
 }
+.docs-content .terminal > code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fffdf8;
+  font: 600 0.76rem/1.7 var(--mono);
+}
 .terminal button {
   margin-left: auto;
   background: none;
@@ -1149,7 +1156,7 @@ footer a:focus-visible {
 }
 
 .docs-intro {
-  padding: 2.5rem 0 5rem;
+  padding: 1.5rem 0 2.5rem;
 }
 
 .docs-intro h1 {
@@ -1177,6 +1184,10 @@ footer a:focus-visible {
   padding: 4.5rem 0;
   border-top: 1px solid var(--ink);
   scroll-margin-top: 2rem;
+}
+
+.doc-tab-panel > .doc-section:first-of-type {
+  padding-top: 3rem;
 }
 
 .doc-kicker {
