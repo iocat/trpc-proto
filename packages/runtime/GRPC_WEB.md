@@ -338,6 +338,11 @@ may mix compressed and uncompressed messages. Binary and text responses use
 the same message-compression path because base64 is removed before frames are
 decoded.
 
+The built-in direct and forwarding HTTP handlers currently emit uncompressed
+`0x00` response frames even when the browser advertises gzip. Response
+decompression is receive-side compatibility for external gRPC-Web servers;
+server-side response negotiation and compression remain backlog work.
+
 The implementation supports gzip data messages through the Web Compression
 Streams API. Missing or unsupported `grpc-encoding` values and compressed
 trailer frames are rejected.
@@ -578,7 +583,7 @@ when their successful browser-facing HTTP response closes.
 | Request metadata and bearer authorization                 | Supported for string values  |
 | Exact-origin CORS preflight                               | Opt-in                       |
 | Gzip-compressed request messages                          | Opt-in with `compress: true` |
-| Gzip-compressed unary and streaming responses             | Supported                    |
+| Gzip-compressed unary and streaming responses             | Decode-only                  |
 | Final-status presence and syntax validation               | Supported                    |
 | Browser connection cancellation reaches backend gRPC call | Supported                    |
 
