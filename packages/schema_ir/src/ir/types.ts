@@ -146,6 +146,8 @@ export interface ProtoObjectMeta {
   protoMessageName?: string;
   protoEnumName?: string;
   protoUseKnownType?: string;
+  /** Put this field in the named protobuf `oneof`. */
+  protoOneof?: string;
 }
 
 /** Complete protobuf schema intermediate representation. */

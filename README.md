@@ -378,6 +378,8 @@ registration.
 | ---------------------------------------------------------- | ----------------------------------------------------- |
 | `z.object`, including nested objects                       | `message`                                             |
 | `.meta({ protoMessageName: 'User' })`                      | Named message; name must be PascalCase                |
+| Named object referenced through `z.lazy`                   | Recursive message reference                           |
+| Field `.meta({ protoOneof: 'value' })`                     | Field in the named `oneof`                            |
 | `.meta({ protoUseKnownType: 'google.protobuf.Duration' })` | Selected well-known type                              |
 | `.meta({ protoEnumName: 'UserRole' })`                     | Named enum; name must be PascalCase                   |
 | Unnamed nested object                                      | Nested message named from the field                   |
@@ -395,6 +397,9 @@ registration.
 | Void, undefined, never, or null input/output               | `google.protobuf.Empty`                               |
 | `z.optional`, `z.nullable`                                 | Optional field                                        |
 | `zAsyncIterable({ yield: schema })`                        | Server stream using `schema` as the response item     |
+
+`protoOneof` fields must be singular. Repeated and map fields cannot belong to
+a protobuf `oneof`.
 
 Generation rejects open unions, mixed-type literals, mixed integer/float literals, invalid protobuf names, non-scalar map keys, and unsupported Zod types. Prevalidation collects all issues before aborting.
 

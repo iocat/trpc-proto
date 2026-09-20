@@ -57,6 +57,7 @@ class TrpcSchemaTranslator {
   #cache: SchemaGenerateCache;
   #seenMessages = new WeakMap<ZodType, string>();
   #seenEnums = new WeakMap<ZodType, string>();
+  #buildingMessages = new Map<string, ProtoMessage>();
 
   constructor(cache: SchemaGenerateCache) {
     this.#cache = cache;
@@ -97,11 +98,21 @@ class TrpcSchemaTranslator {
     hoist = true,
     cacheName = messageName,
   ): ProtoMessage {
+    let reserved: ProtoMessage | undefined;
     if (hoist) {
       const existing = this.#messages.find(
         (message) => message.name === messageName,
       );
       if (existing) return existing;
+      const building = this.#buildingMessages.get(messageName);
+      if (building) return building;
+      reserved = {
+        name: messageName,
+        fields: [],
+        subMessages: [],
+        comment: zodComment(zod),
+      };
+      this.#buildingMessages.set(messageName, reserved);
     }
 
     const cache = messageCache(this.#cache, cacheName);
@@ -119,6 +130,15 @@ class TrpcSchemaTranslator {
     for (const [key, value] of Object.entries(objectShape(zod))) {
       const fieldName = toSnakeCase(key);
       const mapped = this.#mapField(value, messageName, fieldName, subMessages);
+      const oneof = protoOneofOf(value);
+      if (
+        oneof !== undefined &&
+        (mapped.repeated || mapped.type.kind === 'map')
+      ) {
+        throw new Error(
+          `oneof field cannot be repeated or a map at ${messageName}.${fieldName}`,
+        );
+      }
       const existingField = cache.propertyGenCache[fieldName];
       const number =
         existingField?.tag !== undefined
@@ -136,19 +156,27 @@ class TrpcSchemaTranslator {
         number,
         type: mapped.type,
         repeated: mapped.repeated,
-        optional: true,
+        optional: oneof === undefined,
         comment: zodComment(value),
+        ...(oneof === undefined ? {} : { oneof }),
       });
     }
 
-    const message: ProtoMessage = {
+    const converted: ProtoMessage = {
       name: messageName,
       fields,
       subMessages,
       comment: zodComment(zod),
     };
-    if (hoist) this.#messages.push(message);
-    return message;
+    if (reserved !== undefined) {
+      reserved.fields = converted.fields;
+      reserved.subMessages = converted.subMessages;
+      reserved.comment = converted.comment;
+      this.#buildingMessages.delete(messageName);
+      this.#messages.push(reserved);
+      return reserved;
+    }
+    return converted;
   }
 
   #convertDiscriminatedUnion(
@@ -806,7 +834,8 @@ function isProtoObjectMeta(value: unknown): value is ProtoObjectMeta {
   return !!(
     meta.protoMessageName ||
     meta.protoEnumName ||
-    meta.protoUseKnownType
+    meta.protoUseKnownType ||
+    meta.protoOneof
   );
 }
 
@@ -832,6 +861,28 @@ function protoMessageNameOf(zod: ZodRuntime): string | undefined {
 
 function protoEnumNameOf(zod: ZodRuntime): string | undefined {
   return extractProtoObjectMeta(zod).protoEnumName;
+}
+
+function protoOneofOf(zod: ZodType): string | undefined {
+  let current: ZodType | undefined = zod;
+  const seen = new Set<ZodType>();
+  while (current !== undefined && !seen.has(current)) {
+    seen.add(current);
+    const runtime = asRuntime(current);
+    const value = runtime.meta?.()?.protoOneof;
+    if (typeof value === 'string') {
+      if (value.trim().length === 0) {
+        throw new Error('protoOneof must not be empty');
+      }
+      return toSnakeCase(value);
+    }
+    current =
+      runtime.def.innerType ??
+      runtime.unwrap?.() ??
+      runtime.def.out ??
+      runtime.def.in;
+  }
+  return undefined;
 }
 
 function unwrap(zod: ZodType): { inner: ZodRuntime; optional: boolean } {

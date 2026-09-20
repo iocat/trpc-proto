@@ -1,6 +1,6 @@
 {
   "name": "@trpc-proto/schema_ir",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "Shared protobuf schema IR for @trpc-proto plugin and runtime",
   "keywords": [

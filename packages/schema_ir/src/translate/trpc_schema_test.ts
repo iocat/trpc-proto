@@ -67,6 +67,21 @@ const Address = z
   .object({ city: z.string() })
   .meta({ protoMessageName: 'Address' });
 
+let TreeNode: ZodType;
+TreeNode = z
+  .object({
+    label: z.string(),
+    children: z.array(z.lazy(() => TreeNode)),
+  })
+  .meta({ protoMessageName: 'TreeNode' });
+
+const Choice = z
+  .object({
+    text: z.string().optional().meta({ protoOneof: 'value' }),
+    count: z.int().optional().meta({ protoOneof: 'value' }),
+  })
+  .meta({ protoMessageName: 'Choice' });
+
 interface TranslateCase {
   name: string;
   procedures: RuntimeProcedure[];
@@ -205,6 +220,36 @@ const cases: TranslateCase[] = [
         rpc GetById (UserGetByIdRequest) returns (User);
         // tRPC mutation user.create
         rpc Create (User) returns (User);
+      }
+    `,
+  },
+  {
+    name: 'recursive named object references itself',
+    procedures: [proc('tree.get', { output: TreeNode })],
+    expected: `
+      message TreeNode {
+        optional string label = 1;
+        repeated TreeNode children = 2;
+      }
+      service TreeService {
+        // tRPC query tree.get
+        rpc Get (google.protobuf.Empty) returns (TreeNode);
+      }
+    `,
+  },
+  {
+    name: 'field metadata groups object fields into a oneof',
+    procedures: [proc('choice.get', { output: Choice })],
+    expected: `
+      message Choice {
+        oneof value {
+          string text = 1;
+          int32 count = 2;
+        }
+      }
+      service ChoiceService {
+        // tRPC query choice.get
+        rpc Get (google.protobuf.Empty) returns (Choice);
       }
     `,
   },
@@ -656,6 +701,20 @@ describe('translate', () => {
           }),
         ]),
       /protoMessageName must be PascalCase/,
+    );
+  });
+
+  it('throws when a repeated field declares protoOneof', () => {
+    assert.throws(
+      () =>
+        translate([
+          proc('bad', {
+            input: z.object({
+              values: z.array(z.string()).meta({ protoOneof: 'value' }),
+            }),
+          }),
+        ]),
+      /oneof field cannot be repeated or a map at AppBadRequest.values/,
     );
   });
 

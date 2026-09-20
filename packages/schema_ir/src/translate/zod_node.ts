@@ -50,7 +50,8 @@ function isProtoObjectMeta(value: unknown): value is ProtoObjectMeta {
   return !!(
     meta.protoMessageName ||
     meta.protoEnumName ||
-    meta.protoUseKnownType
+    meta.protoUseKnownType ||
+    meta.protoOneof
   );
 }
 
