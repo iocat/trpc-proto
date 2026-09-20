@@ -1,6 +1,6 @@
 {
   "name": "trpc-proto",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "description": "Generate Protocol Buffers and gRPC transports from tRPC 11 and Zod 4 routers",
@@ -31,6 +31,8 @@
     "build": "pnpm -r build",
     "lint": "eslint packages benchmarks",
     "clean": "pnpm -r clean",
+    "release:version": "node .github/scripts/version.mjs",
+    "release:check": "node .github/scripts/publish.mjs",
     "bench:grpc-web": "pnpm --filter @trpc-proto/runtime build && pnpm --filter @trpc-proto/benchmark-grpc-web bench",
     "bench:grpc-web:envoy": "pnpm --filter @trpc-proto/runtime build && pnpm --filter @trpc-proto/benchmark-grpc-web bench -- --envoy",
     "users:generate": "pnpm --filter @trpc-proto/example-users generate",

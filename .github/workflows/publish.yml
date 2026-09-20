@@ -1,0 +1,62 @@
+name: Publish packages to npm
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install OIDC-capable npm
+        run: npm install --global npm@11
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check lockstep release versions
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: node .github/scripts/publish.mjs "$RELEASE_TAG" --check
+      - name: Build and test public workspace packages
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import { releasePackages } from './.github/scripts/packages.mjs';
+          const packages = await releasePackages(process.cwd());
+          for (const script of ['build', 'test']) {
+            for (const pkg of packages) {
+              execFileSync('pnpm', ['run', '--if-present', script], {
+                cwd: pkg.cwd,
+                stdio: 'inherit',
+              });
+            }
+          }
+          NODE
+      - name: Publish lockstep package versions
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: node .github/scripts/publish.mjs "$RELEASE_TAG" --publish
